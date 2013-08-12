@@ -1,126 +1,235 @@
 var http = require('http');
+var pg = require('pg');
+var express = require('express');
+
 
 // Server State
-var streams = {};
+// ============
+var server = express();
+server.pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
+server.streams = {};
 
-// Server
-var server = http.createServer(function(request, response) {
-	setCorsHeaders(request, response);
 
-	// Route request
-	if (request.method == 'OPTIONS')
-		return OPTIONSall(request, response);
-	if (request.url == '/') {
-		if (request.method == 'GET')
-			return GETroot(request, response);
-		return ERRbadmethod(request, response);
-	} else {
-		response.targetUserId = request.url.slice(1);
-		if (request.method == 'SUBSCRIBE')
-			return SUBuser(request, response);
-		return ERRbadmethod(request, response);
-	}
-});
-server.listen(8000);
-
-// Base Handlers
-// =============
-function OPTIONSall(request, response) {
+// Common Handlers
+// ===============
+server.use(express.bodyParser());
+server.all('*', setCorsHeaders);
+server.options('*', function(request, response) {
 	response.writeHead(204);
 	response.end();
-}
-function GETroot(request, response) {
-	// :TODO:
+});
+
+
+// Root
+// ====
+server.get('/', function(request, response) {
 	response.writeHead(200, 'ok');
 	response.end('signal server');
-}
+});
 
-// User Signal Stream
-// ==================
-function SUBuser(request, response) {
-	authorize(request, response, SUBuser_announce);
-}
-function SUBuser_announce(request, response) {
-	// :TODO: INSERT INTO online_apps (app_id, user_id) VALUES ($0, $1)
-	SUBuser_addstream(request, response);
-}
-function SUBuser_addstream(request, response) {
-	var streamId = response.originAppId+'-'+response.targetUserId;
-	if (streams[streamId]) // one stream at a time
-		endOldStream(streams[streamId]);
-	addStream(streamId, response);
-	/*:DEBUG:*/ do_debug_stream_output(response);
-}
-// - wires up a new stream
-function addStream(streamId, response) {
-	response.streamId = streamId;
-	streams[streamId] = response;
-	response.on('close', onStreamClosed);
 
-	response.writeHead(200, 'ok', {
-		'content-type': 'text/event-stream',
-		'cache-control': 'no-cache',
-		'connection': 'keepalive'
+// Tooling
+// =======
+server.get('/status', function(request, response) {
+	response.json({
+		streams: Object.keys(server.streams)
 	});
+});
+
+// User
+// ====
+// - signal stream
+server.get('/:userId',
+	authorize,
+	function (request, response, next) {
+		if (!request.accepts('text/event-stream'))
+			return next('route');
+
+		// Announce
+		var query = [
+			'INSERT INTO user_presences (app_id, user_id)',
+				'SELECT $1, $2 WHERE NOT EXISTS',
+					'(SELECT id FROM user_presences WHERE app_id=$1 AND user_id=$2)'
+		].join(' ');
+		server.pgClient.query(query, [request.params.appId, request.params.userId], function(err, res) {
+			if (err)
+				return ERRinternal(request, response, 'Failed to update user presence in DB', err);
+			next();
+		});
+	},
+	function (request, response) {
+		var streamId = getStreamId(request.params.appId, request.params.userId);
+
+		// Kill an existing stream if active (only one at a time per app/user combo)
+		if (server.streams[streamId]) {
+			server.streams[streamId].removeAllListeners('close');
+			server.streams[streamId].end();
+		}
+
+		// Store connection
+		response.locals.streamId = streamId;
+		response.locals.appId = request.params.appId;
+		response.locals.userId = request.params.userId;
+		server.streams[streamId] = response;
+		response.on('close', onStreamClosed);
+
+		// Send back stream header
+		response.writeHead(200, 'ok', {
+			'content-type': 'text/event-stream',
+			'cache-control': 'no-cache',
+			'connection': 'keepalive'
+		});
+	}
+);
+server.get('/:userId', ERRbadaccept);
+
+function getStreamId(appId, userId) {
+	return appId+'-'+userId;
 }
-// - ends a stream that's been displaced by a new stream
-function endOldStream(oldStream) {
-	/*:DEBUG:*/clearInterval(oldStream.debug_interval);
-	oldStream.removeAllListeners('close');
-	oldStream.end();
-}
+
 // - handles stream close by client
 function onStreamClosed() {
 	var response = this;
+
+	// Clear connection
 	response.removeAllListeners('close');
-	/*:DEBUG:*/clearInterval(response.debug_interval);
-	// :TODO: DELETE FROM online_apps WHERE app_id=$0 AND user_id=$1, [response.originAppId, response.targetUserId]
-	delete streams[response.streamId];
+	delete server.streams[response.locals.streamId];
+
+	// De-announce
+	server.pgClient.query('DELETE FROM user_presences WHERE app_id=$1 AND user_id=$2', [response.locals.appId, response.locals.userId], function(err) {
+		if (err)
+			console.error('Failed to delete user presence from DB', err);
+	});
 }
 
-function do_debug_stream_output(response) {
-	var i=0;
-	response.debug_interval = setInterval(function() {
-		console.log('event', i);
-		response.write('event: test\r\n');
-		response.write('data: {"foo":'+i+'}\r\n\r\n');
-		i++;
-		if (i > 5) {
-			clearInterval(response.debug_interval);
-			response.removeAllListeners('close');
-			response.end();
-		}
-	}, 1000);
-}
+
+// User Peers
+// ==========
+// - whois online
+server.get('/:userId/peers',
+	authorize,
+	function (request, response, next) {
+		if (!request.accepts('json'))
+			return next('route');
+
+		var query = [
+			'SELECT apps.id as app_id, apps.name as app_name, users.id as user_id, users.name as user_name',
+				'FROM user_presences',
+				'INNER JOIN user_auth_tokens',
+					'ON user_auth_tokens.dst_user_id = user_presences.user_id',
+					'AND user_auth_tokens.src_user_id = $1',
+				'INNER JOIN users ON users.id = user_presences.user_id',
+				'INNER JOIN apps ON apps.id = user_presences.app_id'
+		].join(' ');
+		server.pgClient.query(query, [request.params.userId], function(err, res) {
+			if (err)
+				return ERRinternal(request, response, 'Failed to read user presences from DB', err);
+			response.writeHead(200, 'ok', { 'content-type': 'application/json' });
+			response.end(JSON.stringify(res.rows));
+		});
+	}
+);
+server.get('/:userId/peers', ERRbadaccept);
+
+
+// User App
+// ========
+// - signalling target
+server.notify('/:userId/apps/:targetAppId',
+	authorize,
+	function (request, response, next) {
+		// Locate the target app's stream
+		var streamId = getStreamId(request.params.targetAppId, request.params.userId);
+		var stream = server.streams[streamId];
+		if (!stream)
+			return ERRnotfound(request, response);
+
+		// Validate
+		var body = request.body;
+		if (!body)
+			return ERRbadent(request, response, 'Request body is required');
+		if (!body.event || (!body.data || typeof body.data != 'object'))
+			return ERRbadent(request, response, 'Request body `event` and `data` fields are required');
+		if (body.event != 'candidate' && body.event != 'offer' && body.event != 'answer')
+			return ERRbadent(request, response, 'Request body `event` must be one of "candidate", "offer", or "answer"');
+
+		// Emit to the target stream
+		stream.write('event: '+body.event+'\r\n');
+		stream.write('data: '+JSON.stringify(body.data)+'\r\n\r\n');
+		response.writeHead(204, 'ok, no content');
+		response.end();
+	}
+);
+
+
+// Common Middleware
+// =================
 
 // Auth
-// ====
-// - adds response.originAppId on success
-function authorize(request, response, cb) {
-	// var token = parseAuthToken(request.headers.authorization)
-	// :TODO: SELECT app_id FROM auth_tokens WHERE user_id = $0 AND id = $1, [response.targetUserId, token]
-	/* if (results==0)
-		return ERRforbidden(request, response); */
-	response.originAppId = 'foobar';
-	cb(request, response);
+// - adds request.params.appId on success
+var uuidRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// ^ http://stackoverflow.com/a/13653180
+function authorize(request, response, next) {
+	var token = parseAuthToken(request.headers.authorization);
+	if (!token)
+		return ERRforbidden(request, response, '`Authorization: Token <token>` required');
+	if (!uuidRE.test(token))
+		return ERRforbidden(request, response, 'Malformed authorization token');
+
+	var query = [
+		'SELECT app_id FROM app_auth_tokens',
+			'WHERE id = $1',
+			'AND user_id = $2',
+			'AND (expires_at IS NULL OR expires_at > NOW())'
+	].join(' ');
+	server.pgClient.query(query, [token, request.params.userId], function(err, res) {
+		if (err)
+			return ERRinternal(request, response, 'Failed to fetch app authorization token from DB', err);
+
+		if (!res.rows[0])
+			return ERRforbidden(request, response, 'Invalid auth token');
+
+		request.params.appId = res.rows[0].app_id;
+		next();
+	});
+}
+function parseAuthToken(authHeader) {
+	if (!authHeader || authHeader.indexOf('Token ') !== 0)
+		return null;
+	return authHeader.slice(6).trim();
 }
 
-// Response Helpers
-// ================
-function setCorsHeaders(request, response) {
+function setCorsHeaders(request, response, next) {
 	response.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
 	response.setHeader('Access-Control-Allow-Credentials', true);
 	response.setHeader('Access-Control-Allow-Methods', 'OPTIONS, HEAD, GET, PUT, PATCH, POST, DELETE, NOTIFY, SUBSCRIBE');
 	response.setHeader('Access-Control-Allow-Headers', request.headers['access-control-request-headers'] || '');
 	response.setHeader('Access-Control-Expose-Headers', request.headers['access-control-request-headers'] || 'Content-Type, Content-Length, Date, ETag, Last-Modified, Link, Location');
+	next();
 }
+
 
 // Error Responses
 // ===============
-function ERRforbidden(request, response) { response.writeHead(403, 'forbidden'); response.end(); }
-function ERRbadmethod(request, response) { response.writeHead(405, 'bad method'); response.end(); }
-function ERRinternal(request, response, err) {
-	console.log('INTERNAL ERROR', err);
+function ERRforbidden(request, response, msg) { response.writeHead(403, 'forbidden'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRnotfound(request, response, msg) { response.writeHead(404, 'not found'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRbadmethod(request, response, msg) { response.writeHead(405, 'bad method'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRbadaccept(request, response, msg) { response.writeHead(406, 'bad accept'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRbadent(request, response, msg) { response.writeHead(422, 'bad entity'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRinternal(request, response, msg, exception) {
+	console.error(msg, exception);
 	response.writeHead(500, 'internal error');
-	response.end();
+	response.end(msg);
 }
+
+
+// Setup
+// =====
+server.pgClient.connect(function(err) {
+	if (err) {
+		console.error("Failed to connect to postgres", err);
+		process.exit();
+	}
+});
+server.listen(8000);
+console.log('HTTP server listening on port 8000');

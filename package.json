@@ -1,0 +1,12 @@
+{
+	"author": "Paul Frazee <pfrazee@gmail.com>",
+	"dependencies": {
+		"express": "3.0.x",
+		"pg": "2.3.x",
+		"bcrypt": "0.7.x"
+	},
+	"devDependencies": {
+	},
+	"scripts": {
+	}
+}
