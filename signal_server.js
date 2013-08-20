@@ -31,10 +31,17 @@ server.get('/', function(request, response) {
 // Tooling
 // =======
 server.get('/status', function(request, response) {
+	var uptime = (new Date() - server.startTime);
 	response.json({
+		started_at: server.startTime.toLocaleString(),
+		uptime_seconds: uptime/1000,
+		uptime_minutes: uptime/(60*1000),
+		uptime_hours: uptime/(60*60*1000),
+		uptime_days: uptime/(24*60*60*1000),
 		streams: Object.keys(server.streams)
 	});
 });
+
 
 // User
 // ====
@@ -51,14 +58,14 @@ server.get('/:userId',
 				'SELECT $1, $2 WHERE NOT EXISTS',
 					'(SELECT id FROM user_presences WHERE app_id=$1 AND user_id=$2)'
 		].join(' ');
-		server.pgClient.query(query, [request.params.appId, request.params.userId], function(err, res) {
+		server.pgClient.query(query, [response.locals.appId, request.params.userId], function(err, res) {
 			if (err)
 				return ERRinternal(request, response, 'Failed to update user presence in DB', err);
 			next();
 		});
 	},
 	function (request, response) {
-		var streamId = getStreamId(request.params.appId, request.params.userId);
+		var streamId = getStreamId(response.locals.appId, request.params.userId);
 
 		// Kill an existing stream if active (only one at a time per app/user combo)
 		if (server.streams[streamId]) {
@@ -68,7 +75,6 @@ server.get('/:userId',
 
 		// Store connection
 		response.locals.streamId = streamId;
-		response.locals.appId = request.params.appId;
 		response.locals.userId = request.params.userId;
 		server.streams[streamId] = response;
 		response.on('close', onStreamClosed);
@@ -166,7 +172,7 @@ server.notify('/:userId/apps/:targetAppId',
 // =================
 
 // Auth
-// - adds request.params.appId on success
+// - adds response.locals.appId on success
 var uuidRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // ^ http://stackoverflow.com/a/13653180
 function authorize(request, response, next) {
@@ -189,7 +195,7 @@ function authorize(request, response, next) {
 		if (!res.rows[0])
 			return ERRforbidden(request, response, 'Invalid auth token');
 
-		request.params.appId = res.rows[0].app_id;
+		response.locals.appId = res.rows[0].app_id;
 		next();
 	});
 }
@@ -231,5 +237,6 @@ server.pgClient.connect(function(err) {
 		process.exit();
 	}
 });
-server.listen(8000);
-console.log('HTTP server listening on port 8000');
+server.listen(8001);
+server.startTime = new Date();
+console.log('Signalling HTTP server listening on port 8001');
