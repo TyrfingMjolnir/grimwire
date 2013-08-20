@@ -1,0 +1,11 @@
+
+/* header */
+.navbar-static-top .navbar-brand {
+	height: 50px;
+}
+#logo {
+	height: 50px;
+	position: relative;
+	float: left;
+	top: -7px;
+}
