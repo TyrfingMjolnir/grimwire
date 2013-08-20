@@ -1,5 +1,7 @@
 CREATE EXTENSION "uuid-ossp";
 
+CREATE TYPE basicStatusEnum AS ENUM ('Active', 'Inactive');
+
 CREATE TABLE users (
 	id SERIAL UNIQUE,
 
@@ -8,7 +10,8 @@ CREATE TABLE users (
 	password VARCHAR(256),
 
 	created_at TIMESTAMP DEFAULT NOW(),
-	registered_at TIMESTAMP
+	registered_at TIMESTAMP,
+	status basicStatusEnum DEFAULT 'Active'
 );
 
 CREATE TABLE apps (
@@ -18,7 +21,8 @@ CREATE TABLE apps (
 	name VARCHAR(256) NOT NULL,
 	redirect_url VARCHAR(1024),
 
-	created_at TIMESTAMP DEFAULT NOW()
+	created_at TIMESTAMP DEFAULT NOW(),
+	status basicStatusEnum DEFAULT 'Active'
 );
 
 CREATE TABLE user_auth_tokens (
