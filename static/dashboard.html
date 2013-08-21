@@ -20,7 +20,7 @@
     <![endif]-->
   </head>
 
-  <body>
+  <body id="dashboardapp">
 
     <!-- Static navbar -->
     <div class="navbar navbar-default navbar-static-top">
@@ -38,7 +38,7 @@
             <li class="dropdown">
               <a href="#" class="dropdown-toggle" data-toggle="dropdown">Bob @ Grimwire.net <b class="caret"></b></a>
               <ul class="dropdown-menu">
-                <li><a href="#">Edit Account</a></li>
+                <li><a href="/_/profile.html">Edit Account</a></li>
                 <li><a href="#">Log Out</a></li>
               </ul>
             </li>
@@ -53,116 +53,15 @@
       <p class="text-muted">Hello, and welcome to the Grimwire closed beta. If anything breaks, please let pfrazee@gmail.com know. ~pfrazee</p>
 
       <div class="row">
-        <div class="col-md-8">
+        <div id="stations" class="col-md-8">
           <div class="row">
-            <div class="col-md-4"><h3 style="margin: 0">Your Stations</h3></div>
+            <div class="col-md-4"><h3 style="margin-top: 0">Your Stations</h3></div>
             <div class="col-md-8">
               <form role="form">
-                <div class="form-group"><input type="text" class="form-control" placeholder="Station ID (eg bobs-palace)"></div>
+                <div class="form-group"><input id="station-id" type="text" class="form-control" placeholder="Station ID (eg bobs-palace)"></div>
               </form>
             </div>
           </div>
-
-          <div class="panel panel-default">
-            <div class="panel-heading">
-              <div class="pull-right">
-                <a href="#"><span class="glyphicon glyphicon-refresh text-muted"></span></a>&nbsp;
-                <a href="#"><span class="glyphicon glyphicon-remove text-muted"></span></a>
-              </div>
-              <h3 class="panel-title">
-                /grimdev - Grimwire Dev Team
-              </h3>
-            </div>
-            <div class="panel-body">
-              <div class="row">
-                <div class="col-md-8">
-                  Private,
-                  <a href="javascript:void(0)" class="popover-link" data-content="bob <span class='label label-default'>admin</span><br/>susan<br/>alice<br/>john<br/>tim">5 users</a>
-                  <br/>
-                  Connected apps:
-                  <a href="javascript:void(0)" class="connected-app">GrimChat</a>,
-                  <a href="javascript:void(0)" class="connected-app">GitHub</a>
-                </div>
-                <div class="col-md-4">
-                  <div class="pull-right">
-                    <button type="button" class="btn btn-default" data-toggle="collapse" data-target="#debug-admin-section">Admin</button>
-                    <div class="btn-group">
-                      <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-                        Join With <span class="caret"></span>
-                      </button>
-                      <ul class="dropdown-menu" role="menu">
-                        <li class="dropdown-header">Your Past Apps</li>
-                        <li><a href="#">GrimChat</a></li>
-                        <li><a href="#">Webdrive</a></li>
-                        <li><a href="#">Echo</a></li>
-                        <li class="divider"></li>
-                        <li class="dropdown-header">Station Apps</li>
-                        <li><a href="#">GitHub</a></li>
-                        <li><a href="#">GrimChat</a></li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div id="debug-admin-section" class="panel-footer collapse">
-              <form class="form-horizontal" role="form">
-                <div class="form-group">
-                  <label for="name" class="col-sm-3 control-label">Station Name</label>
-                  <div class="col-sm-9"><input type="text" class="form-control" id="name" value="Grimwire Dev Team" /></div>
-                </div>
-                <div class="form-group">
-                  <label for="admins" class="col-sm-3 control-label">Admins</label>
-                  <div class="col-sm-9"><textarea class="form-control" id="admins">bob</textarea></div>
-                </div>
-                <div class="form-group">
-                  <label for="allowed-users" class="col-sm-3 control-label">Invited Users</label>
-                  <div class="col-sm-9"><textarea class="form-control" id="allowed-users">bob, susan, alice, john, tim</textarea></div>
-                </div>
-                <div class="form-group">
-                  <label for="allowed-apps" class="col-sm-3 control-label">Allowed Apps</label>
-                  <div class="col-sm-9"><textarea class="form-control" id="allowed-apps">*</textarea></div>
-                </div>
-                <div class="form-group">
-                  <label for="recommended-apps" class="col-sm-3 control-label">Recommended Apps</label>
-                  <div class="col-sm-9"><textarea class="form-control" id="recommended-apps">chat.grimwire.net, github.com</textarea></div>
-                </div>
-                <div class="form-group"><div class="col-sm-offset-3 col-sm-9"><button type="submit" class="btn btn-default">Update Settings</button></div></div>
-              </form>
-            </div>
-          </div><!-- /panel -->
-
-          <div class="panel panel-default">
-            <div class="panel-heading">
-              <div class="pull-right">
-                <a href="#"><span class="glyphicon glyphicon-refresh text-muted"></span></a>&nbsp;
-                <a href="#"><span class="glyphicon glyphicon-remove text-muted"></span></a>
-              </div>
-              <h3 class="panel-title">/foobar</h3>
-            </div>
-            <div class="panel-body">
-              Inactive
-              <div class="btn-group pull-right">
-                <button type="button" class="btn btn-success" data-toggle="dropdown">
-                  <span class="glyphicon glyphicon-plus"></span> Create
-                </button>
-              </div>
-            </div>
-          </div><!-- /panel -->
-
-          <div class="panel panel-default">
-            <div class="panel-heading">
-              <div class="pull-right">
-                <a href="#"><span class="glyphicon glyphicon-refresh text-muted"></span></a>&nbsp;
-                <a href="#"><span class="glyphicon glyphicon-remove text-muted"></span></a>
-              </div>
-              <h3 class="panel-title">/bobs-palace - Bob's Palace</h3>
-            </div>
-            <div class="panel-body">
-              Private
-            </div>
-          </div><!-- /panel -->
-
         </div><!-- /col-md-8 -->
 
         <div class="col-md-4">
@@ -179,22 +78,117 @@
 
     </div> <!-- /container -->
 
+    <script type="text/template" id="station-template">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <div class="pull-right">
+            <a class="toolbar-refresh" href="javascript:void(0)"><span class="glyphicon glyphicon-refresh text-muted"></span></a>&nbsp;
+            <a class="toolbar-close" href="javascript:void(0)"><span class="glyphicon glyphicon-remove text-muted"></span></a>
+          </div>
+          <h3 class="panel-title">
+            /<%= id %> <% if (name) { %> - <%= name %> <% } %>
+          </h3>
+        </div>
+        <div class="panel-body">
+          <% if (members.length > 0) { %>
+            <div class="row">
+              <div class="col-md-8">
+                <% if (invites.length === 0 || userIsInvited) { %>
+                  <% if (invites.length === 0) { %> Public, <% } else { %> Private, <% } %>
+                  <a href="javascript:void(0)" class="popover-link" data-content="<%= members.join('<br/>') %>"><%- members.length %> online users</a>,
+                  <a href="javascript:void(0)" class="popover-link" data-content="<%= admins.join('<br/>') %>"><%- admins.length %> admins</a>
+                  <br/>
+                  Connected apps:
+                  <%= userApps.map(function(app) { return '<a href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
+                <% } else { %>
+                  Private
+                <% } %>
+              </div>
+              <div class="col-md-4">
+                <div class="pull-right">
+                  <button type="button" class="btn btn-default admin-btn">Admin</button>
+                  <div class="btn-group">
+                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+                      Join With <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu" role="menu">
+                      <li class="dropdown-header">Your Past Apps</li>
+                      <li><a href="javascript:void(0)">GrimChat</a></li>
+                      <li><a href="javascript:void(0)">Webdrive</a></li>
+                      <li><a href="javascript:void(0)">Echo</a></li>
+                      <li class="divider"></li>
+                      <li class="dropdown-header">Station Apps</li>
+                      <li><a href="javascript:void(0)">GitHub</a></li>
+                      <li><a href="javascript:void(0)">GrimChat</a></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% } else { %>
+            Inactive
+            <div class="btn-group pull-right">
+              <button type="button" class="btn btn-success" data-toggle="dropdown">
+                <span class="glyphicon glyphicon-plus"></span> Create
+              </button>
+            </div>
+          <% } %>
+        </div>
+        <div class="panel-footer collapse"></div>
+      </div>
+    </script>
+    <script type="text/template" id="station-admin-template">
+      <form class="form-horizontal" role="form">
+        <div class="form-group">
+          <label for="name" class="col-sm-3 control-label">Station Name</label>
+          <div class="col-sm-9"><input type="text" class="form-control" id="name" value="<%- name %>" /></div>
+        </div>
+        <div class="form-group">
+          <label for="admins" class="col-sm-3 control-label">Admins</label>
+          <div class="col-sm-9"><textarea class="form-control" id="admins"><%- admins.join(', ') %></textarea></div>
+        </div>
+        <div class="form-group">
+          <label for="allowed-users" class="col-sm-3 control-label">Invited Users</label>
+          <div class="col-sm-9"><textarea class="form-control" id="allowed-users"><%- invites.join(', ') %></textarea></div>
+        </div>
+        <div class="form-group">
+          <label for="allowed-apps" class="col-sm-3 control-label">Allowed Apps</label>
+          <div class="col-sm-9"><textarea class="form-control" id="allowed-apps"><%- allowedApps.join(', ') %></textarea></div>
+        </div>
+        <div class="form-group">
+          <label for="recommended-apps" class="col-sm-3 control-label">Recommended Apps</label>
+          <div class="col-sm-9"><textarea class="form-control" id="recommended-apps"><%- recommendedApps.join(', ') %></textarea></div>
+        </div>
+        <div class="form-group">
+          <div class="col-sm-offset-3 col-sm-9">
+            <button type="submit" class="btn btn-default">Update Settings</button>
+            <button type="submit" class="btn btn-danger"><span class="glyphicon glyphicon-remove"></span> Close Station</button>
+          </div>
+        </div>
+      </form>
+    </script>
+
     <script src="js/jquery-2.0.3.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
+    <script src="js/underscore.js"></script>
+    <script src="js/backbone.js"></script>
     <script>
-    // temporary
-    $(function() {
-      // popovers
-      $('.popover-link').popover({ html: true });
-      $('.connected-app').popover({
-        html: true,
-        content: [
-          '<h4 style="margin: 0">GrimChat</h4>',
-          '<a href="#">chat.grimwire.net</a><br/><br/>',
-          '<button class="btn btn-danger btn-xs">Disconnect <span class="glyphicon glyphicon-remove-circle"></span></button>'
-        ].join('')
-      })
-    });
+      // :DEBUG:
+      $(function() {
+        // popovers
+        $('.connected-app').popover({
+          html: true,
+          content: [
+            '<h4 style="margin: 0">GrimChat</h4>',
+            '<a href="#">chat.grimwire.net</a><br/><br/>',
+            '<button class="btn btn-danger btn-xs">Disconnect <span class="glyphicon glyphicon-remove-circle"></span></button>'
+          ].join('')
+        })
+      });
     </script>
+    <script src="js/dashboard/models.js"></script>
+    <script src="js/dashboard/collections.js"></script>
+    <script src="js/dashboard/views.js"></script>
+    <script src="js/dashboard/app.js"></script>
   </body>
 </html>
