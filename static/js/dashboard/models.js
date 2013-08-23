@@ -19,9 +19,10 @@ var Models;
                 members: [],
                 admins: [],
                 invites: [],
+                hosts: [],
                 allowedApps: [],
                 recommendedApps: [],
-                userIsInvited: false,
+                userId: '',
                 userApps: []
             };
         };

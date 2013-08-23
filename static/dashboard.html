@@ -8,7 +8,7 @@
     <meta name="author" content="">
     <link rel="shortcut icon" href="ico/favicon.png">
 
-    <title>Grimwire - Dashboard</title>
+    <title>Grimwire WebPN</title>
 
     <link href="css/bootstrap.css" rel="stylesheet">
     <link href="css/dashboard.css" rel="stylesheet">
@@ -31,12 +31,12 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/_/dashboard.html"><img id="logo" src="img/logo_small.png" /></a>
+          <a class="navbar-brand" href="/_/dashboard.html" title="Web Peer Network"><img id="logo" src="img/logo_small.png" /> WebPN</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
             <li class="dropdown">
-              <a href="#" class="dropdown-toggle" data-toggle="dropdown">Bob @ Grimwire.net <b class="caret"></b></a>
+              <a href="#" class="dropdown-toggle" data-toggle="dropdown">bob &lceil;&bull;&bull;&middot;&middot;&middot;&rfloor; <b class="caret"></b></a>
               <ul class="dropdown-menu">
                 <li><a href="/_/profile.html">Edit Account</a></li>
                 <li><a href="#">Log Out</a></li>
@@ -50,87 +50,104 @@
 
     <div class="container">
 
-      <p class="text-muted">Hello, and welcome to the Grimwire closed beta. If anything breaks, please let pfrazee@gmail.com know. ~pfrazee</p>
-
+      <br/>
       <div class="row">
-        <div id="stations" class="col-md-8">
+        <div id="stations" class="col-md-6">
           <div class="row">
-            <div class="col-md-4"><h3 style="margin-top: 0">Your Stations</h3></div>
-            <div class="col-md-8">
-              <form role="form">
-                <div class="form-group"><input id="station-id" type="text" class="form-control" placeholder="Station ID (eg bobs-palace)"></div>
-              </form>
+            <div class="col-md-5"><h3 style="margin-top: 0">Network Stations</h3></div>
+            <div class="col-md-7">
+              <div class="input-group">
+                <span class="input-group-addon">/</span>
+                <input id="station-id" type="text" class="form-control" placeholder="station-id">
+              </div>
+              <a class="pull-right" href="#"><small>New</small></a>
             </div>
           </div>
-        </div><!-- /col-md-8 -->
-
-        <div class="col-md-4">
-          <h4>Your Past Apps</h4>
-          <a href="#">GrimChat</a> <small class="text-muted">today</small><br/>
-          <a href="#">GitHub</a> <small class="text-muted">today</small><br/>
-          <a href="#">WebDrive</a> <small class="text-muted">yesterday</small><br/>
           <br/>
-          <h4>Your Past Stations</h4>
-          <a href="#">Grimwire Dev Team</a> <small class="text-muted">today</small><br/>
-          <a href="#">Bob's Palace</a> <small class="text-muted">today</small><br/>
+        </div><!-- /col-md-7 -->
+
+        <div class="col-md-6">
+          <textarea id="scratchpad" class="form-control" rows="30">===[[[[ Grimwire.net ]]]]===
+Web Peer Network v0.1 (Aug22, 2013)
+
+First time? Click "New" and join with one of the applications. Then join with another application (so they're both running at the same time) and see how they interact.</textarea>
+          <small class="text-muted">scratchpad ^ saves to local storage on blur</small>
         </div>
       </div> <!-- /row -->
 
     </div> <!-- /container -->
 
     <script type="text/template" id="station-template">
+      <% var userIsAdmin = (admins.indexOf(userId) !== -1); %>
+      <% var userIsInvited = (userIsAdmin || invites.length === 0 || invites.indexOf(userId) !== -1); %>
       <div class="panel panel-default">
         <div class="panel-heading">
-          <div class="pull-right">
-            <a class="toolbar-refresh" href="javascript:void(0)"><span class="glyphicon glyphicon-refresh text-muted"></span></a>&nbsp;
-            <a class="toolbar-close" href="javascript:void(0)"><span class="glyphicon glyphicon-remove text-muted"></span></a>
-          </div>
           <h3 class="panel-title">
-            /<%= id %> <% if (name) { %> - <%= name %> <% } %>
+            <span class="text-muted">/<%= id %></span> <% if (name) { %> <%= name %> <% } %></span>
+            <span class="pull-right">
+              <a href="#" class="dismiss-station">&times;</a>&nbsp;
+            </span>
           </h3>
         </div>
         <div class="panel-body">
           <% if (members.length > 0) { %>
             <div class="row">
-              <div class="col-md-8">
-                <% if (invites.length === 0 || userIsInvited) { %>
+              <div class="col-md-7">
+                <% if (userIsInvited) { %>
                   <% if (invites.length === 0) { %> Public, <% } else { %> Private, <% } %>
                   <a href="javascript:void(0)" class="popover-link" data-content="<%= members.join('<br/>') %>"><%- members.length %> online users</a>,
                   <a href="javascript:void(0)" class="popover-link" data-content="<%= admins.join('<br/>') %>"><%- admins.length %> admins</a>
-                  <br/>
-                  Connected apps:
-                  <%= userApps.map(function(app) { return '<a href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
+                  <% if (userApps.length > 0) { %>
+                    <%= userApps.map(function(app) { return '<a class="text-muted" href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
+                  <% } %>
                 <% } else { %>
                   Private
                 <% } %>
               </div>
-              <div class="col-md-4">
+              <div class="col-md-5">
                 <div class="pull-right">
-                  <button type="button" class="btn btn-default admin-btn">Admin</button>
-                  <div class="btn-group">
-                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-                      Join With <span class="caret"></span>
-                    </button>
-                    <ul class="dropdown-menu" role="menu">
-                      <li class="dropdown-header">Your Past Apps</li>
-                      <li><a href="javascript:void(0)">GrimChat</a></li>
-                      <li><a href="javascript:void(0)">Webdrive</a></li>
-                      <li><a href="javascript:void(0)">Echo</a></li>
-                      <li class="divider"></li>
-                      <li class="dropdown-header">Station Apps</li>
-                      <li><a href="javascript:void(0)">GitHub</a></li>
-                      <li><a href="javascript:void(0)">GrimChat</a></li>
-                    </ul>
-                  </div>
+                  <% if (userIsInvited) { %>
+                    <div class="btn-group">
+                      <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+                        <% if (userApps.length === 0) { %>Join With<% } else { %>Add<% } %>
+                        <span class="caret"></span>
+                      </button>
+                      <ul class="dropdown-menu" role="menu">
+                      <% if (allowedApps.length > 0) { %>
+                        <li class="dropdown-header">Allowed Apps</li>
+                        <%= allowedApps.map(function(app) {
+                          return '<li><a href="javascript:void(0)">'+app+'</a></li>';
+                        }).join('') %>
+                      <% } else { %>
+                        <li class="dropdown-header">Your Past Apps</li>
+                        <li><a href="javascript:void(0)">GrimChat</a></li>
+                        <li><a href="javascript:void(0)">Webdrive</a></li>
+                        <li><a href="javascript:void(0)">Echo</a></li>
+                        <li class="divider"></li>
+                        <li class="dropdown-header">Station Apps</li>
+                        <li><a href="javascript:void(0)">GitHub</a></li>
+                        <li><a href="javascript:void(0)">GrimChat</a></li>
+                        <li class="divider"></li>
+                        <li class="dropdown-header">Network Apps</li>
+                        <li><a href="javascript:void(0)">GrimChat</a></li>
+                        <li><a href="javascript:void(0)">WebDrive</a></li>
+                        <li><a href="javascript:void(0)">Echo</a></li>
+                      <% } %>
+                      </ul>
+                    </div>
+                  <% } %>
+                  <% if (userIsAdmin) { %><button type="button" class="btn btn-default admin-btn" data-toggle="button">Admin</button><% } %>
                 </div>
               </div>
             </div>
           <% } else { %>
-            Inactive
-            <div class="btn-group pull-right">
-              <button type="button" class="btn btn-success" data-toggle="dropdown">
-                <span class="glyphicon glyphicon-plus"></span> Create
-              </button>
+            <div>
+              Inactive
+              <div class="pull-right">
+                <button type="button" class="btn btn-success create-station" data-toggle="button">
+                  <span class="glyphicon glyphicon-plus"></span> Create
+                </button>
+              </div>
             </div>
           <% } %>
         </div>
@@ -139,30 +156,53 @@
     </script>
     <script type="text/template" id="station-admin-template">
       <form class="form-horizontal" role="form">
+        <br/>
         <div class="form-group">
-          <label for="name" class="col-sm-3 control-label">Station Name</label>
-          <div class="col-sm-9"><input type="text" class="form-control" id="name" value="<%- name %>" /></div>
+          <label for="name" class="col-sm-3 control-label" style="font-weight: normal">Station Title</label>
+          <div class="col-sm-9"><input type="text" class="form-control" id="name" value="<%- name %>" placeholder="Not required." /></div>
         </div>
+        <br/>
         <div class="form-group">
-          <label for="admins" class="col-sm-3 control-label">Admins</label>
-          <div class="col-sm-9"><textarea class="form-control" id="admins"><%- admins.join(', ') %></textarea></div>
+          <label for="invites" class="col-sm-3 control-label" style="font-weight: normal">
+            Invited Users<br/>
+            <small><a class="invite-just-me" href="javascript:void(0)">Just Me</a></small>
+          </label>
+          <div class="col-sm-9"><textarea class="form-control" id="invites" placeholder="If left empty, the channel will be public."><%- invites.join(', ') %></textarea></div>
         </div>
-        <div class="form-group">
-          <label for="allowed-users" class="col-sm-3 control-label">Invited Users</label>
-          <div class="col-sm-9"><textarea class="form-control" id="allowed-users"><%- invites.join(', ') %></textarea></div>
+        <div class="form-advanced collapse">
+          <hr/>
+          <div class="form-group">
+            <label for="admins" class="col-sm-3 control-label" style="font-weight: normal">Admins</label>
+            <div class="col-sm-9"><textarea class="form-control" id="admins" placeholder="The creator of the station will always be an admin."><%- admins.join(', ') || userId %></textarea></div>
+          </div>
+          <div class="form-group">
+            <label style="font-weight: normal" for="hosts" class="col-sm-3 control-label">Allowed Hosters</label>
+            <div class="col-sm-9"><textarea class="form-control" id="hosts" placeholder="If left empty, all users will be allowed to connect to each other."><%- hosts.join(', ') %></textarea></div>
+          </div>
+          <div class="form-group">
+            <label style="font-weight: normal" for="allowed-apps" class="col-sm-3 control-label">Allowed Apps</label>
+            <div class="col-sm-9"><textarea class="form-control" id="allowed-apps" placeholder="If left empty, all apps will be allowed."><%- allowedApps.join(', ') %></textarea></div>
+          </div>
+          <div class="form-group">
+            <label style="font-weight: normal" for="recommended-apps" class="col-sm-3 control-label">Recommended Apps</label>
+            <div class="col-sm-9"><textarea class="form-control" id="recommended-apps" placeholder="If left empty, no apps will be recommended to joining users."><%- recommendedApps.join(', ') %></textarea></div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="allowed-apps" class="col-sm-3 control-label">Allowed Apps</label>
-          <div class="col-sm-9"><textarea class="form-control" id="allowed-apps"><%- allowedApps.join(', ') %></textarea></div>
-        </div>
-        <div class="form-group">
-          <label for="recommended-apps" class="col-sm-3 control-label">Recommended Apps</label>
-          <div class="col-sm-9"><textarea class="form-control" id="recommended-apps"><%- recommendedApps.join(', ') %></textarea></div>
-        </div>
+        <br/>
         <div class="form-group">
           <div class="col-sm-offset-3 col-sm-9">
-            <button type="submit" class="btn btn-default">Update Settings</button>
-            <button type="submit" class="btn btn-danger"><span class="glyphicon glyphicon-remove"></span> Close Station</button>
+            <% if (members.length > 0) { %>
+              <div class="btn-group pull-right">
+                <button type="submit" class="btn btn-default toggle-advanced" data-toggle="button"><span class="glyphicon glyphicon-cog"></span></button>
+                <button type="submit" class="btn btn-default update-settings">Update Settings</button>
+              </div>
+              <button type="submit" class="btn btn-default close-station"><span class="glyphicon glyphicon-remove-sign"></span> Close Station</button>
+            <% } else { %>
+              <div class="btn-group pull-right">
+                <button type="submit" class="btn btn-default toggle-advanced" data-toggle="button"><span class="glyphicon glyphicon-cog"></span></button>
+                <button type="submit" class="btn btn-default update-settings">Start Broadcasting</button>
+              </div>
+            <% } %>
           </div>
         </div>
       </form>

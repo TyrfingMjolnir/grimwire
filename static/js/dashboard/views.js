@@ -13,16 +13,19 @@ var Views;
         __extends(Station, _super);
         function Station(options) {
             this.events = {
-                'click .toolbar-refresh': 'refresh',
-                'click .toolbar-close': 'close',
+                'click .dismiss-station': 'close',
                 'click .admin-btn': 'toggleAdmin',
-                'click .update-settings': 'updateSettings'
+                'click .create-station': 'toggleAdmin',
+                'click .toggle-advanced': 'adminToggleAdvanced',
+                'click .update-settings': 'adminUpdateSettings',
+                'click .close-station': 'adminCloseStation',
+                'click .invite-just-me': 'adminInviteJustMe'
             };
             _super.call(this, options);
             this.template = _.template($('#station-template').html());
             this.adminTemplate = _.template($('#station-admin-template').html());
 
-            _.bindAll(this, 'render', 'remove', 'refresh', 'close', 'toggleAdmin', 'updateSettings');
+            _.bindAll(this, 'render', 'remove', 'refresh', 'close', 'toggleAdmin', 'adminToggleAdvanced', 'adminUpdateSettings', 'adminCloseStation');
             this.model.bind('change', this.render);
             this.model.bind('remove', this.remove);
         }
@@ -50,11 +53,39 @@ var Views;
             this.$footer.collapse('toggle');
         };
 
+        // Open/close admin advanced items
+        Station.prototype.adminToggleAdvanced = function () {
+            this.$('.form-advanced').collapse('toggle');
+        };
+
         // POST update and refresh ui
-        Station.prototype.updateSettings = function () {
+        Station.prototype.adminUpdateSettings = function (e) {
+            e.preventDefault();
+
             // :TODO:
-            console.debug(this.$('form.settings').serializeArray());
+            console.debug(this.$('form').serializeArray());
             this.refresh();
+        };
+
+        // DELETE station
+        Station.prototype.adminCloseStation = function (e) {
+            e.preventDefault();
+            confirm('Close /' + this.model.get('id') + '? This will stop users from being able to connect through this station.');
+            // :TODO:
+        };
+
+        // Change invited users to just me
+        Station.prototype.adminInviteJustMe = function (e) {
+            e.preventDefault();
+            if (typeof this.oldInvitesState == 'string') {
+                this.$('#invites').val(this.oldInvitesState);
+                this.oldInvitesState = null;
+                this.$('.invite-just-me').text('Just Me');
+            } else {
+                this.oldInvitesState = this.$('#invites').val();
+                this.$('#invites').val(this.model.get('userId'));
+                this.$('.invite-just-me').text('Undo');
+            }
         };
         return Station;
     })(Backbone.View);
@@ -65,18 +96,25 @@ var Views;
         function App() {
             _super.call(this);
             this.events = {
-                'keypress #station-id': 'createOnEnter'
+                'keypress #station-id': 'createOnEnter',
+                'blur #scratchpad': 'saveScratchpad'
             };
             this.userStations = new Collections.Station();
             this.setElement($('#dashboardapp'), true);
             this.$stationIdInput = this.$('#station-id');
             this.$stationList = this.$('#stations');
+            this.$scratchPad = this.$('#scratchpad');
             _.bindAll(this, 'render', 'addOne', 'addAll', 'createOnEnter');
 
             this.userStations.bind('add', this.addOne);
             this.userStations.bind('reset', this.addAll);
             this.userStations.bind('all', this.render);
+
             //this.userStations.fetch();
+            var v = localStorage.getItem('scratchpad');
+            if (v != null) {
+                this.$scratchPad.val(v);
+            }
         }
         App.prototype.render = function () {
         };
@@ -95,6 +133,12 @@ var Views;
                 return;
             console.debug(this.$stationIdInput.val());
             // :TODO:
+        };
+
+        App.prototype.saveScratchpad = function (e) {
+            if (localStorage) {
+                localStorage.setItem('scratchpad', this.$scratchPad.val());
+            }
         };
         return App;
     })(Backbone.View);

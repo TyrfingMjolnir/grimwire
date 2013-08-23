@@ -10,24 +10,37 @@ $(() => {
 			name: 'Grimwire Dev Team',
 
 			members: ['bob', 'alice', 'john', 'tim'],
+
 			admins: ['bob'],
 			invites: ['susan', 'alice', 'john', 'tim'],
+			allowedApps: [],
+			recommendedApps: ['chat.grimwire.com', 'github.com'],
 
-			allowedApps: ['*'],
-			recommendedApps: ['chat.grimwire.net', 'github.com'],
-
-			userIsInvited: true,
-			userApps: ['chat.grimwire.net', 'github.com']
+			userId: 'bob',
+			userApps: ['chat.grimwire.com', 'github.com']
 		},
 		{
-			id: 'foobar'
+			id: 'foobaz',
+			name: 'Foobaz',
+
+			members: ['jimmy'],
+			admins: ['jimmy'],
+			allowedApps: ['chat.grimwire.com', 'github.com'],
+
+			userId: 'bob'
 		},
 		{
-			id: 'bobs-palace',
-			name: 'Bob\'s Palace',
+			id: 'foobar',
+
+			userId: 'bob'
+		},
+		{
+			id: 'gregs-palace',
 
 			members: ['greg'],
-			invites: ['greg']
+			invites: ['greg'],
+
+			userId: 'bob'
 		}
 	]);
 });

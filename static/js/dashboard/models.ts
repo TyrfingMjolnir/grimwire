@@ -10,13 +10,14 @@ module Models {
 				name: '',
 
 				members: [],
+
 				admins: [],
 				invites: [],
-
+				hosts: [],
 				allowedApps: [],
 				recommendedApps: [],
 
-				userIsInvited: false,
+				userId: '',
 				userApps: []
 			}
 		}
