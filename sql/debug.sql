@@ -1,8 +1,26 @@
-INSERT INTO users (name) VALUES ('pfraze');
-INSERT INTO users (name) VALUES ('bob');
-INSERT INTO apps (owning_user_id, name) SELECT id, 'Debug App' FROM users WHERE name='pfraze';
-INSERT INTO app_auth_tokens (id, user_id, app_id) SELECT uuid_generate_v4(), owning_user_id, id FROM apps WHERE name='Debug App';
-INSERT INTO app_auth_tokens (id, user_id, app_id) SELECT uuid_generate_v4(), (SELECT id FROM users WHERE name='bob'), (SELECT id FROM apps WHERE name='Debug App');
-INSERT INTO user_auth_tokens (id, src_user_id, dst_user_id) SELECT uuid_generate_v4(), (SELECT id FROM users WHERE name='pfraze'), (SELECT id FROM users WHERE name='bob');
-INSERT INTO user_auth_tokens (id, src_user_id, dst_user_id) SELECT uuid_generate_v4(), (SELECT id FROM users WHERE name='bob'), (SELECT id FROM users WHERE name='pfraze');
-INSERT INTO user_presences (user_id, app_id) SELECT (SELECT id FROM users WHERE name='bob'), (SELECT id FROM apps WHERE name='Debug App');
+
+-- Insert some debug records
+
+INSERT INTO users (id) VALUES ('pfraze');
+INSERT INTO users (id) VALUES ('bob');
+INSERT INTO apps (id) VALUES ('chat.grimwire.com');
+INSERT INTO apps (id) VALUES ('webdrive.grimwire.com');
+
+INSERT INTO stations (id, owning_user_id, name, invites, admins) VALUES ('foobar', 'pfraze', 'Foobar Station', '{"bob","pfraze"}', '{"pfraze"}');
+INSERT INTO stations (id, owning_user_id, name, invites, admins) VALUES ('bobs-palace', 'bob', 'Bob''s Palace', '{"bob"}', '{"bob"}');
+
+INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_generate_v4(), 'foobar', 'pfraze', 'chat.grimwire.com';
+INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_generate_v4(), 'foobar', 'pfraze', 'webdrive.grimwire.com';
+INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_generate_v4(), 'foobar', 'bob', 'chat.grimwire.com';
+--INSERT INTO user_presences (station_id, user_id, app_id) VALUES ('foobar', 'pfraze', 'chat.grimwire.com');
+--INSERT INTO user_presences (station_id, user_id, app_id) VALUES ('foobar', 'pfraze', 'webdrive.grimwire.com');
+--INSERT INTO user_presences (station_id, user_id, app_id) VALUES ('foobar', 'bob', 'chat.grimwire.com');
+
+
+-- Test queries
+select * from active_stations_list_view;
+select * from empty_active_stations_list_view;
+select * from user_online_stations_fn('pfraze');
+select * from user_online_stations_fn('bob');
+select * from station_detail_view WHERE id='foobar';
+select * from station_detail_view WHERE id='bobs-palace';

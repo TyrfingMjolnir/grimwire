@@ -8,6 +8,7 @@ var express = require('express');
 var server = express();
 server.pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
 server.streams = {};
+server.stationStreamIds = {};
 
 
 // Common Handlers
@@ -24,7 +25,7 @@ server.options('*', function(request, response) {
 // ====
 server.get('/', function(request, response) {
 	response.writeHead(200, 'ok');
-	response.end('signal server');
+	response.end('Web Peer Relay Network Server');
 });
 
 
@@ -43,54 +44,309 @@ server.get('/status', function(request, response) {
 });
 
 
-// User
-// ====
-// - signal stream
-server.get('/:userId',
+// Station
+// =======
+server.all('/:stationId',
 	authorize,
+	getStationMiddleware,
 	function (request, response, next) {
-		if (!request.accepts('text/event-stream'))
+		// Set link header
+		response.setHeader('link',
+			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN", '+
+			'<http://grimwire.net:8001/s>; rel="up collection grimwire.com/-webprn/relays"; id="stations", '+
+			'<http://grimwire.net:8001/'+response.locals.stationId+'>; rel="self item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'", '+
+			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="collection"; id="streams"'
+		);
+
+		// Route by method
+		if (request.method == 'HEAD') {
+			response.send(204);
+			return;
+		}
+		if (request.method != 'GET') {
 			return next('route');
-
-		// Announce
-		var query = [
-			'INSERT INTO user_presences (app_id, user_id)',
-				'SELECT $1, $2 WHERE NOT EXISTS',
-					'(SELECT id FROM user_presences WHERE app_id=$1 AND user_id=$2)'
-		].join(' ');
-		server.pgClient.query(query, [response.locals.appId, request.params.userId], function(err, res) {
-			if (err)
-				return ERRinternal(request, response, 'Failed to update user presence in DB', err);
-			next();
-		});
-	},
-	function (request, response) {
-		var streamId = getStreamId(response.locals.appId, request.params.userId);
-
-		// Kill an existing stream if active (only one at a time per app/user combo)
-		if (server.streams[streamId]) {
-			server.streams[streamId].removeAllListeners('close');
-			server.streams[streamId].end();
 		}
 
-		// Store connection
-		response.locals.streamId = streamId;
-		response.locals.userId = request.params.userId;
-		server.streams[streamId] = response;
-		response.on('close', onStreamClosed);
+		if (request.accepts('json')) {
+			// Permissions
+			if (!response.locals.stationInfo.user_is_invited) {
+				// Uninvited view
+				response.locals.stationInfo = {
+					id: response.locals.stationInfo.id,
+					name: response.locals.stationInfo.name,
+					status: response.locals.stationInfo.status,
+					user_is_invited: false
+				};
+			}
 
-		// Send back stream header
-		response.writeHead(200, 'ok', {
-			'content-type': 'text/event-stream',
-			'cache-control': 'no-cache',
-			'connection': 'keepalive'
+			// GET json
+			response.json(response.locals.stationInfo);
+			return;
+		}
+		if (request.accepts('text/event-stream')) {
+			// Permissions
+			if (!response.locals.stationInfo.user_is_invited) {
+				return ERRforbidden(request, response);
+			}
+
+			// Announce
+			var query = 'INSERT INTO user_presences (station_id, app_id, user_id) VALUES ($1, $2, $3) RETURNING id';
+			server.pgClient.query(query, [request.params.stationId, response.locals.appId, response.locals.userId], function(err, res) {
+				if (err) {
+					return ERRinternal(request, response, 'Failed to update user presence in DB', err);
+				}
+				if (!res.rows[0]) {
+					return ERRinternal(request, response, 'Failed to create user presence entry in DB', err);
+				}
+
+				// Store connection
+				var streamId = response.locals.streamId = res.rows[0].id;
+				var stationStreamIds = addStream(streamId, response);
+
+				// Send back stream header
+				response.writeHead(200, 'ok', {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache',
+					'connection': 'keepalive'
+				});
+
+				// Write the ident message
+				var identJSON = JSON.stringify({ stream: streamId, user: response.locals.userId, app: response.locals.appId });
+				emitTo(streamId, 'event: ident\r\ndata: '+identJSON+'\r\n\r\n');
+
+				// Write the join message to all but the new stream
+				emitTo(stationStreamIds, 'event: join\r\ndata: '+identJSON+'\r\n\r\n', streamId);
+			});
+			return;
+		}
+		ERRbadaccept(request, response);
+	}
+);
+server.patch('/:stationId',
+	function (request, response, next) {
+		var stationInfo = response.locals.stationInfo;
+
+		// Validate content types
+		if (!request.accepts('json')) {
+			return next('route');
+		}
+		if (!request.is('json')) {
+			res.writeHead(415, 'bad content-type: must be json');
+			res.end();
+			return;
+		}
+
+		// Check permissions
+		if (stationInfo.admins.indexOf(response.locals.userId) === -1) {
+			return ERRforbidden(request, response);
+		}
+
+		// Validate inputs
+		var errors = validateStationPatch(request.body);
+		if (errors) {
+			response.writeHead(422, 'bad entity', { 'content-type': 'application/json' });
+			response.end(JSON.stringify(errors));
+			return;
+		}
+
+		// Update station
+		var query =
+			'UPDATE stations SET '+
+				'invites = $2, '+
+				'admins = $3, '+
+				'hosters = $4, '+
+				'allowed_apps = $5, '+
+				'recommended_apps = $6 '+
+			'WHERE stations.id = $1';
+		var values = [
+			request.params.stationId,
+			request.body.invites || stationInfo.invites,
+			request.body.admins || stationInfo.admins,
+			request.body.hosters || stationInfo.hosters,
+			request.body.allowed_apps || stationInfo.allowed_apps,
+			request.body.recommended_apps || stationInfo.recommended_apps
+		];
+		server.pgClient.query(query, values, function(err, res) {
+			if (err) {
+				return ERRinternal(request, response, 'Failed to update station in DB', err);
+			}
+
+			response.writeHead(204, 'ok, no content');
+			response.end();
 		});
 	}
 );
-server.get('/:userId', ERRbadaccept);
+server.delete('/:stationId',
+	function (request, response, next) {
+		var stationInfo = response.locals.stationInfo;
 
-function getStreamId(appId, userId) {
-	return appId+'-'+userId;
+		// Check permissions
+		if (stationInfo.admins.indexOf(response.locals.userId) === -1) {
+			return ERRforbidden(request, response);
+		}
+
+		// Remove station record
+		server.pgClient.query('DELETE FROM stations WHERE stations.id = $1', [request.params.stationId], function(err, res) {
+			if (err) {
+				return ERRinternal(request, response, 'Failed to remove station from DB', err);
+			}
+
+			response.writeHead(204, 'ok, no content');
+			response.end();
+		});
+	}
+);
+server.all('/:stationId', ERRbadmethod);
+
+
+// Station Streams
+// ===============
+server.all('/:stationId/streams',
+	authorize,
+	getStationMiddleware,
+	function (request, response, next) {
+		// Set link header
+		var linkHeader = [
+			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8001/'+response.locals.stationId+'>; rel="up item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'"',
+			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="self collection"; id="streams"'
+		];
+		if (response.locals.stationInfo.user_is_invited) {
+			(server.stationStreamIds[response.locals.stationId] || []).forEach(function(streamId) {
+				linkHeader.push('<http://grimwire.net:8001/'+response.locals.stationId+'/streams/'+streamId+'>; rel="item"; id="'+streamId+'"');
+			});
+		}
+		response.setHeader('link', linkHeader.join(', '));
+
+		// Route by method
+		if (request.method == 'HEAD') {
+			response.send(204);
+			return;
+		}
+	}
+);
+server.all('/:stationId/streams', ERRbadmethod);
+
+
+// Station Stream
+// ==============
+server.all('/:stationId/streams/:streamId',
+	authorize,
+	getStationMiddleware,
+	function (request, response, next) {
+		var streamId = request.params.streamId;
+		var stream = server.streams[streamId];
+
+		// Make sure the stream belongs to the station
+		if (!stream || stream.locals.stationId != response.locals.stationId) {
+			return ERRnotfound(request, response);
+		}
+
+		// Check permissions
+		if (!response.locals.stationInfo.user_is_invited) {
+			return ERRforbidden(request, response);
+		}
+
+		// Set link header
+		var linkHeader = [
+			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="up collection"; id="streams"',
+			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams/'+streamId+'>; rel="self item"; id="'+streamId+'"'
+		];
+		response.setHeader('link', linkHeader.join(', '));
+
+		// Route by method
+		if (request.method == 'HEAD') {
+			response.send(204);
+			return;
+		}
+		if (request.method != 'GET') {
+			return next('route');
+		}
+
+		if (request.accepts('json')) {
+			// Make sure the stream belongs to the station
+			var stream = server.streams[streamId];
+			if (stream.locals.stationId != response.locals.stationId) {
+				return ERRnotfound(request, response);
+			}
+
+			// GET json
+			response.json({ stream: streamId, user: stream.locals.userId, app: stream.locals.appId });
+			return;
+		}
+		ERRbadaccept(request, response);
+	}
+);
+server.post('/:stationId/streams/:streamId',
+	function (request, response, next) {
+		var streamId = request.params.streamId;
+
+		if (request.is('json')) {
+			if (!request.body.event || typeof request.body.event != 'string') {
+				response.writeHead(422, 'bad entity - `event` is a required string');
+				response.end();
+				return;
+			}
+			msg = 'event: '+request.body.event+'\r\n';
+			if (request.body.data) {
+				msg += 'data: '+JSON.stringify(request.body.data)+'\r\n';
+			}
+			emitTo(streamId, msg+'\r\n');
+			response.writeHead(204, 'ok no content');
+			response.end();
+			return;
+		}
+		ERRbadctype(request, response);
+	}
+);
+server.all('/:stationId/streams/:streamId', ERRbadmethod);
+
+
+// Stream Helpers
+// ==============
+function emitTo(streamIds, msg, exclude) {
+	if (!Array.isArray(streamIds)) { streamIds = [streamIds]; }
+	if (exclude && !Array.isArray(exclude)) { exclude = [exclude]; }
+	streamIds.forEach(function(streamId) {
+		if (exclude && exclude.indexOf(streamId) != -1) {
+			return;
+		}
+		var stream = server.streams[streamId];
+		if (!stream) {
+			console.error('Stream ID given for nonexistant stream', streamId);
+			return;
+		}
+		stream.write(msg);
+	});
+}
+
+function addStream(streamId, response) {
+	// Track the stream
+	server.streams[streamId] = response;
+	// Track the stream ID on the station
+	var stationStreamIds = server.stationStreamIds[response.locals.stationId];
+	if (!stationStreamIds) {
+		stationStreamIds = server.stationStreamIds[response.locals.stationId] = [];
+	}
+	stationStreamIds.push(streamId);
+	// Wire up close behavior
+	response.on('close', onStreamClosed);
+	return stationStreamIds;
+}
+
+function removeStream(stationId, streamId) {
+	// Remove the station's track of the stream ID
+	var ids = server.stationStreamIds[stationId];
+	if (ids) {
+		ids.splice(ids.indexOf(streamId), 1);
+		if (ids.length === 0) {
+			delete server.stationStreamIds[stationId];
+		}
+	}
+	// Remove the server's track of the stream
+	delete server.streams[streamId];
+	return ids || [];
 }
 
 // - handles stream close by client
@@ -99,49 +355,26 @@ function onStreamClosed() {
 
 	// Clear connection
 	response.removeAllListeners('close');
-	delete server.streams[response.locals.streamId];
+	var remainingStreamIds = removeStream(response.locals.stationId, response.locals.streamId);
 
 	// De-announce
-	server.pgClient.query('DELETE FROM user_presences WHERE app_id=$1 AND user_id=$2', [response.locals.appId, response.locals.userId], function(err) {
+	server.pgClient.query('DELETE FROM user_presences WHERE id=$1', [response.locals.streamId], function(err) {
 		if (err)
 			console.error('Failed to delete user presence from DB', err);
 	});
-}
 
-
-// User Peers
-// ==========
-// - whois online
-server.get('/:userId/peers',
-	authorize,
-	function (request, response, next) {
-		if (!request.accepts('json'))
-			return next('route');
-
-		var query = [
-			'SELECT apps.id as app_id, apps.name as app_name, users.id as user_id, users.name as user_name',
-				'FROM user_presences',
-				'INNER JOIN user_auth_tokens',
-					'ON user_auth_tokens.dst_user_id = user_presences.user_id',
-					'AND user_auth_tokens.src_user_id = $1',
-				'INNER JOIN users ON users.id = user_presences.user_id',
-				'INNER JOIN apps ON apps.id = user_presences.app_id'
-		].join(' ');
-		server.pgClient.query(query, [request.params.userId], function(err, res) {
-			if (err)
-				return ERRinternal(request, response, 'Failed to read user presences from DB', err);
-			response.writeHead(200, 'ok', { 'content-type': 'application/json' });
-			response.end(JSON.stringify(res.rows));
-		});
+	// Emit 'part' event
+	if (remainingStreamIds) {
+		var identJSON = JSON.stringify({ stream: response.locals.streamId, user: response.locals.userId, app: response.locals.appId });
+		emitTo(remainingStreamIds, 'event: part\r\ndata: '+identJSON+'\r\n\r\n');
 	}
-);
-server.get('/:userId/peers', ERRbadaccept);
+}
 
 
 // User App
 // ========
 // - signalling target
-server.notify('/:userId/apps/:targetAppId',
+/*server.notify('/:userId/apps/:targetAppId',
 	authorize,
 	function (request, response, next) {
 		// Locate the target app's stream
@@ -165,7 +398,81 @@ server.notify('/:userId/apps/:targetAppId',
 		response.writeHead(204, 'ok, no content');
 		response.end();
 	}
-);
+);*/
+
+
+// Query Helpers
+// ==============
+function getStation(stationId, cb) {
+	server.pgClient.query('SELECT * FROM station_detail_view WHERE id=$1', [stationId], function(err, res) {
+		if (err) {
+			return cb(err);
+		}
+		if (res.rows.length === 0) {
+			cb(null, null);
+		} else {
+			// Fill out station info
+			var stationInfo = res.rows[0];
+			stationInfo.admins           = stationInfo.admins || [];
+			stationInfo.invites          = stationInfo.invites || [];
+			stationInfo.hosters          = stationInfo.hosters || [];
+			stationInfo.allowed_apps     = stationInfo.allowed_apps || [];
+			stationInfo.recommended_apps = stationInfo.recommended_apps || [];
+			stationInfo.online_users     = stationInfo.online_users || [];
+
+			try {
+				// :TEMP: Remap the online_users output until we find a SQL solution
+				stationInfo.online_users = stationInfo.online_users.map(function(online_user) {
+					return { stream: online_user.f1, user: online_user.f2, app: online_user.f3 };
+				});
+			} catch(e) { console.warn('Failure mapping stationInfo.online_users', e); }
+
+			cb(null, stationInfo);
+		}
+	});
+}
+
+
+// Business Logic
+// ==============
+function validateStationPatch(body) {
+	var nonString = function(v) { return typeof v != 'string'; };
+	if (!body) {
+		return { errors: ['Body is required.'] };
+	}
+	var errors = [];
+	[
+		'invites',
+		'admins',
+		'hosters',
+		'allowed_apps',
+		'recommended_apps'
+	].forEach(function(k) {
+		if (!body[k]) {
+			return;
+		}
+		if (typeof body[k] == 'string') {
+			body[k] = body[k].split(/[\s,]+/g);
+		}
+		if (!Array.isArray(body[k]) || body[k].filter(nonString).length > 0) {
+			errors.push('`'+k+'` must be a comma-separated string or array of strings');
+		}
+	});
+	if (body.name && typeof body.name != 'string') {
+		errors.push('`name` must be a comma-separated string');
+	}
+	if (errors.length > 0) {
+		return { errors: errors };
+	}
+	return false;
+}
+function userIsInvited(stationInfo, userId) {
+	// Either the user is an admin, there are no invites, or the user is invited
+	return (
+		(stationInfo.admins && stationInfo.admins.indexOf(userId) !== -1) ||
+		(!stationInfo.invites || (stationInfo.invites.length === 0 || stationInfo.invites.indexOf(userId) !== -1))
+	);
+}
 
 
 // Common Middleware
@@ -176,6 +483,9 @@ server.notify('/:userId/apps/:targetAppId',
 var uuidRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // ^ http://stackoverflow.com/a/13653180
 function authorize(request, response, next) {
+	response.locals.userId = 'pfraze'; // :TODO: temporary until auth is added
+	response.locals.appId = 'debug.grimwire.com';
+	return next();
 	var token = parseAuthToken(request.headers.authorization);
 	if (!token)
 		return ERRforbidden(request, response, '`Authorization: Token <token>` required');
@@ -205,6 +515,23 @@ function parseAuthToken(authHeader) {
 	return authHeader.slice(6).trim();
 }
 
+function getStationMiddleware(request, response, next) {
+	getStation(request.params.stationId, function(err, stationInfo) {
+		if (err) {
+			return ERRinternal(request, response, 'Failed to get station info from DB', err);
+		}
+		if (!stationInfo) {
+			return ERRnotfound(request, response);
+		}
+
+		// User-specific data
+		stationInfo.user_is_invited  = userIsInvited(stationInfo, response.locals.userId);
+		response.locals.stationInfo = stationInfo;
+		response.locals.stationId = request.params.stationId;
+		next();
+	});
+}
+
 function setCorsHeaders(request, response, next) {
 	response.setHeader('Access-Control-Allow-Origin', request.headers.origin || '*');
 	response.setHeader('Access-Control-Allow-Credentials', true);
@@ -221,6 +548,7 @@ function ERRforbidden(request, response, msg) { response.writeHead(403, 'forbidd
 function ERRnotfound(request, response, msg) { response.writeHead(404, 'not found'); response.end((typeof msg == 'string') ? msg : undefined); }
 function ERRbadmethod(request, response, msg) { response.writeHead(405, 'bad method'); response.end((typeof msg == 'string') ? msg : undefined); }
 function ERRbadaccept(request, response, msg) { response.writeHead(406, 'bad accept'); response.end((typeof msg == 'string') ? msg : undefined); }
+function ERRbadctype(request, response, msg) { response.writeHead(415, 'bad content-type'); response.end((typeof msg == 'string') ? msg : undefined); }
 function ERRbadent(request, response, msg) { response.writeHead(422, 'bad entity'); response.end((typeof msg == 'string') ? msg : undefined); }
 function ERRinternal(request, response, msg, exception) {
 	console.error(msg, exception);
@@ -236,6 +564,8 @@ server.pgClient.connect(function(err) {
 		console.error("Failed to connect to postgres", err);
 		process.exit();
 	}
+
+	// :TODO: should clear out any user presences that might have been left over
 });
 server.listen(8001);
 server.startTime = new Date();
