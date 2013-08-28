@@ -8,7 +8,7 @@
     <meta name="author" content="">
     <link rel="shortcut icon" href="ico/favicon.png">
 
-    <title>Grimwire WebPN</title>
+    <title>Grimwire WebPRN</title>
 
     <link href="css/bootstrap.css" rel="stylesheet">
     <link href="css/dashboard.css" rel="stylesheet">
@@ -31,7 +31,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/_/dashboard.html" title="Web Peer Network"><img id="logo" src="img/logo_small.png" /> WebPN</a>
+          <a class="navbar-brand" href="/_/dashboard.html" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> WebPRN</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -67,11 +67,10 @@
         </div><!-- /col-md-7 -->
 
         <div class="col-md-6">
-          <textarea id="scratchpad" class="form-control" rows="30">===[[[[ Grimwire.net ]]]]===
-Web Peer Network v0.1 (Aug22, 2013)
+          <textarea id="scratchpad" class="form-control" rows="20">===[[[[ Grimwire.net ]]]]===
+Web Peer Network v0.1
 
 First time? Click "New" and join with one of the applications. Then join with another application (so they're both running at the same time) and see how they interact.</textarea>
-          <small class="text-muted">scratchpad ^ saves to local storage on blur</small>
         </div>
       </div> <!-- /row -->
 
@@ -83,7 +82,7 @@ First time? Click "New" and join with one of the applications. Then join with an
       <div class="panel panel-default">
         <div class="panel-heading">
           <h3 class="panel-title">
-            <span class="text-muted">/<%= id %></span> <% if (name) { %> <%= name %> <% } %></span>
+            <a <% if (userIsInvited) { %>href="/<%= id %>"<% } %> title="<%= name %>" style="color:#428bca">/<%= id %></a> <% if (name) { %> <%= name %> <% } %>
             <span class="pull-right">
               <a href="#" class="dismiss-station">&times;</a>&nbsp;
             </span>
@@ -209,6 +208,7 @@ First time? Click "New" and join with one of the applications. Then join with an
     </script>
 
     <script src="js/jquery-2.0.3.min.js"></script>
+    <script src="js/local.min.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <script src="js/underscore.js"></script>
     <script src="js/backbone.js"></script>
