@@ -1,9 +1,9 @@
 /// <reference path="views.ts" />
 $(function () {
-    var app = new Views.App();
+    window.app = new Views.App();
 
     // DEBUG
-    app.userStations.add([
+    /*app.userStations.add([
         {
             id: 'grimdev',
             name: 'Grimwire Dev Team',
@@ -33,5 +33,5 @@ $(function () {
             invites: ['greg'],
             userId: 'bob'
         }
-    ]);
+    ]);*/
 });

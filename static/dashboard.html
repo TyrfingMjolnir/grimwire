@@ -31,7 +31,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/_/dashboard.html" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> WebPRN</a>
+          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> WebPRN</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -78,23 +78,22 @@ First time? Click "New" and join with one of the applications. Then join with an
 
     <script type="text/template" id="station-template">
       <% var userIsAdmin = (admins.indexOf(userId) !== -1); %>
-      <% var userIsInvited = (userIsAdmin || invites.length === 0 || invites.indexOf(userId) !== -1); %>
       <div class="panel panel-default">
         <div class="panel-heading">
           <h3 class="panel-title">
-            <a <% if (userIsInvited) { %>href="/s/<%= id %>"<% } %> title="<%= name %>" style="color:#428bca">s/<%= id %></a> <% if (name) { %> <%= name %> <% } %>
+            <a <% if (user_is_invited) { %>href="/s/<%= id %>"<% } %> title="<%= name %>" style="color:#428bca">s/<%= id %></a> <% if (name) { %> <%= name %> <% } %>
             <span class="pull-right">
               <a href="#" class="dismiss-station">&times;</a>&nbsp;
             </span>
           </h3>
         </div>
         <div class="panel-body">
-          <% if (members.length > 0) { %>
+          <% if (status == 'Active') { %>
             <div class="row">
               <div class="col-md-7">
-                <% if (userIsInvited) { %>
+                <% if (user_is_invited) { %>
                   <% if (invites.length === 0) { %> Public, <% } else { %> Private, <% } %>
-                  <a href="javascript:void(0)" class="popover-link" data-content="<%= members.join('<br/>') %>"><%- members.length %> online users</a>,
+                  <a href="javascript:void(0)" class="popover-link" data-content="<%= online_users.join('<br/>') %>"><%- online_users.length %> online users</a>,
                   <a href="javascript:void(0)" class="popover-link" data-content="<%= admins.join('<br/>') %>"><%- admins.length %> admins</a>
                   <% if (userApps.length > 0) { %>
                     <%= userApps.map(function(app) { return '<a class="text-muted" href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
@@ -105,16 +104,16 @@ First time? Click "New" and join with one of the applications. Then join with an
               </div>
               <div class="col-md-5">
                 <div class="pull-right">
-                  <% if (userIsInvited) { %>
+                  <% if (user_is_invited) { %>
                     <div class="btn-group">
                       <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
                         <% if (userApps.length === 0) { %>Join With<% } else { %>Add<% } %>
                         <span class="caret"></span>
                       </button>
                       <ul class="dropdown-menu" role="menu">
-                      <% if (allowedApps.length > 0) { %>
+                      <% if (allowed_apps.length > 0) { %>
                         <li class="dropdown-header">Allowed Apps</li>
-                        <%= allowedApps.map(function(app) {
+                        <%= allowed_apps.map(function(app) {
                           return '<li><a href="javascript:void(0)">'+app+'</a></li>';
                         }).join('') %>
                       <% } else { %>
@@ -158,7 +157,7 @@ First time? Click "New" and join with one of the applications. Then join with an
         <br/>
         <div class="form-group">
           <label for="name" class="col-sm-3 control-label" style="font-weight: normal">Station Title</label>
-          <div class="col-sm-9"><input type="text" class="form-control" id="name" value="<%- name %>" placeholder="Not required." /></div>
+          <div class="col-sm-9"><input type="text" class="form-control" name="name" value="<%- name %>" placeholder="Not required." /></div>
         </div>
         <br/>
         <div class="form-group">
@@ -166,31 +165,31 @@ First time? Click "New" and join with one of the applications. Then join with an
             Invited Users<br/>
             <small><a class="invite-just-me" href="javascript:void(0)">Just Me</a></small>
           </label>
-          <div class="col-sm-9"><textarea class="form-control" id="invites" placeholder="If left empty, the channel will be public."><%- invites.join(', ') %></textarea></div>
+          <div class="col-sm-9"><textarea class="form-control" name="invites" placeholder="If left empty, the channel will be public."><%- invites.join(', ') %></textarea></div>
         </div>
         <div class="form-advanced collapse">
           <hr/>
           <div class="form-group">
             <label for="admins" class="col-sm-3 control-label" style="font-weight: normal">Admins</label>
-            <div class="col-sm-9"><textarea class="form-control" id="admins" placeholder="The creator of the station will always be an admin."><%- admins.join(', ') || userId %></textarea></div>
+            <div class="col-sm-9"><textarea class="form-control" name="admins" placeholder="The creator of the station will always be an admin."><%- admins.join(', ') || userId %></textarea></div>
           </div>
           <div class="form-group">
-            <label style="font-weight: normal" for="hosts" class="col-sm-3 control-label">Allowed Hosters</label>
-            <div class="col-sm-9"><textarea class="form-control" id="hosts" placeholder="If left empty, all users will be allowed to connect to each other."><%- hosts.join(', ') %></textarea></div>
+            <label style="font-weight: normal" for="hosters" class="col-sm-3 control-label">Allowed Hosters</label>
+            <div class="col-sm-9"><textarea class="form-control" name="hosters" placeholder="If left empty, all users will be allowed to connect to each other."><%- hosters.join(', ') %></textarea></div>
           </div>
           <div class="form-group">
-            <label style="font-weight: normal" for="allowed-apps" class="col-sm-3 control-label">Allowed Apps</label>
-            <div class="col-sm-9"><textarea class="form-control" id="allowed-apps" placeholder="If left empty, all apps will be allowed."><%- allowedApps.join(', ') %></textarea></div>
+            <label style="font-weight: normal" for="allowed_apps" class="col-sm-3 control-label">Allowed Apps</label>
+            <div class="col-sm-9"><textarea class="form-control" name="allowed_apps" placeholder="If left empty, all apps will be allowed."><%- allowed_apps.join(', ') %></textarea></div>
           </div>
           <div class="form-group">
-            <label style="font-weight: normal" for="recommended-apps" class="col-sm-3 control-label">Recommended Apps</label>
-            <div class="col-sm-9"><textarea class="form-control" id="recommended-apps" placeholder="If left empty, no apps will be recommended to joining users."><%- recommendedApps.join(', ') %></textarea></div>
+            <label style="font-weight: normal" for="recommended_apps" class="col-sm-3 control-label">Recommended Apps</label>
+            <div class="col-sm-9"><textarea class="form-control" name="recommended_apps" placeholder="If left empty, no apps will be recommended to joining users."><%- recommended_apps.join(', ') %></textarea></div>
           </div>
         </div>
         <br/>
         <div class="form-group">
           <div class="col-sm-offset-3 col-sm-9">
-            <% if (members.length > 0) { %>
+            <% if (status == 'Active') { %>
               <div class="btn-group pull-right">
                 <button type="submit" class="btn btn-default toggle-advanced" data-toggle="button"><span class="glyphicon glyphicon-cog"></span></button>
                 <button type="submit" class="btn btn-default update-settings">Update Settings</button>
@@ -208,7 +207,7 @@ First time? Click "New" and join with one of the applications. Then join with an
     </script>
 
     <script src="js/jquery-2.0.3.min.js"></script>
-    <script src="js/local.min.js"></script>
+    <script src="js/local.js"></script>
     <script src="js/bootstrap.min.js"></script>
     <script src="js/underscore.js"></script>
     <script src="js/backbone.js"></script>

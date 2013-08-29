@@ -32,8 +32,9 @@ server.get('/', function(request, response) {
 
 		// Set link header
 		response.setHeader('link',
-			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
-			'<http://grimwire.net:8001/s>; rel="self collection grimwire.com/-webprn/relays"; id="stations"'
+			'<http://grimwire.net:8000>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
+			'<http://grimwire.net:8000/s>; rel="self collection grimwire.com/-webprn/relays"; id="stations", '+
+			'<http://grimwire.net:8000/s/{id}>; rel="item grimwire.com/-webprn/relay"'
 		);
 		// Route by method
 		if (request.method == 'HEAD') {
@@ -90,10 +91,10 @@ server.all('/:stationId',
 	function (request, response, next) {
 		// Set link header
 		response.setHeader('link',
-			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
-			'<http://grimwire.net:8001/s>; rel="up collection grimwire.com/-webprn/relays"; id="stations", '+
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'>; rel="self item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'", '+
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="collection"; id="streams"'
+			'<http://grimwire.net:8000>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
+			'<http://grimwire.net:8000/s>; rel="up collection grimwire.com/-webprn/relays"; id="stations", '+
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'>; rel="self item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'", '+
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'/streams>; rel="collection"; id="streams"'
 		);
 
 		// Route by method
@@ -196,15 +197,17 @@ server.patch('/:stationId',
 			// Update station
 			var query =
 				'UPDATE stations SET '+
-					'invites = $2, '+
-					'admins = $3, '+
-					'hosters = $4, '+
-					'allowed_apps = $5, '+
-					'recommended_apps = $6, '+
-					'is_public = $7 '+
+					'name = $2, '+
+					'invites = $3, '+
+					'admins = $4, '+
+					'hosters = $5, '+
+					'allowed_apps = $6, '+
+					'recommended_apps = $7, '+
+					'is_public = $8 '+
 				'WHERE stations.id = $1';
 			var values = [
 				request.params.stationId,
+				request.body.name || stationInfo.name,
 				(typeof request.body.invites == 'undefined') ? stationInfo.invites : request.body.invites,
 				(typeof request.body.admins == 'undefined') ? stationInfo.admins : request.body.admins,
 				(typeof request.body.hosters == 'undefined') ? stationInfo.hosters : request.body.hosters,
@@ -278,13 +281,13 @@ server.all('/:stationId/streams',
 	function (request, response, next) {
 		// Set link header
 		var linkHeader = [
-			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'>; rel="up item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'"',
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="self collection"; id="streams"'
+			'<http://grimwire.net:8000>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'>; rel="up item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'"',
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'/streams>; rel="self collection"; id="streams"'
 		];
 		if (response.locals.stationInfo.user_is_invited) {
 			(server.stationStreamIds[response.locals.stationId] || []).forEach(function(streamId) {
-				linkHeader.push('<http://grimwire.net:8001/'+response.locals.stationId+'/streams/'+streamId+'>; rel="item"; id="'+streamId+'"');
+				linkHeader.push('<http://grimwire.net:8000/'+response.locals.stationId+'/streams/'+streamId+'>; rel="item"; id="'+streamId+'"');
 			});
 		}
 		response.setHeader('link', linkHeader.join(', '));
@@ -320,9 +323,9 @@ server.all('/:stationId/streams/:streamId',
 
 		// Set link header
 		var linkHeader = [
-			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="up collection"; id="streams"',
-			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams/'+streamId+'>; rel="self item"; id="'+streamId+'"'
+			'<http://grimwire.net:8000>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'/streams>; rel="up collection"; id="streams"',
+			'<http://grimwire.net:8000/s/'+response.locals.stationId+'/streams/'+streamId+'>; rel="self item"; id="'+streamId+'"'
 		];
 		response.setHeader('link', linkHeader.join(', '));
 
@@ -490,6 +493,7 @@ function validateStationPatch(body) {
 		'recommended_apps'
 	].forEach(function(k) {
 		if (!body[k]) {
+			body[k] = null;
 			return;
 		}
 		if (typeof body[k] == 'string') {
@@ -610,7 +614,7 @@ if (!module.parent) {
 
 		// :TODO: should clear out any user presences that might have been left over
 	});
-	server.listen(8001);
+	server.listen(8000);
 	server.startTime = new Date();
-	console.log('Signalling HTTP server listening on port 8001');
+	console.log('Signalling HTTP server listening on port 8000');
 }

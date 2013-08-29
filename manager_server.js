@@ -1,15 +1,17 @@
 var http = require('http');
 var pg = require('pg');
 var express = require('express');
-var signal_server = require('./signal_server.js');
+var stations_server = require('./signal_server.js');
 
 
 // Server State
 // ============
 var server = express();
 server.pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
-signal_server.pgClient = server.pgClient;
-
+stations_server.pgClient = server.pgClient;
+server.assets = {
+	dashboardHtml: require('fs').readFileSync('./static/dashboard.html').toString()
+};
 
 // Common Handlers
 // ===============
@@ -19,20 +21,33 @@ server.options('*', function(request, response) {
 	response.writeHead(204);
 	response.end();
 });
-server.use('/_', express.static(__dirname + '/static'));
-server.use('/s', signal_server);
 
 
 // Root
-// ====
-server.get('/', function(request, response) {
-	response.writeHead(200, 'ok');
-	response.end('manager server');
+server.all('/', function(request, response, next) {
+	response.setHeader('link', [
+		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+		'<http://grimwire.net:8000/s>; rel="self collection grimwire.com/-webprn/relays"; id="stations"'
+	].join(', '));
+	if (request.method == 'HEAD') {
+		return response.send(204);
+	}
+	if (request.method == 'GET') {
+		return response.format({
+			'text/html': function() { response.send(server.assets.dashboardHtml); },
+			'application/json': function() { response.json({ msg: 'hello' }); }
+		});
+	}
+	ERRbadmethod(request, response);
 });
+// Matching static files
+server.use('/', express.static(__dirname + '/static'));
+// Stations Service
+server.use('/s', stations_server);
 
 
-// Tooling
-// =======
+// Admin
+// =====
 server.get('/status', function(request, response) {
 	var uptime = (new Date() - server.startTime);
 	response.json({
@@ -47,6 +62,10 @@ server.get('/status', function(request, response) {
 
 // Users
 // =====
+server.get('/whoami',
+	authorize,
+	ERRtodo
+);
 server.get('/u',
 	authorize,
 	ERRtodo

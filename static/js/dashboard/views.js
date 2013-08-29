@@ -5,25 +5,35 @@ Views.Station = Backbone.View.extend({
         'click .admin-btn': 'toggleAdmin',
         'click .create-station': 'toggleAdmin',
         'click .toggle-advanced': 'adminToggleAdvanced',
-        'click .update-settings': 'adminUpdateSettings',
         'click .close-station': 'adminCloseStation',
-        'click .invite-just-me': 'adminInviteJustMe'
+        'request form': 'adminUpdateSettings'
     },
 
     initialize: function() {
+        // Cache templates
         this.template = _.template($('#station-template').html());
         this.adminTemplate = _.template($('#station-admin-template').html());
+        // Cache API resolution
+        this.relayAPI = window.app.prnStationsAPI.follow({ rel: 'grimwire.com/-webprn/relay', id: this.model.get('id') });
+        this.relayAPI.resolve();
+        // Cache function bindings
+        _.bindAll(this, 'render', 'remove', 'refresh', 'close', 'toggleAdmin', 'adminToggleAdvanced', 'adminUpdateSettings', 'adminCloseStation', 'adminInviteJustMe');
 
-        _.bindAll(this, 'render', 'remove', 'refresh', 'close', 'toggleAdmin', 'adminToggleAdvanced', 'adminUpdateSettings', 'adminCloseStation');
+        // Bind events
         this.model.bind('change', this.render);
         this.model.bind('remove', this.remove);
     },
 
     render: function () {
+        // Render
         this.$el.html(this.template(this.model.toJSON()));
         this.$footer = this.$('.panel-footer');
         this.$footer.html(this.adminTemplate(this.model.toJSON()));
+
+        // Bind behaviors
         this.$('.popover-link').popover({ html: true });
+        this.$('.invite-just-me').on('click', this.adminInviteJustMe);
+        local.bindRequestEvents(this.$('form')[0]);
         return this;
     },
 
@@ -52,9 +62,26 @@ Views.Station = Backbone.View.extend({
     adminUpdateSettings: function (e) {
         e.preventDefault();
 
-        // :TODO:
-        console.debug(this.$('form').serializeArray());
-        this.refresh();
+        // Send patch request to our API
+        var model = this.model, relayAPI = this.relayAPI;
+        var request = e.originalEvent.detail;
+        var body = request.body;
+        this.relayAPI.patch(body, { 'content-type': 'application/json' })
+            .fail(function(res) {
+                // :TODO: notify user
+                console.warn('Failed to update station', res);
+            })
+            .then(function(res) {
+                // Get canonical copy
+                return relayAPI.get({ accept: 'application/json' });
+            })
+            .fail(function(res) {
+                // :TODO: notify user
+                console.warn('Failed to get updated station', res);
+            })
+            .then(function(res) {
+                model.set(res.body);
+            });
     },
 
     // DELETE station
@@ -66,16 +93,18 @@ Views.Station = Backbone.View.extend({
 
     // Change invited users to just me
     adminInviteJustMe: function (e) {
+        console.log('JUST ME')
         e.preventDefault();
         if (typeof this.oldInvitesState == 'string') {
-            this.$('#invites').val(this.oldInvitesState);
+            this.$('[name=invites]').val(this.oldInvitesState);
             this.oldInvitesState = null;
             this.$('.invite-just-me').text('Just Me');
         } else {
-            this.oldInvitesState = this.$('#invites').val();
-            this.$('#invites').val(this.model.get('userId'));
+            this.oldInvitesState = this.$('[name=invites]').val();
+            this.$('[name=invites]').val(this.model.get('userId'));
             this.$('.invite-just-me').text('Undo');
         }
+        return false;
     }
 });
 
@@ -85,20 +114,31 @@ Views.App = Backbone.View.extend({
         'blur #scratchpad': 'saveScratchpad'
     },
     initialize: function() {
+        // Web APIs
+        this.prnServiceAPI = local.navigator('//grimwire.net:8000'); // PRN provider
+        this.prnServiceAPI = this.prnServiceAPI.follow({ rel: 'self grimwire.com/-webprn/service' }); // Verify protocol support
+        this.prnStationsAPI = this.prnServiceAPI.follow({ rel: 'grimwire.com/-webprn/relays', id: 'stations' });
+        this.prnServiceAPI.resolve(); // Force resolution at loadtime
+        this.prnStationsAPI.resolve();
+
+        // Collection of currently open stations
         this.userStations = new Collections.Station();
+
+        // Cache selectors & fn bindings
         this.setElement($('#dashboardapp'), true);
         this.$stationIdInput = this.$('#station-id');
         this.$stationList = this.$('#stations');
         this.$scratchPad = this.$('#scratchpad');
         _.bindAll(this, 'render', 'addOne', 'addAll', 'createOnEnter');
 
+        // Bind collection events
         this.userStations.bind('add', this.addOne);
         this.userStations.bind('reset', this.addAll);
         this.userStations.bind('all', this.render);
 
-        //this.userStations.fetch();
+        // Load scratchpad content from localstorage
         var v = localStorage.getItem('scratchpad');
-        if (v != null) {
+        if (v !== null) {
             this.$scratchPad.val(v);
         }
     },
@@ -116,10 +156,43 @@ Views.App = Backbone.View.extend({
     },
 
     createOnEnter: function (e) {
-        if (e.keyCode != 13)
+        if (e.keyCode != 13) { // Enter
             return;
-        console.debug(this.$stationIdInput.val());
-        // :TODO:
+        }
+        var self = this;
+        var stationId = this.$stationIdInput.val();
+        this.prnStationsAPI.follow({ rel: 'grimwire.com/-webprn/relay', id: stationId })
+            .get({ accept: 'application/json' })
+            .then(function(res) {
+                self.userStations.add({
+                    id: res.body.id,
+                    name: res.body.name,
+
+                    admins: res.body.admins,
+                    invites: res.body.invites,
+                    hosters: res.body.hosters,
+                    allowed_apps: res.body.allowed_apps,
+                    recommended_apps: res.body.recommended_apps,
+
+                    online_users: res.body.online_users,
+                    status: res.body.status,
+                    created_at: res.body.created_at,
+                    user_is_invited: res.body.user_is_invited,
+
+                    userId: 'pfraze' // :DEBUG:
+                    // userApps: ['chat.grimwire.com', 'github.com'] // :DEBUG:
+                });
+            })
+            .fail(function(res) {
+                if (res.status == 404) {
+                    self.userStations.add({
+                        id: stationId,
+                        userId: 'pfraze' // :DEBUG:
+                    });
+                } else {
+                    console.warn(res);
+                }
+            });
     },
 
     saveScratchpad: function (e) {

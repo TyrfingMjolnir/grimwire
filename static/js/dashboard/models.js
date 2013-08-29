@@ -4,14 +4,16 @@ Models.Station = Backbone.Model.extend({
         return {
             id: '',
             name: '',
-            members: [],
             admins: [],
             invites: [],
-            hosts: [],
-            allowedApps: [],
-            recommendedApps: [],
+            hosters: [],
+            allowed_apps: [],
+            recommended_apps: [],
+            online_users: [],
+            user_is_invited: false,
             userId: '',
-            userApps: []
+            userApps: [],
+            status: 'Inactive'
         };
     },
 
