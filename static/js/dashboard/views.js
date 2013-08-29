@@ -5,7 +5,6 @@ Views.Station = Backbone.View.extend({
         'click .admin-btn': 'toggleAdmin',
         'click .create-station': 'toggleAdmin',
         'click .toggle-advanced': 'adminToggleAdvanced',
-        'click .close-station': 'adminCloseStation',
         'request form': 'adminUpdateSettings'
     },
 
@@ -32,14 +31,26 @@ Views.Station = Backbone.View.extend({
 
         // Bind behaviors
         this.$('.popover-link').popover({ html: true });
-        this.$('.invite-just-me').on('click', this.adminInviteJustMe);
+        this.$('.invite-just-me').on('click', this.adminInviteJustMe); // Bind here to override the request event (eugh)
+        this.$('.close-station').on('click', this.adminCloseStation); // Bind here to override the request event (eugh)
         local.bindRequestEvents(this.$('form')[0]);
         return this;
     },
 
     // GET latest values
     refresh: function () {
-        this.model.fetch();
+        // Refresh with canonical copy
+        var model = this.model;
+        this.relayAPI.get({ accept: 'application/json' })
+            .then(function(res) {
+                model.set(res.body);
+                // :TODO: notify user
+            })
+            .fail(function(res) {
+                var v = model.defaults();
+                v.id = model.get('id');
+                model.set(v);
+            });
         return this;
     },
 
@@ -63,7 +74,7 @@ Views.Station = Backbone.View.extend({
         e.preventDefault();
 
         // Send patch request to our API
-        var model = this.model, relayAPI = this.relayAPI;
+        var self = this;
         var request = e.originalEvent.detail;
         var body = request.body;
         this.relayAPI.patch(body, { 'content-type': 'application/json' })
@@ -72,29 +83,30 @@ Views.Station = Backbone.View.extend({
                 console.warn('Failed to update station', res);
             })
             .then(function(res) {
-                // Get canonical copy
-                return relayAPI.get({ accept: 'application/json' });
-            })
-            .fail(function(res) {
-                // :TODO: notify user
-                console.warn('Failed to get updated station', res);
-            })
-            .then(function(res) {
-                model.set(res.body);
+                self.refresh();
             });
     },
 
     // DELETE station
     adminCloseStation: function (e) {
+        var self = this;
         e.preventDefault();
-        confirm('Close /' + this.model.get('id') + '? This will stop users from being able to connect through this station.');
-        // :TODO:
+        if (confirm('Close /' + this.model.get('id') + '? This will stop users from being able to connect through this station.')) {
+            // Send a DELETE
+            this.relayAPI.delete()
+                .fail(function(res) {
+                    // :TODO: notify user
+                    console.warn('Failed to delete station', res);
+                })
+                .then(function(res) {
+                    self.refresh();
+                });
+        }
+        return false;
     },
 
     // Change invited users to just me
     adminInviteJustMe: function (e) {
-        console.log('JUST ME')
-        e.preventDefault();
         if (typeof this.oldInvitesState == 'string') {
             this.$('[name=invites]').val(this.oldInvitesState);
             this.oldInvitesState = null;

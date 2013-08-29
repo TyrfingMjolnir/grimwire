@@ -16,6 +16,8 @@ server.assets = {
 // Common Handlers
 // ===============
 server.use(express.bodyParser());
+server.use(express.cookieParser());
+server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE' }));
 server.all('*', setCorsHeaders);
 server.options('*', function(request, response) {
 	response.writeHead(204);
@@ -27,7 +29,9 @@ server.options('*', function(request, response) {
 server.all('/', function(request, response, next) {
 	response.setHeader('link', [
 		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
-		'<http://grimwire.net:8000/s>; rel="self collection grimwire.com/-webprn/relays"; id="stations"'
+		'<http://grimwire.net:8000/s>; rel="collection grimwire.com/-webprn/relays"; id="stations"',
+		'<http://grimwire.net:8000/session>; rel="service"; id="session"',
+		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
 	].join(', '));
 	if (request.method == 'HEAD') {
 		return response.send(204);
@@ -49,6 +53,10 @@ server.use('/s', stations_server);
 // Admin
 // =====
 server.get('/status', function(request, response) {
+	response.setHeader('link', [
+		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+		'<http://grimwire.net:8000/status>; rel="self service"; id="status"'
+	].join(', '));
 	var uptime = (new Date() - server.startTime);
 	response.json({
 		started_at: server.startTime.toLocaleString(),
@@ -60,12 +68,80 @@ server.get('/status', function(request, response) {
 });
 
 
+// Session
+// =======
+server.all('/session',
+	function (req, res, next) {
+		getSession(req.session, function(err, session) {
+			if (err) {
+				return ERRinternal(req, res, 'Failed to get session info from DB', err);
+			}
+			res.locals.session = session;
+			next();
+		});
+	},
+	function (req, res, next) {
+		// Set links
+		res.setHeader('link', [
+			'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8000/session>; rel="self service"; id="session"'
+		].join(', '));
+
+		// Route methods
+		if (req.method == 'HEAD') {
+			return res.send(204);
+		}
+		if (req.method == 'GET') {
+			// Whoami?
+			if (!req.accepts('json')) {
+				return ERRbadaccept(req, res);
+			}
+			return res.json(res.locals.session);
+		}
+		if (req.method == 'POST') {
+			// Sign In
+			// Validate inputs
+			var errors = validateSessionCreate(req.body);
+			if (errors) {
+				res.writeHead(422, 'bad entity', { 'content-type': 'application/json' });
+				res.end(JSON.stringify(errors));
+				return;
+			}
+
+			// Fetch the user
+			getUser(req.body.id, function(err, user) {
+				if (err) {
+					res.writeHead(412, 'bad entity', { 'content-type': 'application/json' });
+					res.end(JSON.stringify({errors:['Invalid username or password.']}));
+					return;
+				}
+
+				// Check password
+				checkPassword(req.body.password, user.password, function(err) {
+					if (err) {
+						res.writeHead(412, 'bad entity', { 'content-type': 'application/json' });
+						res.end(JSON.stringify({errors:['Invalid username or password.']}));
+						return;
+					}
+
+					// Create the session
+					createSession(req.body.id, function(err, session) {
+						if (err || !session) {
+							return ERRinternal(req, res, 'Failed to create session info in DB', err);
+						}
+
+						// Set new session cookie
+						req.session = session.id;
+						res.send(204);
+					});
+				});
+			});
+		}
+	}
+);
+
 // Users
 // =====
-server.get('/whoami',
-	authorize,
-	ERRtodo
-);
 server.get('/u',
 	authorize,
 	ERRtodo
@@ -86,6 +162,77 @@ server.get('/a/:appId',
 	authorize,
 	ERRtodo
 );
+
+
+// Query Helpers
+// ==============
+function getUser(userId, cb) {
+	server.pgClient.query('SELECT * FROM users WHERE id=$1', [userId], function(err, res) {
+		if (err) {
+			return cb(err);
+		}
+		if (res.rows.length === 0) {
+			cb(null, null);
+		} else {
+			cb(null, res.rows[0]);
+		}
+	});
+}
+function getSession(sessionId, cb) {
+	// Validate input
+	if (uuidRE.test(sessionId) == false) {
+		return cb(null, null);
+	}
+
+	// Fetch session
+	server.pgClient.query('SELECT * FROM sessions WHERE id=$1', [sessionId], function(err, res) {
+		if (err) {
+			return cb(err);
+		}
+		if (res.rows.length === 0) {
+			cb(null, null);
+		} else {
+			cb(null, res.rows[0]);
+		}
+	});
+}
+function createSession(userId, cb) {
+	server.pgClient.query('INSERT INTO sessions (id, user_id) VALUES(uuid_generate_v4(), $1) RETURNING id', [userId], function(err, res) {
+		if (err) {
+			return cb(err);
+		}
+		if (res.rows.length === 0) {
+			cb(null, null);
+		} else {
+			cb(null, res.rows[0]);
+		}
+	});
+}
+
+
+// Business Logic
+// ==============
+var uuidRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function validateSessionCreate(body) {
+	if (!body) {
+		return { errors: ['Body is required.'] };
+	}
+	var errors = [];
+	if (body.id && typeof body.id != 'string') {
+		errors.push('`id` must be a string');
+	}
+	if (body.password && typeof body.password != 'string') {
+		errors.push('`password` must be a string');
+	}
+	if (errors.length > 0) {
+		return { errors: errors };
+	}
+	return false;
+}
+function checkPassword(plaintext, encrypted, cb) {
+	// :TODO: for now, no encryption is in place
+	cb(plaintext != encrypted);
+}
 
 
 // Common Middleware
@@ -113,7 +260,7 @@ function authorize(request, response, next) {
 		next();
 	});
 }
-function parseAuthToken(authHeader) {
+function parseAuthBasic(authHeader) {
 	if (!authHeader || authHeader.indexOf('Basic ') !== 0)
 		return null;
 	authHeader = new Buffer(authHeader.slice(6).trim(), 'base64').toString();

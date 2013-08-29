@@ -9,7 +9,7 @@ CREATE TABLE users (
 	id VARCHAR(32) PRIMARY KEY,
 
 	email VARCHAR(256),
-	password VARCHAR(256),
+	password VARCHAR(256) NOT NULL,
 
 	created_at TIMESTAMP DEFAULT NOW(),
 	status basicStatusEnum DEFAULT 'Active'
@@ -39,8 +39,14 @@ CREATE TABLE apps (
 
 -- Station presence & auth
 --
+CREATE TABLE sessions (
+	id UUID PRIMARY KEY,
+	user_id VARCHAR(32) REFERENCES users(id) ON DELETE CASCADE,
+	expires_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT NOW()
+);
 CREATE TABLE app_auth_tokens (
-	id UUID UNIQUE,
+	id UUID PRIMARY KEY,
 	station_id VARCHAR(32) REFERENCES stations(id) ON DELETE CASCADE,
 	user_id VARCHAR(32) REFERENCES users(id) ON DELETE CASCADE,
 	app_id VARCHAR(256),
@@ -49,7 +55,7 @@ CREATE TABLE app_auth_tokens (
 	created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE user_presences (
-	id SERIAL UNIQUE,
+	id SERIAL PRIMARY KEY,
 	station_id VARCHAR(32) REFERENCES stations(id) ON DELETE CASCADE,
 	user_id VARCHAR(32) REFERENCES users(id) ON DELETE CASCADE,
 	app_id VARCHAR(256),

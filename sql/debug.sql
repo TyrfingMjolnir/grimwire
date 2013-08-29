@@ -1,8 +1,8 @@
 
 -- Insert some debug records
 
-INSERT INTO users (id) VALUES ('pfraze');
-INSERT INTO users (id) VALUES ('bob');
+INSERT INTO users (id, password) VALUES ('pfraze', 'password');
+INSERT INTO users (id, password) VALUES ('bob', 'password');
 INSERT INTO apps (id) VALUES ('chat.grimwire.com');
 INSERT INTO apps (id) VALUES ('webdrive.grimwire.com');
 

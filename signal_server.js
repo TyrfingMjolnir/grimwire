@@ -504,7 +504,7 @@ function validateStationPatch(body) {
 		}
 	});
 	if (body.name && typeof body.name != 'string') {
-		errors.push('`name` must be a comma-separated string');
+		errors.push('`name` must be a string');
 	}
 	if (errors.length > 0) {
 		return { errors: errors };
