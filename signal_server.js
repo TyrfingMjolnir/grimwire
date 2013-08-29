@@ -24,8 +24,31 @@ server.options('*', function(request, response) {
 // Root
 // ====
 server.get('/', function(request, response) {
-	response.writeHead(200, 'ok');
-	response.end('Web Peer Relay Network Server');
+	// Get the list of active stations
+	server.pgClient.query('SELECT id, name FROM active_public_stations_list_view', function(err, res) {
+		if (err) {
+			return ERRinternal(request, response, 'Failed to get station info from DB', err);
+		}
+
+		// Set link header
+		response.setHeader('link',
+			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
+			'<http://grimwire.net:8001/s>; rel="self collection grimwire.com/-webprn/relays"; id="stations"'
+		);
+		// Route by method
+		if (request.method == 'HEAD') {
+			response.send(204);
+			return;
+		}
+		if (request.method != 'GET') {
+			return ERRbadmethod(request, response);
+		}
+		if (!request.accepts('json')) {
+			return ERRbadaccept(request, response);
+		}
+
+		response.json({ rows: res.rows });
+	});
 });
 
 
@@ -48,14 +71,29 @@ server.get('/status', function(request, response) {
 // =======
 server.all('/:stationId',
 	authorize,
-	getStationMiddleware,
+	function (request, response, next) {
+		// Attempt to fetch station info
+		getStation(request.params.stationId, function(err, stationInfo) {
+			if (err) {
+				return ERRinternal(request, response, 'Failed to get station info from DB', err);
+			}
+
+			// User-specific data
+			if (stationInfo) {
+				stationInfo.user_is_invited  = userIsInvited(stationInfo, response.locals.userId);
+			}
+			response.locals.stationInfo = stationInfo;
+			response.locals.stationId = request.params.stationId;
+			next();
+		});
+	},
 	function (request, response, next) {
 		// Set link header
 		response.setHeader('link',
-			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN", '+
+			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN", '+
 			'<http://grimwire.net:8001/s>; rel="up collection grimwire.com/-webprn/relays"; id="stations", '+
-			'<http://grimwire.net:8001/'+response.locals.stationId+'>; rel="self item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'", '+
-			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="collection"; id="streams"'
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'>; rel="self item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'", '+
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="collection"; id="streams"'
 		);
 
 		// Route by method
@@ -65,6 +103,11 @@ server.all('/:stationId',
 		}
 		if (request.method != 'GET') {
 			return next('route');
+		}
+
+		// Check existence
+		if (!response.locals.stationInfo) {
+			return ERRnotfound(request, response);
 		}
 
 		if (request.accepts('json')) {
@@ -128,17 +171,12 @@ server.patch('/:stationId',
 
 		// Validate content types
 		if (!request.accepts('json')) {
-			return next('route');
+			return ERRbadaccept(request, response);
 		}
 		if (!request.is('json')) {
 			res.writeHead(415, 'bad content-type: must be json');
 			res.end();
 			return;
-		}
-
-		// Check permissions
-		if (stationInfo.admins.indexOf(response.locals.userId) === -1) {
-			return ERRforbidden(request, response);
 		}
 
 		// Validate inputs
@@ -149,31 +187,64 @@ server.patch('/:stationId',
 			return;
 		}
 
-		// Update station
-		var query =
-			'UPDATE stations SET '+
-				'invites = $2, '+
-				'admins = $3, '+
-				'hosters = $4, '+
-				'allowed_apps = $5, '+
-				'recommended_apps = $6 '+
-			'WHERE stations.id = $1';
-		var values = [
-			request.params.stationId,
-			request.body.invites || stationInfo.invites,
-			request.body.admins || stationInfo.admins,
-			request.body.hosters || stationInfo.hosters,
-			request.body.allowed_apps || stationInfo.allowed_apps,
-			request.body.recommended_apps || stationInfo.recommended_apps
-		];
-		server.pgClient.query(query, values, function(err, res) {
-			if (err) {
-				return ERRinternal(request, response, 'Failed to update station in DB', err);
+		if (stationInfo) {
+			// Check permissions
+			if (stationInfo.admins.indexOf(response.locals.userId) === -1) {
+				return ERRforbidden(request, response);
 			}
 
-			response.writeHead(204, 'ok, no content');
-			response.end();
-		});
+			// Update station
+			var query =
+				'UPDATE stations SET '+
+					'invites = $2, '+
+					'admins = $3, '+
+					'hosters = $4, '+
+					'allowed_apps = $5, '+
+					'recommended_apps = $6, '+
+					'is_public = $7 '+
+				'WHERE stations.id = $1';
+			var values = [
+				request.params.stationId,
+				(typeof request.body.invites == 'undefined') ? stationInfo.invites : request.body.invites,
+				(typeof request.body.admins == 'undefined') ? stationInfo.admins : request.body.admins,
+				(typeof request.body.hosters == 'undefined') ? stationInfo.hosters : request.body.hosters,
+				(typeof request.body.allowed_apps == 'undefined') ? stationInfo.allowed_apps : request.body.allowed_apps,
+				(typeof request.body.recommended_apps == 'undefined') ? stationInfo.recommended_apps : request.body.recommended_apps,
+				(!request.body.invites || request.body.invites.length === 0)
+			];
+			server.pgClient.query(query, values, function(err, res) {
+				if (err) {
+					return ERRinternal(request, response, 'Failed to update station in DB', err);
+				}
+
+				response.writeHead(204, 'ok, no content');
+				response.end();
+			});
+		} else {
+			// Create station
+			var query =
+				'INSERT INTO stations (id, owning_user_id, name, invites, admins, hosters, allowed_apps, recommended_apps, is_public) '+
+				'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)';
+			var values = [
+				request.params.stationId,
+				response.locals.userId,
+				request.body.name,
+				request.body.invites,
+				request.body.admins || [response.locals.userId],
+				request.body.hosters,
+				request.body.allowed_apps,
+				request.body.recommended_apps,
+				!request.body.invites || request.body.invites.length === 0
+			];
+			server.pgClient.query(query, values, function(err, res) {
+				if (err) {
+					return ERRinternal(request, response, 'Failed to update station in DB', err);
+				}
+
+				response.writeHead(204, 'ok, no content');
+				response.end();
+			});
+		}
 	}
 );
 server.delete('/:stationId',
@@ -207,9 +278,9 @@ server.all('/:stationId/streams',
 	function (request, response, next) {
 		// Set link header
 		var linkHeader = [
-			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN"',
-			'<http://grimwire.net:8001/'+response.locals.stationId+'>; rel="up item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'"',
-			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="self collection"; id="streams"'
+			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'>; rel="up item grimwire.com/-webprn/relay"; id="'+response.locals.stationId+'"',
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="self collection"; id="streams"'
 		];
 		if (response.locals.stationInfo.user_is_invited) {
 			(server.stationStreamIds[response.locals.stationId] || []).forEach(function(streamId) {
@@ -249,9 +320,9 @@ server.all('/:stationId/streams/:streamId',
 
 		// Set link header
 		var linkHeader = [
-			'<http://grimwire.net:8001>; rel="via service"; title="Grimwire.net WebPRN"',
-			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams>; rel="up collection"; id="streams"',
-			'<http://grimwire.net:8001/'+response.locals.stationId+'/streams/'+streamId+'>; rel="self item"; id="'+streamId+'"'
+			'<http://grimwire.net:8001>; rel="via service grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams>; rel="up collection"; id="streams"',
+			'<http://grimwire.net:8001/s/'+response.locals.stationId+'/streams/'+streamId+'>; rel="self item"; id="'+streamId+'"'
 		];
 		response.setHeader('link', linkHeader.join(', '));
 
@@ -369,36 +440,6 @@ function onStreamClosed() {
 		emitTo(remainingStreamIds, 'event: part\r\ndata: '+identJSON+'\r\n\r\n');
 	}
 }
-
-
-// User App
-// ========
-// - signalling target
-/*server.notify('/:userId/apps/:targetAppId',
-	authorize,
-	function (request, response, next) {
-		// Locate the target app's stream
-		var streamId = getStreamId(request.params.targetAppId, request.params.userId);
-		var stream = server.streams[streamId];
-		if (!stream)
-			return ERRnotfound(request, response);
-
-		// Validate
-		var body = request.body;
-		if (!body)
-			return ERRbadent(request, response, 'Request body is required');
-		if (!body.event || (!body.data || typeof body.data != 'object'))
-			return ERRbadent(request, response, 'Request body `event` and `data` fields are required');
-		if (body.event != 'candidate' && body.event != 'offer' && body.event != 'answer')
-			return ERRbadent(request, response, 'Request body `event` must be one of "candidate", "offer", or "answer"');
-
-		// Emit to the target stream
-		stream.write('event: '+body.event+'\r\n');
-		stream.write('data: '+JSON.stringify(body.data)+'\r\n\r\n');
-		response.writeHead(204, 'ok, no content');
-		response.end();
-	}
-);*/
 
 
 // Query Helpers
@@ -557,16 +598,19 @@ function ERRinternal(request, response, msg, exception) {
 }
 
 
-// Setup
-// =====
-server.pgClient.connect(function(err) {
-	if (err) {
-		console.error("Failed to connect to postgres", err);
-		process.exit();
-	}
+module.exports = server;
+if (!module.parent) {
+	// Setup
+	// =====
+	server.pgClient.connect(function(err) {
+		if (err) {
+			console.error("Failed to connect to postgres", err);
+			process.exit();
+		}
 
-	// :TODO: should clear out any user presences that might have been left over
-});
-server.listen(8001);
-server.startTime = new Date();
-console.log('Signalling HTTP server listening on port 8001');
+		// :TODO: should clear out any user presences that might have been left over
+	});
+	server.listen(8001);
+	server.startTime = new Date();
+	console.log('Signalling HTTP server listening on port 8001');
+}

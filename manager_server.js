@@ -1,12 +1,14 @@
 var http = require('http');
 var pg = require('pg');
 var express = require('express');
+var signal_server = require('./signal_server.js');
 
 
 // Server State
 // ============
 var server = express();
 server.pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
+signal_server.pgClient = server.pgClient;
 
 
 // Common Handlers
@@ -18,6 +20,7 @@ server.options('*', function(request, response) {
 	response.end();
 });
 server.use('/_', express.static(__dirname + '/static'));
+server.use('/s', signal_server);
 
 
 // Root

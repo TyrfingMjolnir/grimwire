@@ -26,6 +26,7 @@ CREATE TABLE stations (
 	recommended_apps VARCHAR(256)[],
 
 	created_at TIMESTAMP DEFAULT NOW(),
+	is_public BOOLEAN,
 	status basicStatusEnum DEFAULT 'Active'
 );
 CREATE TABLE apps (
@@ -63,13 +64,14 @@ CREATE TABLE user_presences (
 --
 
 -- Active stations
-CREATE VIEW active_stations_list_view AS
+CREATE VIEW active_public_stations_list_view AS
 	SELECT
 		s.id,
 		s.name
 	FROM stations s
 	WHERE
-		s.status = 'Active';
+		s.is_public = 't'
+		AND s.status = 'Active';
 
 -- Active stations with nobody in them
 CREATE VIEW empty_active_stations_list_view AS

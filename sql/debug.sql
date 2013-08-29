@@ -6,8 +6,8 @@ INSERT INTO users (id) VALUES ('bob');
 INSERT INTO apps (id) VALUES ('chat.grimwire.com');
 INSERT INTO apps (id) VALUES ('webdrive.grimwire.com');
 
-INSERT INTO stations (id, owning_user_id, name, invites, admins) VALUES ('foobar', 'pfraze', 'Foobar Station', '{"bob","pfraze"}', '{"pfraze"}');
-INSERT INTO stations (id, owning_user_id, name, invites, admins) VALUES ('bobs-palace', 'bob', 'Bob''s Palace', '{"bob"}', '{"bob"}');
+INSERT INTO stations (id, owning_user_id, name, invites, admins, is_public) VALUES ('foobar', 'pfraze', 'Foobar Station', '{"bob","pfraze"}', '{"pfraze"}', 't');
+INSERT INTO stations (id, owning_user_id, name, invites, admins, is_public) VALUES ('bobs-palace', 'bob', 'Bob''s Palace', '{"bob"}', '{"bob"}', 'f');
 
 INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_generate_v4(), 'foobar', 'pfraze', 'chat.grimwire.com';
 INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_generate_v4(), 'foobar', 'pfraze', 'webdrive.grimwire.com';
@@ -18,7 +18,7 @@ INSERT INTO app_auth_tokens (id, station_id, user_id, app_id) SELECT uuid_genera
 
 
 -- Test queries
-select * from active_stations_list_view;
+select * from active_public_stations_list_view;
 select * from empty_active_stations_list_view;
 select * from user_online_stations_fn('pfraze');
 select * from user_online_stations_fn('bob');
