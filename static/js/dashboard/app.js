@@ -1,10 +1,3 @@
-// :DEBUG:
-$('.active-peer').popover({
-	html: true,
-	placement: 'bottom'
-});
-
-
 // Page state
 var _session = null;
 var _active_users = [
@@ -105,10 +98,16 @@ function renderAll() {
 	// Populate active users
 	var renderUser = function(user) {
 		if (_peer_web.indexOf(user.id) !== -1) {
-			return '<a href="#">'+user.id+'</a>';
+			return '<a href="#" data-content="todo">'+user.id+'</a>';
 		}
 		return '<span class="text-muted">'+user.id+'</span>';
 	};
 	$('#active-users').html(_active_users.map(renderUser).join(' '));
+
+	// Create popovers
+	$('.active-peer').popover({
+		html: true,
+		placement: 'bottom'
+	});
 }
 renderAll();
