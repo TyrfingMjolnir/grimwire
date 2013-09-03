@@ -13,3 +13,7 @@
 .navbar-nav .dropdown-toggle {
 	border-left: solid #E5E5E5 1px; border-right: solid #E5E5E5 1px; box-shadow: -1px 0 0 #FFF, 1px 0 0 #FFF;
 }
+
+
+/* ui controls */
+#peerweb-edit { display: none; }

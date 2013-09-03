@@ -649,7 +649,6 @@ function extractRequestPayload(targetElem, form, opts) {
 
 		// skip if it doesnt have a name
 		if (!elem.name) {
-			console.warn('Request Form Serialization: Skipping form element with no name', elem);
 			continue;
 		}
 
@@ -1994,7 +1993,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Hook up to sse relay
 		this.onSigRelayMessageBound = onSigRelayMessage.bind(self);
 		this.config.signalStream.on('message', this.onSigRelayMessageBound);
-		this.peerSignal = local.navigator(this.config.signalStream.getUrl())
+		this.peerSignalAPI = local.navigator(this.config.signalStream.getUrl())
 			.follow({ rel: 'collection', id: 'streams' })
 			.follow({ rel: 'item', id: this.config.peer.stream });
 
@@ -2163,7 +2162,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 	// Helper to send a message to peers on the relay
 	RTCPeerServer.prototype.signal = function(event, data) {
-		this.peerSignal.post({ event: event, data: data })
+		this.peerSignalAPI.post({ event: event, data: data })
 			.then(null, function(res) {
 				console.warn('RTCPeerServer - Failed to send signal message to relay', res);
 			});
@@ -4081,9 +4080,15 @@ Navigator.prototype.resolve = function(options) {
 Navigator.prototype.lookupLink = function(context) {
 	if (context.query) {
 		if (typeof context.query == 'object') {
-			// Try to find a link with matching rel and id
-			var link, reducedQuery = { rel: context.query.rel, id: context.query.id };
-			link = local.web.queryLinks1(this.links, reducedQuery);
+			// Search only by rel and ID
+			var reducedQuery = {};
+			if (typeof context.query.rel != 'undefined')
+				reducedQuery.rel = context.query.rel;
+			if (typeof context.query.id != 'undefined')
+				reducedQuery.id = context.query.id;
+
+			// Try to find a link that matches
+			var link = local.web.queryLinks1(this.links, reducedQuery);
 			if (!link && reducedQuery.id) {
 				// Try again without the id
 				reducedQuery.id = undefined;

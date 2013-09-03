@@ -26,10 +26,10 @@ server.options('*', function(request, response) {
 // ====
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
-		'<http://grimwire.net:8000/s>; rel="collection grimwire.com/-webprn/relays"; id="stations"',
+		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net WebPRN"',
+		'<http://grimwire.net:8000/s>; rel="collection grimwire.com/-p2pw/relays"; id="stations"',
 		'<http://grimwire.net:8000/u>; rel="collection"; id="users"',
-		'<http://grimwire.net:8000/session>; rel="service"; id="session"',
+		'<http://grimwire.net:8000/session>; rel="service grimwire.com/-session"; id="session"',
 		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
 	].join(', '));
 	next();
@@ -56,7 +56,7 @@ server.use('/s', stations_server);
 // =====
 server.get('/status', function(request, response) {
 	response.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
+		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-p2pw/service"; title="Grimwire.net WebPRN"',
 		'<http://grimwire.net:8000/status>; rel="self service"; id="status"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
@@ -85,8 +85,8 @@ server.all('/session',
 	function (req, res, next) {
 		// Set links
 		res.setHeader('Link', [
-			'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
-			'<http://grimwire.net:8000/session>; rel="self service"; id="session"'
+			'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-p2pw/service"; title="Grimwire.net WebPRN"',
+			'<http://grimwire.net:8000/session>; rel="self service grimwire.com/-session"; id="session"'
 		].join(', '));
 
 		// Route methods

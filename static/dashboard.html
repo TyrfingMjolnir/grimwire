@@ -8,7 +8,7 @@
     <meta name="author" content="">
     <link rel="shortcut icon" href="ico/favicon.png">
 
-    <title>Grimwire WebPRN</title>
+    <title>grimwire p2pw</title>
 
     <link href="css/bootstrap.css" rel="stylesheet">
     <link href="css/dashboard.css" rel="stylesheet">
@@ -31,7 +31,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> P2PW</a>
+          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> p2pw</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -49,142 +49,38 @@
 
     <div class="container">
 
-      <br/>
       <div class="row">
-        <div id="stations" class="col-md-6">
-          <div class="row">
-            <div class="col-md-5"><h3 style="margin-top: 0">Trusted Peers</h3></div>
-            <div class="col-md-7">
-              <div class="input-group">
-                <span class="input-group-addon">s/</span>
-                <input id="station-id" type="text" class="form-control" placeholder="station-id">
-              </div>
-              <a id="new-station" class="pull-right" href="#"><small>New</small></a>
+        <div class="col-md-10">
+          <h3>Active Users <small><a href="#" id="refresh">refresh</a></small></h3>
+          <div id="active-users"></div>
+        </div><!-- /col-md-10 -->
+        <!--div class="col-md-2">
+          <h4>Whois</h4>
+          <input type="text" class="form-control" placeholder="username" />
+        </div>< /col-md-2 -->
+        <div class="col-md-2">
+          <h4>Peer Web</h4>
+          <div id="peerweb-review">
+            <div class="usernames">
+              alice<br/>
+              bob<br/>
+              charlie
             </div>
+            <a id="edit-peerweb" href="#">edit</a>
           </div>
-          <br/>
-        </div><!-- /col-md-7 -->
-
-        <div class="col-md-6">
-          <textarea id="scratchpad" class="form-control" rows="7">===[[[[ Grimwire.net ]]]]===
-Web Peer Network v0.1</textarea>
-          <br/>
-          <h4>Active Stations</h4>
-          <ul id="public-stations" class="list-unstyled"></ul>
-        </div>
+          <div id="peerweb-edit">
+            <textarea class="form-control" rows="20" placeholder="Enter the names of the users you're connecting to."></textarea>
+            <a id="save-peerweb" href="#">save</a>
+          </div>
+        </div><!-- /col-md-2 -->
       </div> <!-- /row -->
 
     </div> <!-- /container -->
 
-    <script type="text/template" id="station-template">
-      <% var userIsAdmin = (admins.indexOf(userId) !== -1); %>
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <h3 class="panel-title">
-            <a <% if (user_is_invited) { %>href="/s/<%= id %>"<% } %> title="<%= name %>" style="color:#428bca">s/<%= id %></a> <% if (name) { %> <%= name %> <% } %>
-            <span class="pull-right">
-              <a href="#" class="dismiss-station">&times;</a>&nbsp;
-            </span>
-          </h3>
-        </div>
-        <div class="panel-body">
-          <% if (status == 'Active') { %>
-            <div class="row">
-              <div class="col-md-7">
-                <% if (user_is_invited) { %>
-                  <% if (invites.length === 0) { %> Public, <% } else { %> Private, <% } %>
-                  <a href="javascript:void(0)" class="popover-link" data-content="<%= online_users.map(function(item) { return item.user+' <a target=_blank href=//'+item.app+'>'+item.app+'</a>'; }).join('<br/>') %>"><%- online_users.length %> online users</a>,
-                  <a href="javascript:void(0)" class="popover-link" data-content="<%= admins.join('<br/>') %>"><%- admins.length %> admins</a>
-                  <% if (userApps.length > 0) { %>
-                    <%= userApps.map(function(app) { return '<a class="text-muted" href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
-                  <% } %>
-                <% } else { %>
-                  Private
-                <% } %>
-              </div>
-              <div class="col-md-5">
-                <div class="pull-right">
-                  <% if (userIsAdmin) { %><button type="button" class="btn btn-default admin-btn" data-toggle="button">Admin</button><% } %>
-                </div>
-              </div>
-            </div>
-          <% } else { %>
-            <div>
-              Inactive
-              <div class="pull-right">
-                <button type="button" class="btn btn-success create-station" data-toggle="button">
-                  <span class="glyphicon glyphicon-plus"></span> Create
-                </button>
-              </div>
-            </div>
-          <% } %>
-        </div>
-        <div class="panel-footer collapse"></div>
-      </div>
-    </script>
-    <script type="text/template" id="station-admin-template">
-      <form class="form-horizontal" role="form">
-        <br/>
-        <div class="form-group">
-          <label for="name" class="col-sm-3 control-label" style="font-weight: normal">Station Title</label>
-          <div class="col-sm-9"><input type="text" class="form-control" name="name" value="<%- name %>" placeholder="Not required." /></div>
-        </div>
-        <br/>
-        <div class="form-group">
-          <label for="invites" class="col-sm-3 control-label" style="font-weight: normal">
-            Invited Users<br/>
-            <small><a class="invite-just-me" href="javascript:void(0)">Just Me</a></small>
-          </label>
-          <div class="col-sm-9"><textarea class="form-control" name="invites" placeholder="If left empty, the channel will be public."><%- invites.join(', ') %></textarea></div>
-        </div>
-        <div class="form-advanced collapse">
-          <hr/>
-          <div class="form-group">
-            <label for="admins" class="col-sm-3 control-label" style="font-weight: normal">Admins</label>
-            <div class="col-sm-9"><textarea class="form-control" name="admins" placeholder="The creator of the station will always be an admin."><%- admins.join(', ') || userId %></textarea></div>
-          </div>
-          <div class="form-group">
-            <label style="font-weight: normal" for="hosters" class="col-sm-3 control-label">Allowed Hosters</label>
-            <div class="col-sm-9"><textarea class="form-control" name="hosters" placeholder="If left empty, all users will be allowed to connect to each other."><%- hosters.join(', ') %></textarea></div>
-          </div>
-          <div class="form-group">
-            <label style="font-weight: normal" for="allowed_apps" class="col-sm-3 control-label">Allowed Apps</label>
-            <div class="col-sm-9"><textarea class="form-control" name="allowed_apps" placeholder="If left empty, all apps will be allowed."><%- allowed_apps.join(', ') %></textarea></div>
-          </div>
-          <div class="form-group">
-            <label style="font-weight: normal" for="recommended_apps" class="col-sm-3 control-label">Recommended Apps</label>
-            <div class="col-sm-9"><textarea class="form-control" name="recommended_apps" placeholder="If left empty, no apps will be recommended to joining users."><%- recommended_apps.join(', ') %></textarea></div>
-          </div>
-        </div>
-        <br/>
-        <div class="form-group">
-          <div class="col-sm-offset-3 col-sm-9">
-            <% if (status == 'Active') { %>
-              <div class="btn-group pull-right">
-                <button type="submit" class="btn btn-default toggle-advanced" data-toggle="button"><span class="glyphicon glyphicon-cog"></span></button>
-                <button type="submit" class="btn btn-default update-settings">Update Settings</button>
-              </div>
-              <button type="submit" class="btn btn-default close-station"><span class="glyphicon glyphicon-remove-sign"></span> Close Station</button>
-            <% } else { %>
-              <div class="btn-group pull-right">
-                <button type="submit" class="btn btn-default toggle-advanced" data-toggle="button"><span class="glyphicon glyphicon-cog"></span></button>
-                <button type="submit" class="btn btn-default update-settings">Start Broadcasting</button>
-              </div>
-            <% } %>
-          </div>
-        </div>
-      </form>
-    </script>
-
     <script src="js/jquery-2.0.3.min.js"></script>
     <script src="js/local.js"></script>
     <script src="js/bootstrap.min.js"></script>
-    <script src="js/underscore.js"></script>
-    <script src="js/backbone.js"></script>
 
-    <script src="js/dashboard/models.js"></script>
-    <script src="js/dashboard/collections.js"></script>
-    <script src="js/dashboard/views.js"></script>
     <script src="js/dashboard/app.js"></script>
   </body>
 </html>
