@@ -138,9 +138,20 @@ server.all('/session',
 					});
 				});
 			});
+			return;
 		}
+		if (req.method == 'DELETE') {
+			// Remove the session cookie
+			req.session = null;
+			res.send(204);
+			return;
+		}
+		res.send(405);
 	}
 );
+server.get('/login', function(req, res, next) {
+	res.send('todo');
+});
 
 // Users
 // =====
@@ -242,23 +253,20 @@ function checkPassword(plaintext, encrypted, cb) {
 
 // Auth
 // - adds response.locals.authedUserId and authedUserName on success
-function authorize(request, response, next) {
-	var user = parseAuthBasic(request.headers.authorization);
-	var query = [
-		'SELECT id FROM users',
-			'WHERE name = $1',
-			'AND password = $2',
-			'AND status = \'Active\''
-	].join(' ');
-	server.pgClient.query(query, [user[0], user[1]], function(err, res) {
-		if (err)
-			return ERRinternal(request, response, 'Failed to fetch user record from DB', err);
-
-		if (!res.rows[0])
-			return ERRforbidden(request, response, 'Invalid auth credentials');
-
-		request.params.authedUserId = res.rows[0].id;
-		request.params.authedUserName = user[0];
+function authorize(req, res, next) {
+	getSession(req.session, function(err, session) {
+		if (err) {
+			return ERRinternal(req, res, 'Failed to get session info from DB', err);
+		}
+		if (!session) {
+			if (req.accepts('html')) {
+				res.send(401, getLoginHtml());
+			} else {
+				res.send(401);
+			}
+			return;
+		}
+		res.locals.session = session;
 		next();
 	});
 }
