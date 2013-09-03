@@ -2,10 +2,10 @@ var Views = Views || {};
 Views.Station = Backbone.View.extend({
     events: {
         'click .dismiss-station': 'close',
-        'click .admin-btn': 'toggleAdmin',
-        'click .create-station': 'toggleAdmin',
+        'click .admin-btn':       'toggleAdmin',
+        'click .create-station':  'toggleAdmin',
         'click .toggle-advanced': 'adminToggleAdvanced',
-        'request form': 'adminUpdateSettings'
+        'request form':           'adminUpdateSettings',
     },
 
     initialize: function() {
@@ -120,18 +120,62 @@ Views.Station = Backbone.View.extend({
     }
 });
 
-Views.App = Backbone.View.extend({
+Views.Toolbar = Backbone.View.extend({
     events: {
-        'keypress #station-id': 'createOnEnter',
-        'blur #scratchpad': 'saveScratchpad'
+        'click #logout': 'clickLogout'
+    },
+
+    initialize: function() {
+        // Web APIs
+        this.prnSessionAPI = window.app.prnServiceAPI.follow({ rel: 'service', id: 'session' });
+
+        // Cache selectors & fn bindings
+        this.setElement($('#toolbar'), true);
+
+        // Load session
+        var self = this;
+        this.prnSessionAPI.get({Accept:'application/json'})
+            .then(function(res) {
+                // Update UI
+                self.setSession(res.body);
+            })
+            .fail(function(res) {
+                // Failed to load session, redirect to login
+                window.location = '/login.html';
+            });
+    },
+
+    setSession: function(session) {
+        this.session = session;
+        // &lceil;&bull;&bull;&middot;&middot;&middot;&rfloor;
+        $('#userid').html(session.user_id+' <b class="caret"></b>');
+    },
+
+    clickLogout: function(e) {
+        this.prnSessionAPI.delete()
+            .then(function() {
+                window.location = '/login.html';
+            })
+            .fail(function() {
+                console.warn('Failed to delete session');
+            });
+        return false;
+    }
+});
+
+Views.App = Backbone.View.extend({
+    pastStations: [],
+    events: {
+        'keypress #station-id': 'keypressStationId',
+        'click #new-station': 'clickNewStation',
+        'blur #scratchpad': 'saveScratchpad',
+        'click #public-stations a': 'clickPublicStation'
     },
     initialize: function() {
         // Web APIs
         this.prnServiceAPI = local.navigator('//grimwire.net:8000'); // PRN provider
         this.prnServiceAPI = this.prnServiceAPI.follow({ rel: 'self grimwire.com/-webprn/service' }); // Verify protocol support
         this.prnStationsAPI = this.prnServiceAPI.follow({ rel: 'grimwire.com/-webprn/relays', id: 'stations' });
-        this.prnServiceAPI.resolve(); // Force resolution at loadtime
-        this.prnStationsAPI.resolve();
 
         // Collection of currently open stations
         this.userStations = new Collections.Station();
@@ -141,18 +185,31 @@ Views.App = Backbone.View.extend({
         this.$stationIdInput = this.$('#station-id');
         this.$stationList = this.$('#stations');
         this.$scratchPad = this.$('#scratchpad');
-        _.bindAll(this, 'render', 'addOne', 'addAll', 'createOnEnter');
+        _.bindAll(this, 'render', 'addOne', 'addAll');
 
         // Bind collection events
         this.userStations.bind('add', this.addOne);
         this.userStations.bind('reset', this.addAll);
         this.userStations.bind('all', this.render);
 
-        // Load scratchpad content from localstorage
-        var v = localStorage.getItem('scratchpad');
-        if (v !== null) {
-            this.$scratchPad.val(v);
+        if (localStorage) {
+            // Load scratchpad content from localstorage
+            var v = localStorage.getItem('scratchpad');
+            if (v !== null) {
+                this.$scratchPad.val(v);
+            }
         }
+
+        // Load the active public stations
+        this.prnStationsAPI.get({ Accept: 'application/json' })
+            .then(function(res) {
+                if (res.body && res.body.rows) {
+                    $('#public-stations').html(res.body.rows.map(function(row) { return '<li><a href="#">'+row.id+'</a></li>'; }).join(''));
+                }
+            });
+
+        // Focus station id on load
+        this.$('#station-id').focus();
     },
 
     render: function () {
@@ -167,14 +224,29 @@ Views.App = Backbone.View.extend({
         this.userStations.each(this.addOne);
     },
 
-    createOnEnter: function (e) {
-        if (e.keyCode != 13) { // Enter
+    keypressStationId: function (e) {
+        if (e.keyCode != 13) { // Enter key only
             return;
         }
+        // Get the station, clear the input
+        this.openStation(this.$stationIdInput.val());
+    },
+
+    clickNewStation: function() {
+        this.openStation(+Date.now());
+        return false;
+    },
+
+    clickPublicStation: function(e) {
+        this.openStation(e.currentTarget.innerText);
+        return false;
+    },
+
+    openStation: function(stationId) {
         var self = this;
-        var stationId = this.$stationIdInput.val();
+        // Fetch data from the server
         this.prnStationsAPI.follow({ rel: 'grimwire.com/-webprn/relay', id: stationId })
-            .get({ accept: 'application/json' })
+            .get({ Accept: 'application/json' })
             .then(function(res) {
                 self.userStations.add({
                     id: res.body.id,

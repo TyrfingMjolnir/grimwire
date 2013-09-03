@@ -9,9 +9,6 @@ var stations_server = require('./signal_server.js');
 var server = express();
 server.pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
 stations_server.pgClient = server.pgClient;
-server.assets = {
-	dashboardHtml: require('fs').readFileSync('./static/dashboard.html').toString()
-};
 
 // Common Handlers
 // ===============
@@ -26,24 +23,29 @@ server.options('*', function(request, response) {
 
 
 // Root
-server.all('/', function(request, response, next) {
-	response.setHeader('link', [
+// ====
+server.all('/', function(req, res, next) {
+	res.setHeader('Link', [
 		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
 		'<http://grimwire.net:8000/s>; rel="collection grimwire.com/-webprn/relays"; id="stations"',
+		'<http://grimwire.net:8000/u>; rel="collection"; id="users"',
 		'<http://grimwire.net:8000/session>; rel="service"; id="session"',
 		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
 	].join(', '));
-	if (request.method == 'HEAD') {
-		return response.send(204);
-	}
-	if (request.method == 'GET') {
-		return response.format({
-			'text/html': function() { response.send(server.assets.dashboardHtml); },
-			'application/json': function() { response.json({ msg: 'hello' }); }
+	next();
+});
+server.head('/', function(req, res, next) {
+	res.send(204);
+});
+server.get('/',
+	authorize,
+	function(req, res, next) {
+		return res.format({
+			'text/html': function() { res.send(getDashboardHtml()); },
+			'application/json': function() { res.json({ msg: 'hello' }); }
 		});
 	}
-	ERRbadmethod(request, response);
-});
+);
 // Matching static files
 server.use('/', express.static(__dirname + '/static'));
 // Stations Service
@@ -53,7 +55,7 @@ server.use('/s', stations_server);
 // Admin
 // =====
 server.get('/status', function(request, response) {
-	response.setHeader('link', [
+	response.setHeader('Link', [
 		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
 		'<http://grimwire.net:8000/status>; rel="self service"; id="status"'
 	].join(', '));
@@ -82,7 +84,7 @@ server.all('/session',
 	},
 	function (req, res, next) {
 		// Set links
-		res.setHeader('link', [
+		res.setHeader('Link', [
 			'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-webprn/service"; title="Grimwire.net WebPRN"',
 			'<http://grimwire.net:8000/session>; rel="self service"; id="session"'
 		].join(', '));
@@ -110,8 +112,8 @@ server.all('/session',
 
 			// Fetch the user
 			getUser(req.body.id, function(err, user) {
-				if (err) {
-					res.writeHead(412, 'bad entity', { 'content-type': 'application/json' });
+				if (err || !user) {
+					res.writeHead(422, 'bad entity', { 'content-type': 'application/json' });
 					res.end(JSON.stringify({errors:['Invalid username or password.']}));
 					return;
 				}
@@ -119,7 +121,7 @@ server.all('/session',
 				// Check password
 				checkPassword(req.body.password, user.password, function(err) {
 					if (err) {
-						res.writeHead(412, 'bad entity', { 'content-type': 'application/json' });
+						res.writeHead(422, 'bad entity', { 'content-type': 'application/json' });
 						res.end(JSON.stringify({errors:['Invalid username or password.']}));
 						return;
 					}
@@ -275,6 +277,13 @@ function setCorsHeaders(request, response, next) {
 	response.setHeader('Access-Control-Expose-Headers', request.headers['access-control-request-headers'] || 'Content-Type, Content-Length, Date, ETag, Last-Modified, Link, Location');
 	next();
 }
+
+
+// Response helpers
+// ================
+function getDashboardHtml() { return require('fs').readFileSync('./static/dashboard.html').toString(); }
+function getLoginHtml() { return require('fs').readFileSync('./static/login.html').toString(); }
+
 
 
 // Error Responses

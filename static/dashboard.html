@@ -23,7 +23,7 @@
   <body id="dashboardapp">
 
     <!-- Static navbar -->
-    <div class="navbar navbar-default navbar-static-top">
+    <div id="toolbar" class="navbar navbar-default navbar-static-top">
       <div class="container">
         <div class="navbar-header">
           <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
@@ -31,15 +31,14 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> WebPRN</a>
+          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> P2PW</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
             <li class="dropdown">
-              <a href="#" class="dropdown-toggle" data-toggle="dropdown">bob &lceil;&bull;&bull;&middot;&middot;&middot;&rfloor; <b class="caret"></b></a>
+              <a id="userid" href="#" class="dropdown-toggle" data-toggle="dropdown"><b class="caret"></b></a>
               <ul class="dropdown-menu">
-                <li><a href="/_/profile.html">Edit Account</a></li>
-                <li><a href="#">Log Out</a></li>
+                <li><a id="logout" href="#">Log Out</a></li>
               </ul>
             </li>
           </ul>
@@ -54,23 +53,24 @@
       <div class="row">
         <div id="stations" class="col-md-6">
           <div class="row">
-            <div class="col-md-5"><h3 style="margin-top: 0">Network Stations</h3></div>
+            <div class="col-md-5"><h3 style="margin-top: 0">Trusted Peers</h3></div>
             <div class="col-md-7">
               <div class="input-group">
                 <span class="input-group-addon">s/</span>
                 <input id="station-id" type="text" class="form-control" placeholder="station-id">
               </div>
-              <a class="pull-right" href="#"><small>New</small></a>
+              <a id="new-station" class="pull-right" href="#"><small>New</small></a>
             </div>
           </div>
           <br/>
         </div><!-- /col-md-7 -->
 
         <div class="col-md-6">
-          <textarea id="scratchpad" class="form-control" rows="20">===[[[[ Grimwire.net ]]]]===
-Web Peer Network v0.1
-
-First time? Click "New" and join with one of the applications. Then join with another application (so they're both running at the same time) and see how they interact.</textarea>
+          <textarea id="scratchpad" class="form-control" rows="7">===[[[[ Grimwire.net ]]]]===
+Web Peer Network v0.1</textarea>
+          <br/>
+          <h4>Active Stations</h4>
+          <ul id="public-stations" class="list-unstyled"></ul>
         </div>
       </div> <!-- /row -->
 
@@ -93,7 +93,7 @@ First time? Click "New" and join with one of the applications. Then join with an
               <div class="col-md-7">
                 <% if (user_is_invited) { %>
                   <% if (invites.length === 0) { %> Public, <% } else { %> Private, <% } %>
-                  <a href="javascript:void(0)" class="popover-link" data-content="<%= online_users.join('<br/>') %>"><%- online_users.length %> online users</a>,
+                  <a href="javascript:void(0)" class="popover-link" data-content="<%= online_users.map(function(item) { return item.user+' <a target=_blank href=//'+item.app+'>'+item.app+'</a>'; }).join('<br/>') %>"><%- online_users.length %> online users</a>,
                   <a href="javascript:void(0)" class="popover-link" data-content="<%= admins.join('<br/>') %>"><%- admins.length %> admins</a>
                   <% if (userApps.length > 0) { %>
                     <%= userApps.map(function(app) { return '<a class="text-muted" href="javascript:void(0)">'+app+'</a>'; }).join(', ') %>
@@ -104,36 +104,6 @@ First time? Click "New" and join with one of the applications. Then join with an
               </div>
               <div class="col-md-5">
                 <div class="pull-right">
-                  <% if (user_is_invited) { %>
-                    <div class="btn-group">
-                      <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-                        <% if (userApps.length === 0) { %>Join With<% } else { %>Add<% } %>
-                        <span class="caret"></span>
-                      </button>
-                      <ul class="dropdown-menu" role="menu">
-                      <% if (allowed_apps.length > 0) { %>
-                        <li class="dropdown-header">Allowed Apps</li>
-                        <%= allowed_apps.map(function(app) {
-                          return '<li><a href="javascript:void(0)">'+app+'</a></li>';
-                        }).join('') %>
-                      <% } else { %>
-                        <li class="dropdown-header">Your Past Apps</li>
-                        <li><a href="javascript:void(0)">GrimChat</a></li>
-                        <li><a href="javascript:void(0)">Webdrive</a></li>
-                        <li><a href="javascript:void(0)">Echo</a></li>
-                        <li class="divider"></li>
-                        <li class="dropdown-header">Station Apps</li>
-                        <li><a href="javascript:void(0)">GitHub</a></li>
-                        <li><a href="javascript:void(0)">GrimChat</a></li>
-                        <li class="divider"></li>
-                        <li class="dropdown-header">Network Apps</li>
-                        <li><a href="javascript:void(0)">GrimChat</a></li>
-                        <li><a href="javascript:void(0)">WebDrive</a></li>
-                        <li><a href="javascript:void(0)">Echo</a></li>
-                      <% } %>
-                      </ul>
-                    </div>
-                  <% } %>
                   <% if (userIsAdmin) { %><button type="button" class="btn btn-default admin-btn" data-toggle="button">Admin</button><% } %>
                 </div>
               </div>
@@ -211,20 +181,7 @@ First time? Click "New" and join with one of the applications. Then join with an
     <script src="js/bootstrap.min.js"></script>
     <script src="js/underscore.js"></script>
     <script src="js/backbone.js"></script>
-    <script>
-      // :DEBUG:
-      $(function() {
-        // popovers
-        $('.connected-app').popover({
-          html: true,
-          content: [
-            '<h4 style="margin: 0">GrimChat</h4>',
-            '<a href="#">chat.grimwire.net</a><br/><br/>',
-            '<button class="btn btn-danger btn-xs">Disconnect <span class="glyphicon glyphicon-remove-circle"></span></button>'
-          ].join('')
-        })
-      });
-    </script>
+
     <script src="js/dashboard/models.js"></script>
     <script src="js/dashboard/collections.js"></script>
     <script src="js/dashboard/views.js"></script>

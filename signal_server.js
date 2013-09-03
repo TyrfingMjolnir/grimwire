@@ -287,7 +287,7 @@ server.all('/:stationId/streams',
 		];
 		if (response.locals.stationInfo.user_is_invited) {
 			(server.stationStreamIds[response.locals.stationId] || []).forEach(function(streamId) {
-				linkHeader.push('<http://grimwire.net:8000/'+response.locals.stationId+'/streams/'+streamId+'>; rel="item"; id="'+streamId+'"');
+				linkHeader.push('<http://grimwire.net:8000/s/'+response.locals.stationId+'/streams/'+streamId+'>; rel="item"; id="'+streamId+'"');
 			});
 		}
 		response.setHeader('link', linkHeader.join(', '));
