@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="ico/favicon.png">
+
+    <title>grimwire p2pw</title>
+
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/app-auth.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="../../assets/js/html5shiv.js"></script>
+      <script src="../../assets/js/respond.min.js"></script>
+    <![endif]-->
+  </head>
+
+  <body id="dashboardapp">
+
+    <!-- Static navbar -->
+    <div id="toolbar" class="navbar navbar-default navbar-static-top">
+      <div class="container">
+        <div class="navbar-header"><a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="/img/logo_small.png" /> p2pw</a></div>
+        <ul class="nav navbar-nav navbar-right">
+          <li class="dropdown">
+            <a id="userid" href="#" class="dropdown-toggle" data-toggle="dropdown">{SESSION_USER} <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a id="logout" href="#">Log Out</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <h1>Authorize {APP_DOMAIN}</h1>
+          <p>Allow {APP_DOMAIN} to connect to your peer web?</p>
+          <button class="btn btn-primary" onclick="onAllow()">Allow</button>
+          <button class="btn" onclick="onCancel()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    // Only load as a popup
+    if (!window.opener) {
+      alert('This page can only be used as a popup from 3rd-party apps.');
+      window.location = '/';
+    }
+    function sendMsgToParent(msg) {
+      window.opener.postMessage(msg, 'http://{APP_DOMAIN}');
+    }
+    </script>
+
+    <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/local.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+
+    <script>
+    // Get API
+    var accessAPI = local.navigator('http://grimwire.net:8000').follow({
+      rel:  'grimwire.com/-access-token',
+      user: '{SESSION_USER}',
+      app:  '{APP_DOMAIN}'
+    });
+    accessAPI.resolve({ nohead: true });
+
+    // Create the app session and send it back
+    function onAllow() {
+      accessAPI.post()
+        .then(function(res) {
+          if (res.body.token) {
+            sendMsgToParent(res.body.token);
+            window.close();
+          }
+        })
+        .fail(function(res) {
+          console.error('Failed to create app session', res);
+          alert('Sorry, there was an internal error.');
+        })
+    }
+
+    // User canceled
+    function onCancel() {
+      sendMsgToParent(null);
+      window.close()
+    }
+    </script>
+
+  </body>
+</html>

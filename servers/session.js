@@ -1,9 +1,8 @@
 var express = require('express');
-var queries = require('../lib/queries.js');
 
 // Session
 // =======
-module.exports = function(pgClient) {
+module.exports = function(db) {
 	var server = express();
 
 	// Routes
@@ -19,13 +18,13 @@ module.exports = function(pgClient) {
 			].join(', '));
 
 			// Load session
-			queries.getSession(pgClient, req.session, function(err, session) {
+			db.getSession(req.session, function(err, dbres) {
 				if (err) {
 					console.error('Failed to get session info from DB', err);
 					res.send(500);
 					return;
 				}
-				res.locals.session = session;
+				res.locals.session = dbres ? dbres.rows[0] : null;
 				next();
 			});
 		}
@@ -52,13 +51,13 @@ module.exports = function(pgClient) {
 			}
 
 			// Fetch the user
-			queries.getUser(pgClient, req.body.id, function(err, user) {
-				if (err || !user) {
+			db.getUser(req.body.id, function(err, dbres) {
+				if (err || !dbres.rows[0]) {
 					res.writeHead(422, 'bad entity', {'Content-Type': 'application/json'});
 					res.end(JSON.stringify({errors:['Invalid username or password.']}));
 					return;
 				}
-				res.locals.user = user;
+				res.locals.user = dbres.rows[0];
 				next();
 			});
 		},
@@ -75,15 +74,15 @@ module.exports = function(pgClient) {
 		},
 		function (req, res, next) {
 			// Create the session
-			queries.createSession(pgClient, req.body.id, function(err, session) {
-				if (err || !session) {
+			db.createSession(req.body.id, null, function(err, dbres) {
+				if (err || !dbres.rows[0]) {
 					console.error('Failed to create session info in DB', err);
 					res.send(500);
 					return;
 				}
 
 				// Set new session cookie
-				req.session = session.id;
+				req.session = dbres.rows[0].id;
 				res.send(204);
 			});
 		}

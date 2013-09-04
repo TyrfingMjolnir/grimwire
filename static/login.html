@@ -8,10 +8,10 @@
     <meta name="author" content="">
     <link rel="shortcut icon" href="ico/favicon.png">
 
-    <title>Grimwire WebPRN</title>
+    <title>grimwire p2pw</title>
 
-    <link href="css/bootstrap.css" rel="stylesheet">
-    <link href="css/login.css" rel="stylesheet">
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/login.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!--[if lt IE 9]>
@@ -31,7 +31,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="img/logo_small.png" /> WebPRN</a>
+          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="/img/logo_small.png" /> p2pw</a>
         </div>
       </div>
     </div>
@@ -56,8 +56,30 @@
 
     </div> <!-- /container -->
 
-    <script src="js/jquery-2.0.3.min.js"></script>
-    <script src="js/local.js"></script>
-    <script src="js/login/app.js"></script>
+    <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/local.js"></script>
+    <script>
+    var sessionAPI = local.navigator(['//grimwire.net:8000', { rel: 'grimwire.com/-session' }]);
+    sessionAPI.resolve();
+
+    $('.form-login').on('submit', function(e) {
+      var creds = $('.form-login').serializeArray();
+      sessionAPI.post({ id: creds[0].value, password: creds[1].value })
+        .then(function(res) {
+          // Success, reload
+          window.location.href = window.location.href;
+        })
+        .fail(function(res) {
+          if (res.body && res.body.errors) {
+            alert(res.body.errors[0]);
+          }
+        });
+      return false;
+    });
+    $('.form-newuser').on('submit', function(e) {
+      alert('Sorry, we\'re not accepting new users at this time.');
+      return false;
+    });
+    </script>
   </body>
 </html>

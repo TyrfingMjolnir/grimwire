@@ -1,22 +1,16 @@
 // Page state
 var _session = null;
-var _active_users = [
-			{ id:'alice' }, // :DEBUG:
-            { id:'barry' },
-            { id:'bob' },
-            { id:'frank' },
-            { id:'michael' },
-            { id:'nancy' },
-            { id:'peter' },
-            { id:'rachel' },
-            { id:'tom' }];
+var _active_users = {};
 var _peer_web = ['alice', // :DEBUG:
 'bob',
 'frank'];
+function isPeer(user) {
+	return _peer_web.indexOf(user.id) !== -1;
+}
 
 // APIs
-var p2pwServiceAPI     = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-p2pw/service'); // P2PW provider
-var p2pwActiveUsersAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-p2pw/users', active: true });
+var p2pwServiceAPI     = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-service');
+var p2pwOnlineUsersAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-users', online: true });
 var p2pwSessionAPI     = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
 
 // Cache selectors
@@ -37,14 +31,14 @@ function gotoLogin(res) {
 
 // Load active users
 function loadActiveUsers() {
-	p2pwActiveUsersAPI.get({Accept: 'application/json'})
+	p2pwOnlineUsersAPI.get({Accept: 'application/json'})
 		.then(function(res) {
-			if (!res.body || !res.body.rows) {
+			if (!res.body || !res.body.map) {
 				return;
 			}
 
 			// Update state
-			_active_users = res.body.rows;
+			_active_users = res.body.map;
 
 			// Udpate UI
 			renderAll();
@@ -96,13 +90,17 @@ function renderAll() {
 	$('.usernames', $peerweb_review).html(_peer_web.join('<br/>'));
 
 	// Populate active users
-	var renderUser = function(user) {
-		if (_peer_web.indexOf(user.id) !== -1) {
-			return '<a href="#" data-content="todo">'+user.id+'</a>';
+	var html = '';
+	for (var id in _active_users) {
+		var user = _active_users[id];
+		if (isPeer(user)) {
+			var apps = '<a href=chat.grimwire.com target=_blank>chat.grimwire.com</a>'; // :TODO:
+			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
+		} else {
+			html += '<span class="text-muted">'+user.id+'</span> ';
 		}
-		return '<span class="text-muted">'+user.id+'</span>';
-	};
-	$('#active-users').html(_active_users.map(renderUser).join(' '));
+	}
+	$('#active-users').html(html);
 
 	// Create popovers
 	$('.active-peer').popover({
@@ -111,3 +109,4 @@ function renderAll() {
 	});
 }
 renderAll();
+

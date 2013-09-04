@@ -7,7 +7,7 @@ var middleware = require('./lib/middleware.js');
 // ============
 var server = express();
 var pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
-
+var db = require('./lib/queries')(pgClient);
 
 // Common Handlers
 // ===============
@@ -25,8 +25,9 @@ server.options('*', function(request, response) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-		'<http://grimwire.net:8000/u>; rel="collection grimwire.com/-p2pw/peers"; id="users"',
+		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-service"; title="Grimwire.net P2PW"',
+		'<http://grimwire.net:8000/u{?online}>; rel="collection grimwire.com/-users"; id="users"',
+		'<http://grimwire.net:8000/u/{user}/auth/{app}>; rel="service grimwire.com/-access-token"',
 		'<http://grimwire.net:8000/session>; rel="service grimwire.com/-session"; id="session"',
 		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
 	].join(', '));
@@ -34,7 +35,7 @@ server.all('/', function(req, res, next) {
 });
 server.head('/', function(req, res) { res.send(204); });
 server.get('/',
-	middleware.authorize(pgClient),
+	middleware.authenticate(db),
 	function(req, res, next) {
 		return res.format({
 			'text/html': function() { res.send(require('fs').readFileSync('./static/dashboard.html').toString()); },
@@ -44,14 +45,15 @@ server.get('/',
 );
 // Servers
 server.use('/', express.static(__dirname + '/static'));
-server.use('/session', require('./servers/session.js')(pgClient));
+server.use('/u',       require('./servers/users.js')(db));
+server.use('/session', require('./servers/session.js')(db));
 
 
 // Admin
 // =====
 server.get('/status', function(request, response) {
 	response.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
+		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-service"; title="Grimwire.net P2PW"',
 		'<http://grimwire.net:8000/status>; rel="self service"; id="status"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
