@@ -27,9 +27,9 @@ module.exports = function(db) {
 	server.all('/', function (req, res, next) {
 		// Set links
 		res.setHeader('Link', [
-			'</>; rel="up via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u{?online}>; rel="self collection grimwire.com/-users"; id="users"',
-			'</u/{id}>; rel="item grimwire.com/-user"'
+			'</>; rel="up via service grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
+			'</u{?online}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+			'</u/{id}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
 		].join(', '));
 		next();
 	});
@@ -38,44 +38,10 @@ module.exports = function(db) {
 		var userId = req.params.userId;
 		res.setHeader('Link', [
 			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u{?online}>; rel="up collection grimwire.com/-users"; id="users"',
-			'</u/'+req.params.userId+'>; rel="self item grimwire.com/-user"; id="'+userId+'"',
-			'</u/'+userId+'/auth/{id}>; rel="service grimwire.com/-access-token"',
-			'</u/'+userId+'/relays>; rel="service collection grimwire.com/-relays"; id="relays"'
+			'</u{?online}>; rel="up collection grimwire.com/-user"; id="users"',
+			'</u/'+req.params.userId+'>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
 		].join(', '));
 		next();
-	});
-	server.all('/:userId/auth/:app', function (req, res, next) {
-		// Set links
-		var userId = req.params.userId;
-		var app    = req.params.app;
-		res.setHeader('Link', [
-			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u/'+userId+'>; rel="up item grimwire.com/-user"; id="'+userId+'"',
-			'</u/'+userId+'/auth/'+app+'>; rel="self service grimwire.com/-access-token"; id="'+app+'"'
-		].join(', '));
-		next();
-	});
-	server.all('/:userId/relays', function (req, res, next) {
-		// Set links
-		var userId = req.params.userId;
-		res.setHeader('Link', [
-			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u/'+userId+'>; rel="up item grimwire.com/-user"; id="'+userId+'"',
-			'</u/'+userId+'/relays>; rel="self service collection grimwire.com/-relays"; id="relays"',
-			'</u/'+userId+'/relays/{id}>; rel="item grimwire.com/-relay"'
-		].join(', '));
-		next();
-	});
-	server.all('/:userId/relays/:app', function (req, res, next) {
-		// Set links
-		var userId = req.params.userId;
-		var app    = req.params.app;
-		res.setHeader('Link', [
-			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u/'+userId+'/relays>; rel="up service collection grimwire.com/-relays"; id="relays"',
-			'</u/'+userId+'/relays/'+app+'>; rel="item grimwire.com/-relay"'
-		].join(', '));
 	});
 
 	// Get users
@@ -110,146 +76,105 @@ module.exports = function(db) {
 		});
 	});
 
-	// Get user
-	// --------
+	// Get user info or relay stream
+	// -----------------------------
 	server.head('/:userId', function(req, res) { return res.send(204); });
-	server.get('/:userId', getOnlineUser, checkSessionTrust, function(req, res, next) {
-		// Content-negotiation
-		if (!req.accepts('json')) {
-			return res.send(406);
-		}
+	server.get('/:userId', function(req, res, next) {
+		var session = res.locals.session;
 
-		// Send response
-		return res.json({ item: res.locals.user });
-	});
-
-	// Get app access-token interface
-	// ------------------------------
-	server.head('/:userId/auth/:app', function(req, res) { return res.send(204); });
-	server.all('/:userId/auth/:app', function(req, res, next) {
-		// Only provide for session user
-		if (res.locals.session.user_id != req.params.userId) {
-			return res.send(403);
-		}
-		// Don't provide for 3rd party apps (must access directly)
-		if (res.locals.session.app) {
-			return res.send(403);
-		}
-		next();
-	});
-	server.get('/:userId/auth/:app', function(req, res) {
-		// Content negotiation
-		if (!req.accepts('html')) {
-			return res.send(406);
-		}
-
-		// Generate html
-		var html = require('fs').readFileSync('./static/app-auth.html').toString();
-		html = html.replace(/\{APP_DOMAIN\}/g, req.params.app);
-		html = html.replace(/\{SESSION_USER\}/g, res.locals.session.user_id);
-
-		// Serve
-		res.send(html);
-	});
-	server.post('/:userId/auth/:app', function(req, res) {
-		// Generate access token
-		db.createSession(res.locals.session.user_id, req.params.app, function(err, dbres) {
-			if (err || !dbres.rows[0]) {
-				console.error('Failed to create app session in DB', err);
-				return res.send(500);
+		// JSON request
+		if (req.accepts('json')) {
+			// Get user
+			var user = _online_users[req.params.userId];
+			if (!user) {
+				return res.send(404);
 			}
 
-			// Respond
-			res.send({ token: dbres.rows[0].id });
-		});
-	});
+			// Check permissions
+			if (!sessionIsTrusted(res.locals.session, user)) {
+				return res.send(403);
+			}
 
-	// Get user's online relays
-	// ------------------------
-	server.head('/:userId/relays', function(req, res) { return res.send(204); });
-	server.get('/:userId/relays', getOnlineUser, checkSessionTrust, function(req, res, next) {
-		// Content-negotiation
-		if (!req.accepts('json')) {
-			return res.send(406);
+			// Send response
+			return res.json({ item: user });
 		}
 
-		// Respond with user's active apps
-		res.json({ rows: res.locals.user.apps });
-	});
+		// Stream request
+		if (req.accepts('text/event-stream')) {
+			// Only allow users to subscribe to their own relays
+			if (req.params.userId != session.user_id) {
+				return res.send(403);
+			}
 
-	// Get online relay stream & info
-	// ------------------------------
-	server.head('/:userId/relays/:app', function(req, res) { return res.send(204); });
-	server.get('/:userId/relays/:app', function(req, res, next) {
-		var session = res.locals.session;
-		var user = res.locals.user;
+			// Store params in response stream
+			res.locals.relayId = req.params.userId+'-'+session.app;
+			res.locals.userId  = req.params.userId;
+			res.locals.app     = session.app;
 
-		// Content negotiation
-		if (!req.accepts('text/event-stream')) {
-			return res.send(406);
+			// Store connection
+			return addStream(res, function(err) {
+				if (err) {
+					return res.send(500);
+				}
+
+				// Send back stream header
+				res.writeHead(200, 'ok', {
+					'content-type': 'text/event-stream',
+					'cache-control': 'no-cache',
+					'connection': 'keepalive'
+				});
+			});
 		}
 
-		// Only allow <user,app>s to subscribe to their own relays
-		if (req.params.userId != session.user_id || req.params.app == session.app) {
-			return res.send(403);
-		}
-
-		// Store params in response stream
-		res.locals.relayId = req.params.userId+'-'+req.params.app;
-		res.locals.userId  = req.params.userId;
-		res.locals.app     = req.params.app;
-
-		// Store connection
-		addStream(res);
-
-		// Send back stream header
-		res.writeHead(200, 'ok', {
-			'content-type': 'text/event-stream',
-			'cache-control': 'no-cache',
-			'connection': 'keepalive'
-		});
+		// Not acceptable
+		return res.send(406);
 	});
 
 	// Broadcast to a relay
 	// --------------------
-	server.post('/:userId/relays/:app', getOnlineUser, checkSessionTrust, function (req, res, next) {
+	server.post('/:userId', function (req, res, next) {
+		var session = res.locals.session;
 		// Content negotiation
 		if (!req.is('json')) {
 			return res.send(415);
 		}
 
+		// Only allow users to broadcast via their own relays
+		if (req.params.userId != session.user_id) {
+			return res.send(403);
+		}
+
+		// Validate message
+		var body = req.body;
+		if (!body || !body.msg || !body.dst || !body.dst.user || !body.dst.app) {
+			return res.send(422);
+		}
+
+		// Make sure the target relay is online
+		var relayId = body.dst.user+'-'+body.dst.app;
+		if (!(relayId in _online_relays)) {
+			return res.send(504);
+		}
+
+		// Check permissions
+		var user = _online_users[body.dst.user];
+		if (!sessionIsTrusted(res.locals.session, user)) {
+			return res.send(403);
+		}
+
 		// Broadcast event to the stream owner
-		var session = res.locals.session;
 		var data = {
-			from: { app: session.app, user: session.user_id },
-			msg: (req.body) ? req.body : null
+			src: { app: session.app, user: session.user_id },
+			dst: body.dst,
+			msg: body.msg
 		};
-		msg = 'event: post\r\n';
+		msg = 'event: signal\r\n';
 		msg += 'data: '+JSON.stringify(data)+'\r\n';
 		emitTo(relayId, msg+'\r\n');
 
 		// Send response
 		res.send(204);
 	});
-
-
-	// Route Helpers
-	// =============
-	function getOnlineUser(req, res, next) {
-		// Get user
-		res.locals.user = _online_users[req.params.userId];
-		if (!res.locals.user) {
-			return res.send(404);
-		}
-		next();
-	}
-	function checkSessionTrust(req, res, next) {
-		// Does the session have permission to interact?
-		if (sessionIsTrusted(res.locals.session, res.locals.user)) {
-			return res.send(403);
-		}
-		next();
-	}
 
 
 	// Business Logic
@@ -270,12 +195,30 @@ module.exports = function(db) {
 		return true;
 	}
 
-	function addStream(res) {
+	function addUser(session, cb) {
+		// Load user record
+		db.getUser(session.user_id, function(err, dbres) {
+			if (err || !dbres) {
+				console.error('Failed to load user from DB', err);
+				return cb(err);
+			}
+
+			// Add to memory
+			_online_users[session.user_id] = {
+				id: session.user_id,
+				apps: [session.app],
+				trusted_peers: dbres.rows[0].trusted_peers
+			};
+			cb(null, _online_users[session.user_id]);
+		});
+	}
+
+	function addStream(res, cb) {
 		// Create the relay if DNE
 		var relayId = res.locals.relayId;
-		var relay = _active_relays[relayId];
+		var relay = _online_relays[relayId];
 		if (!relay) {
-			relay = _active_relays[relayId] = {
+			relay = _online_relays[relayId] = {
 				id: relayId,
 				app: res.locals.app,
 				user: res.locals.userId,
@@ -286,7 +229,7 @@ module.exports = function(db) {
 		// Close the existing stream
 		if (relay.resStream) {
 			relay.resStream.removeAllListeners('close');
-			relay.resStream.close();
+			relay.resStream.end();
 		}
 
 		// Track the new stream
@@ -296,13 +239,10 @@ module.exports = function(db) {
 		// Update user/app presence
 		var user = _online_users[res.locals.session.user_id];
 		if (!user) {
-			user = _online_users[res.locals.session.user_id] = {
-				id: res.locals.session.user_id,
-				apps: [res.locals.session.app],
-				trusted_peers: [] // :TODO:
-			};
+			addUser(res.locals.session, cb);
 		} else {
 			user.apps.push(res.locals.session.app);
+			cb(null, user);
 		}
 	}
 
@@ -310,13 +250,13 @@ module.exports = function(db) {
 	function onResStreamClosed() {
 		var res     = this;
 		var relayId = res.locals.relayId;
-		var relay   = _active_relays[relayId];
+		var relay   = _online_relays[relayId];
 
 		// Clear connection
 		res.removeAllListeners('close');
 
 		// Remove relay
-		delete _active_relays[relayId];
+		delete _online_relays[relayId];
 
 		// Update user/app presence
 		var user = _online_users[res.locals.session.user_id];

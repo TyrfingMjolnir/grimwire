@@ -25,10 +25,11 @@ server.options('*', function(request, response) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-service"; title="Grimwire.net P2PW"',
-		'<http://grimwire.net:8000/u{?online}>; rel="collection grimwire.com/-users"; id="users"',
-		'<http://grimwire.net:8000/u/{user}/auth/{app}>; rel="service grimwire.com/-access-token"',
+		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
+		'<http://grimwire.net:8000/u{?online}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+		'<http://grimwire.net:8000/u/{id}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"',
 		'<http://grimwire.net:8000/session>; rel="service grimwire.com/-session"; id="session"',
+		'<http://grimwire.net:8000/session/{app}>; rel="service grimwire.com/-access-token"',
 		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
 	].join(', '));
 	next();

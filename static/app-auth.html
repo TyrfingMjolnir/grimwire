@@ -65,11 +65,7 @@
 
     <script>
     // Get API
-    var accessAPI = local.navigator('http://grimwire.net:8000').follow({
-      rel:  'grimwire.com/-access-token',
-      user: '{SESSION_USER}',
-      app:  '{APP_DOMAIN}'
-    });
+    var accessAPI = local.navigator(['//'+window.location.host, { rel: 'grimwire.com/-access-token', app: '{APP_DOMAIN}' }]);
     accessAPI.resolve({ nohead: true });
 
     // Create the app session and send it back

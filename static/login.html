@@ -59,7 +59,7 @@
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/local.js"></script>
     <script>
-    var sessionAPI = local.navigator(['//grimwire.net:8000', { rel: 'grimwire.com/-session' }]);
+    var sessionAPI = local.navigator(['//'+window.location.host, { rel: 'grimwire.com/-session' }]);
     sessionAPI.resolve();
 
     $('.form-login').on('submit', function(e) {

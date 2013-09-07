@@ -9,8 +9,8 @@ function isPeer(user) {
 }
 
 // APIs
-var p2pwServiceAPI     = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-service');
-var p2pwOnlineUsersAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-users', online: true });
+var p2pwServiceAPI     = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-p2pw/service');
+var p2pwOnlineUsersAPI = p2pwServiceAPI.follow({ rel: 'collection grimwire.com/-user', online: true });
 var p2pwSessionAPI     = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
 
 // Cache selectors
@@ -19,14 +19,14 @@ var $peerweb_review = $('#peerweb-review');
 var $peerweb_edit = $('#peerweb-edit');
 
 // Load session
-p2pwSessionAPI.get({Accept:'application/json'}).then(setSession, gotoLogin);
+p2pwSessionAPI.get({Accept:'application/json'}).then(setSession);
 function setSession(res) {
 	_session = res.body;
 	// &lceil;&bull;&bull;&middot;&middot;&middot;&rfloor;
 	$('#userid').html(_session.user_id+' <b class="caret"></b>');
 }
-function gotoLogin(res) {
-	window.location = '/login.html';
+function refreshPage(res) {
+	window.location.href = window.location.href;
 }
 
 // Load active users
@@ -49,7 +49,7 @@ loadActiveUsers();
 // Logout link
 $('#logout').on('click', function(e) {
 	p2pwSessionAPI.delete()
-		.then(gotoLogin, function() {
+		.then(refreshPage, function() {
 			console.warn('Failed to delete session');
 		});
 	return false;
@@ -100,6 +100,7 @@ function renderAll() {
 			html += '<span class="text-muted">'+user.id+'</span> ';
 		}
 	}
+	if (!html) { html = '<span class="text-muted">No users online.</span>'; }
 	$('#active-users').html(html);
 
 	// Create popovers

@@ -8,6 +8,7 @@ CREATE TABLE users (
 
 	email VARCHAR(256),
 	password VARCHAR(256) NOT NULL,
+	trusted_peers VARCHAR(32)[] DEFAULT '{}',
 
 	created_at TIMESTAMP DEFAULT NOW(),
 	status basicStatusEnum DEFAULT 'Active'
