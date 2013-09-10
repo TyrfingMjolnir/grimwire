@@ -9,11 +9,22 @@ module.exports = function(db) {
 	// ============
 	var server = express();
 	// Active relays
-	// - maps "{username}-{app_domain}" -> http.ServerResponse
+	// - maps "{username}-{app_domain}-{stream_id}" -> http.ServerResponse
 	var _online_relays = {};
 	// Active users
-	// - maps username -> [{apps:["foo.com",...]}, ...]
+	// - maps username -> [{streams:{"foo.com":[123,124],...}, ...]
 	var _online_users = {};
+
+	function createRelayId(user, app, stream) {
+		return user+'-'+app+'-'+stream;
+	}
+	function createOnlineUser(userRecord, session) {
+		return {
+			id: session.user_id,
+			streams: {},
+			trusted_peers: userRecord.trusted_peers
+		};
+	}
 
 	// Routes
 	// ======
@@ -28,8 +39,8 @@ module.exports = function(db) {
 		// Set links
 		res.setHeader('Link', [
 			'</>; rel="up via service grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-			'</u{?online}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
-			'</u/{id}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
+			'</u{?online,trusted}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+			'</u/{id}{?stream}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
 		].join(', '));
 		next();
 	});
@@ -38,8 +49,8 @@ module.exports = function(db) {
 		var userId = req.params.userId;
 		res.setHeader('Link', [
 			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u{?online}>; rel="up collection grimwire.com/-user"; id="users"',
-			'</u/'+req.params.userId+'>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
+			'</u{?online,trusted}>; rel="up collection grimwire.com/-user"; id="users"',
+			'</u/'+userId+'{?stream}>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
 		].join(', '));
 		next();
 	});
@@ -47,34 +58,74 @@ module.exports = function(db) {
 	// Get users
 	// ---------
 	server.head('/', function(req, res) { return res.send(204); });
-	server.get('/', function(req, res) {
-		// Content-negotiation
-		if (!req.accepts('json')) {
-			return res.send(406);
-		}
-
-		// Give in-memory online users if requested
-		if (req.query.online) {
-			return res.json({ rows: Object.keys(_online_users) });
-		}
-
-		// Load full list from DB
-		db.getUsers(function(err, dbres) {
-			if (err) {
-				console.error('Failed to load users from DB', err);
-				return res.send(500);
+	server.get('/',
+		function(req, res, next) {
+			// Content-negotiation
+			if (!req.accepts('json')) {
+				return res.send(406);
 			}
 
-			// Extract ids
-			var users = [];
-			for (var i=0; i < dbres.rows.length; i++) {
-				users.push(dbres.rows[i].id);
+			// Get user's trusted peers, if requested
+			if (req.query.trusted) {
+				// Get the session user
+				db.getUser(res.locals.session.user_id, function(err, dbres) {
+					if (err) {
+						console.error('Failed to load users from DB', err);
+						return res.send(500);
+					}
+					res.locals.sessionUser = dbres.rows[0];
+					res.locals.trusteds = res.locals.sessionUser.trusted_users;
+					next();
+				});
+			} else {
+				next();
+			}
+		},
+		function(req, res, next) {
+			// Give in-memory online users if requested
+			if (req.query.online) {
+				res.locals.users = _online_users;
+				return next();
+			}
+
+			// Load full list from DB
+			db.getUsers(function(err, dbres) {
+				if (err) {
+					console.error('Failed to load users from DB', err);
+					return res.send(500);
+				}
+
+				res.locals.users = dbres.rows;
+				next();
+			});
+		},
+		function(req, res) {
+			// Construct output
+			var rows = [], users = res.locals.users, trusteds = res.locals.trusteds;
+			var sessionUserId = res.locals.session.user_id;
+			var shouldFilter = (req.query.trusted && Array.isArray(trusteds));
+			var emptyObj = {};
+			for (var k in users) {
+				var user = users[k];
+				// Filter as requested
+				if (shouldFilter && trusteds.indexOf(user.id) == -1) {
+					continue;
+				}
+				// Get user's online status
+				var onlineUser = _online_users[user.id];
+				// Add row
+				rows.push({
+					id: user.id,
+					online: !!onlineUser,
+					streams: (sessionIsTrusted(res.locals.session, onlineUser)) ? onlineUser.streams : emptyObj,
+					created_at: user.created_at
+				});
 			}
 
 			// Send response
-			res.json({ rows: users });
-		});
-	});
+			return res.json({ rows: rows });
+		}
+	);
 
 	// Get user info or relay stream
 	// -----------------------------
@@ -84,6 +135,9 @@ module.exports = function(db) {
 
 		// JSON request
 		if (req.accepts('json')) {
+
+			// :TODO: get user when offline
+
 			// Get user
 			var user = _online_users[req.params.userId];
 			if (!user) {
@@ -107,9 +161,15 @@ module.exports = function(db) {
 			}
 
 			// Store params in response stream
-			res.locals.relayId = req.params.userId+'-'+session.app;
-			res.locals.userId  = req.params.userId;
-			res.locals.app     = session.app;
+			res.locals.userId   = req.params.userId;
+			res.locals.app      = session.app;
+			res.locals.streamId = req.query.stream || 0;
+			res.locals.relayId  = createRelayId(res.locals.userId, res.locals.app, res.locals.streamId);
+
+			// Check stream availability
+			if ((res.locals.relayId in _online_relays)) {
+				return res.send(423);
+			}
 
 			// Store connection
 			return addStream(res, function(err) {
@@ -123,6 +183,7 @@ module.exports = function(db) {
 					'cache-control': 'no-cache',
 					'connection': 'keepalive'
 				});
+				res.write('\n'); // Writing to the stream lets the client know its open
 			});
 		}
 
@@ -146,12 +207,18 @@ module.exports = function(db) {
 
 		// Validate message
 		var body = req.body;
-		if (!body || !body.msg || !body.dst || !body.dst.user || !body.dst.app) {
+		if (!body || !body.msg) {
+			return res.send(422);
+		}
+		if (!body.dst || !body.dst.user || !body.dst.app || typeof body.dst.stream == 'undefined') {
+			return res.send(422);
+		}
+		if (!body.src || body.src.user != session.user_id || body.src.app != session.app || typeof body.dst.stream == 'undefined') {
 			return res.send(422);
 		}
 
 		// Make sure the target relay is online
-		var relayId = body.dst.user+'-'+body.dst.app;
+		var relayId = createRelayId(body.dst.user, body.dst.app, body.dst.stream);
 		if (!(relayId in _online_relays)) {
 			return res.send(504);
 		}
@@ -164,7 +231,7 @@ module.exports = function(db) {
 
 		// Broadcast event to the stream owner
 		var data = {
-			src: { app: session.app, user: session.user_id },
+			src: body.src,
 			dst: body.dst,
 			msg: body.msg
 		};
@@ -187,11 +254,11 @@ module.exports = function(db) {
 	// Stream Helpers
 	// ==============
 	function emitTo(relayId, msg) {
-		var relay = _online_relays[relayId];
-		if (!relay || !relay.resStream) {
+		var stream = _online_relays[relayId];
+		if (!stream) {
 			return false;
 		}
-		relay.resStream.write(msg);
+		stream.write(msg);
 		return true;
 	}
 
@@ -204,65 +271,57 @@ module.exports = function(db) {
 			}
 
 			// Add to memory
-			_online_users[session.user_id] = {
-				id: session.user_id,
-				apps: [session.app],
-				trusted_peers: dbres.rows[0].trusted_peers
-			};
+			_online_users[session.user_id] = createOnlineUser(dbres.rows[0], session);
 			cb(null, _online_users[session.user_id]);
 		});
 	}
 
 	function addStream(res, cb) {
-		// Create the relay if DNE
-		var relayId = res.locals.relayId;
-		var relay = _online_relays[relayId];
-		if (!relay) {
-			relay = _online_relays[relayId] = {
-				id: relayId,
-				app: res.locals.app,
-				user: res.locals.userId,
-				resStream: null
-			};
-		}
-
-		// Close the existing stream
-		if (relay.resStream) {
-			relay.resStream.removeAllListeners('close');
-			relay.resStream.end();
-		}
+		var app = res.locals.session.app;
 
 		// Track the new stream
-		relay.resStream = res;
+		_online_relays[res.locals.relayId] = res;
 		res.on('close', onResStreamClosed);
 
 		// Update user/app presence
 		var user = _online_users[res.locals.session.user_id];
 		if (!user) {
-			addUser(res.locals.session, cb);
+			addUser(res.locals.session, function(err, user) {
+				if (err) { return cb(err); }
+				if (!user.streams[app]) { user.streams[app] = []; }
+				user.streams[app].push(res.locals.streamId);
+				cb(null, user);
+			});
 		} else {
-			user.apps.push(res.locals.session.app);
+			if (!user.streams[app]) { user.streams[app] = []; }
+			user.streams[app].push(res.locals.streamId);
 			cb(null, user);
 		}
 	}
 
 	// - handles stream close by client
 	function onResStreamClosed() {
-		var res     = this;
-		var relayId = res.locals.relayId;
-		var relay   = _online_relays[relayId];
+		var res      = this;
+		var app      = res.locals.app;
+		var streamId = res.locals.streamId;
+		var relayId  = res.locals.relayId;
 
 		// Clear connection
 		res.removeAllListeners('close');
 
-		// Remove relay
+		// Remove from relays
 		delete _online_relays[relayId];
 
 		// Update user/app presence
 		var user = _online_users[res.locals.session.user_id];
-		if (user) {
-			user.apps = user.apps.filter(function(app) { return app != res.locals.session.app; });
-			if (user.apps.length === 0) {
+		if (user && user.streams[app]) {
+			user.streams[app] = user.streams[app].filter(function(sid) { return sid != streamId; });
+			// Remove app from streams of empty
+			if (user.streams[app].length === 0) {
+				delete user.streams[app];
+			}
+			// Remove user if there are no active streams
+			if (Object.keys(user.streams).length === 0) {
 				delete _online_users[res.locals.session.user_id];
 			}
 		}
