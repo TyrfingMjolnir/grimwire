@@ -40,7 +40,7 @@ module.exports = function(db) {
 		res.setHeader('Link', [
 			'</>; rel="up via service grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
 			'</u{?online,trusted}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
-			'</u/{id}{?stream}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
+			'</u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
 		].join(', '));
 		next();
 	});
@@ -50,7 +50,7 @@ module.exports = function(db) {
 		res.setHeader('Link', [
 			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
 			'</u{?online,trusted}>; rel="up collection grimwire.com/-user"; id="users"',
-			'</u/'+userId+'{?stream}>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
+			'</u/'+userId+'{?stream,nc}>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
 		].join(', '));
 		next();
 	});
