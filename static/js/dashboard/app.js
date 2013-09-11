@@ -30,6 +30,7 @@ function setSession(res) {
 }
 function refreshPage(res) {
 	window.location.href = window.location.href;
+	window.location.reload();
 }
 
 // Load active users
@@ -46,6 +47,7 @@ function loadActiveUsers() {
 			// Udpate UI
 			renderAll();
 		});
+	return false;
 }
 loadActiveUsers();
 

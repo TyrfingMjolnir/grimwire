@@ -74,6 +74,7 @@
         .then(function(res) {
           // Success, reload
           window.location.href = window.location.href;
+          window.location.reload();
         })
         .fail(function(res) {
           if (res.status == 422) {
@@ -93,6 +94,7 @@
             .then(function(res) {
               // Success, reload
               window.location.href = window.location.href;
+              window.location.reload();
             })
             .fail(function(res) {
               $('#newuser-error').html('Your account has been created, but we received an unexpected error while signing you in. Please try to sign in manually.');

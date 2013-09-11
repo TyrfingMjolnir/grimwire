@@ -115,10 +115,22 @@ module.exports = function(db) {
 
 	// End session
 	// -----------
-	server.delete('/', function(req, res) {
-		// Remove the session cookie
-		req.session = null;
-		res.send(204);
+	server.delete('/', getSession, function(req, res) {
+		// Stop now if no session exists
+		if (!res.locals.session) {
+			return res.send(204);
+		}
+		// Clear session records
+		db.deleteUserSessions(res.locals.session.user_id, function(err) {
+			if (err) {
+				console.error('Failed to delete sessions from DB', err);
+				return res.send(500);
+			}
+
+			// Remove the session cookie
+			req.session = null;
+			res.send(204);
+		});
 	});
 
 	// Get app access-token interface

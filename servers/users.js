@@ -277,7 +277,7 @@ module.exports = function(db) {
 
 		// Update online user
 		var user = _online_users[req.params.userId];
-		if (updates.trusted_peers) {
+		if (user && updates.trusted_peers) {
 			user.trusted_peers = updates.trusted_peers;
 		}
 
