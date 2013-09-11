@@ -1,5 +1,6 @@
 var express = require('express');
 var middleware = require('../lib/middleware.js');
+var bcrypt = require('bcrypt');
 
 // Session
 // =======
@@ -180,8 +181,9 @@ module.exports = function(db) {
 		return false;
 	}
 	function checkPassword(plaintext, encrypted, cb) {
-		// :TODO: for now, no encryption is in place
-		cb(plaintext != encrypted);
+		bcrypt.compare(plaintext, encrypted, function(err, success) {
+			cb(!success);
+		});
 	}
 
 

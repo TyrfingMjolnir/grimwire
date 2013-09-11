@@ -64,8 +64,20 @@
 .form-newuser .form-control:focus {
   z-index: 2;
 }
-.form-newuser input[type="text"] {
-  margin-bottom: 10px;
+.form-newuser input[name="id"] {
+  margin-bottom: -1px;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+}
+.form-newuser input[name="email"] {
+  margin-bottom: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.form-newuser input[name="password"] {
+  margin-bottom: 10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }

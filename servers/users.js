@@ -1,5 +1,6 @@
 var express = require('express');
 var middleware = require('../lib/middleware.js');
+var bcrypt = require('bcrypt');
 
 // Users
 // =====
@@ -31,7 +32,8 @@ module.exports = function(db) {
 
 	// Middleware
 	// ----------
-	server.all('*', middleware.authenticate(db));
+	server.get('/', middleware.authenticate(db));
+	server.all('/:userId', middleware.authenticate(db));
 
 	// Linking
 	// -------
@@ -128,6 +130,57 @@ module.exports = function(db) {
 			return res.json({ rows: rows });
 		}
 	);
+
+	// Create user
+	// -----------
+	server.post('/', function (req, res, next) {
+		var session = res.locals.session;
+		// Content negotiation
+		if (!req.is('json')) {
+			return res.send(415);
+		}
+
+		// Validate body
+		var body = req.body;
+		if (!body || !body.id || !body.password) {
+			res.writeHead(422, 'bad ent - must include `id` and `password`');
+			return res.end();
+		}
+		if (typeof body.id != 'string' || typeof body.password != 'string') {
+			res.writeHead(422, 'bad ent - `id` and `password` must be strings');
+			return res.end();
+		}
+		if (body.email && typeof body.email != 'string') {
+			res.writeHead(422, 'bad ent - (when included) `email` must be a string');
+			return res.end();
+		}
+
+		// Hash the password
+		bcrypt.genSalt(10, function(err, salt) {
+			bcrypt.hash(body.password, salt, function(err, hash) {
+				if (err) {
+					console.error('Failed to encrypt user password', err);
+					return res.send(500);
+				}
+				body.password = hash;
+
+				// Try to insert
+				db.createUser(body, function(err, dbres) {
+					if (err) {
+						if (err.code == 23505) { // conflict
+							return res.send(409);
+						} else {
+							console.error('Failed to add user to database', err);
+							return res.send(500);
+						}
+					}
+
+					// Send response
+					res.send(204);
+				});
+			});
+		});
+	});
 
 	// Get user info or relay stream
 	// -----------------------------
