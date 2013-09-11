@@ -8,7 +8,7 @@
     <meta name="author" content="">
     <link rel="shortcut icon" href="ico/favicon.png">
 
-    <title>grimwire p2pw</title>
+    <title>grimwire p2pweb</title>
 
     <link href="/css/bootstrap.css" rel="stylesheet">
     <link href="/css/dashboard.css" rel="stylesheet">
@@ -31,7 +31,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="/img/logo_small.png" /> p2pw</a>
+          <a class="navbar-brand" href="/" title="Grimwire"><img id="logo" src="/img/logo_small.png" /> p2pweb</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -50,29 +50,28 @@
     <div class="container">
 
       <div class="row">
+        <div class="col-md-2">
+          <div class="panel panel-default" style="margin-top: 20px">
+            <div class="panel-heading">My Web</div>
+            <div id="peerweb-review" class="panel-body">
+              <div class="usernames"></div>
+              <br/>
+              <a id="edit-peerweb" href="#">edit</a>
+            </div>
+            <div id="peerweb-edit" class="panel-body">
+              <textarea class="form-control" rows="20" placeholder="Enter the names of the users you're connecting to."></textarea>
+              <a id="save-peerweb" href="#">save</a>
+            </div>
+          </div>
+        </div><!-- /col-md-2 -->
         <div class="col-md-10">
-          <h3>Online Users <small><a href="#" id="refresh">refresh</a></small></h3>
+          <h3>Online <small><a href="#" id="refresh">refresh</a></small></h3>
           <div id="active-users"></div>
         </div><!-- /col-md-10 -->
         <!--div class="col-md-2">
           <h4>Whois</h4>
           <input type="text" class="form-control" placeholder="username" />
         </div>< /col-md-2 -->
-        <div class="col-md-2">
-          <h4>Peer Web</h4>
-          <div id="peerweb-review">
-            <div class="usernames">
-              alice<br/>
-              bob<br/>
-              charlie
-            </div>
-            <a id="edit-peerweb" href="#">edit</a>
-          </div>
-          <div id="peerweb-edit">
-            <textarea class="form-control" rows="20" placeholder="Enter the names of the users you're connecting to."></textarea>
-            <a id="save-peerweb" href="#">save</a>
-          </div>
-        </div><!-- /col-md-2 -->
       </div> <!-- /row -->
 
     </div> <!-- /container -->

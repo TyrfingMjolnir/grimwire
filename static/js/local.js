@@ -777,36 +777,25 @@ local.web.LINK_NOT_FOUND = 1;// Helpers
 
 // EXPORTED
 // breaks a link header into a javascript object
+var linkHeaderRE1 = /<(.*?)>(?:;[\s]*([^,]*))/g;
+var linkHeaderRE2 = /([\-a-z0-9\.]+)=?(?:(?:"([^"]+)")|([^;\s]+))?/g;
 local.web.parseLinkHeader = function parseLinkHeader(headerStr) {
 	if (typeof headerStr !== 'string') {
 		return headerStr;
 	}
+	var links = [], linkParse1, linkParse2, link;
 	// '</foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah"'
-	return headerStr.split(/,[\s]*/g).map(function(linkStr) {
-		// ['</foo/bar>; rel="baz"; id="blah"', '</foo/bar>; rel="baz"; id="blah"']
-		var link = {};
-		linkStr.split(/\s*;\s*/g).forEach(function(attrStr) {
-			// ['</foo/bar>', 'rel="baz"', 'id="blah"']
-			if (!attrStr) { return; }
-			if (attrStr.charAt(0) === '<') {
-				// '</foo/bar>'
-				link.href = attrStr.trim().slice(1, -1);
-			} else {
-				var attrParts = attrStr.split(/\s*=\s*/g);
-				if (attrParts[1]) {
-					// ['rel', '"baz"'] or ['rel', 'baz']
-					var k = attrParts[0];
-					var v = attrParts[1].replace(/^"|"$/g, '');
-					link[k] = v;
-				} else {
-					// ['attr']
-					var k = attrParts[0];
-					link[k] = true;
-				}
-			}
-		});
-		return link;
-	});
+	// Extract individual links
+	while ((linkParse1 = linkHeaderRE1.exec(headerStr))) { // Splits into href [1] and params [2]
+		link = { href: linkParse1[1] };
+		// 'rel="baz"; id="blah"'
+		// Extract individual params
+		while ((linkParse2 = linkHeaderRE2.exec(linkParse1[2]))) { // Splits into key [1] and value [2]/[3]
+			link[linkParse2[1]] = linkParse2[2] || linkParse2[3] || true; // if no parameter value is given, just set to true
+		}
+		links.push(link);
+	}
+	return links;
 };
 
 // EXPORTED
@@ -1964,60 +1953,54 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// server wrapper for WebRTC connections
 	// - currently only supports Chrome
 	// - `config.peer`: required object, who we are connecting to (should be supplied by the peer relay)
-	//   - `config.peer.stream`: required string, the peer's stream ID
 	//   - `config.peer.user`: required string, the peer's user ID
 	//   - `config.peer.app`: required string, the peer's app domain
-	// - `config.signalStream`: required EventSource, must support the grimwire.com/-webprn/relay protocol
-	// - `config.initiateAs`: optional object, if specified will initiate the connection using the object given
-	//   - if given, should match the schema of `peer`
-	// - `chanOpenCb`: function, called when request channel is available
-	function RTCPeerServer(config, chanOpenCb) {
+	//   - `config.peer.stream`: optional number, the stream id of the peer to connect to (defaults to 0)
+	// - `config.relay`: required PeerWebRelay
+	// - `config.initiate`: optional bool, if true will initiate the connection processes
+	// - `config.serverFn`: optional function, the handleRemoteWebRequest function
+	function RTCPeerServer(config) {
+		// Config
 		var self = this;
 		if (!config) config = {};
 		if (!config.peer) throw new Error("`config.peer` is required");
-		if (typeof config.peer.stream == 'undefined') throw new Error("`config.peer.stream` is required");
 		if (typeof config.peer.user == 'undefined') throw new Error("`config.peer.user` is required");
 		if (typeof config.peer.app == 'undefined') throw new Error("`config.peer.app` is required");
-		if (!config.signalStream) throw new Error("`config.signalStream` is required");
+		if (typeof config.peer.stream == 'undefined') config.peer.stream = 0;
+		if (!config.relay) throw new Error("`config.relay` is required");
 		local.web.BridgeServer.call(this, config);
 		local.util.mixinEventEmitter(this);
-		if (chanOpenCb) {
-			this.on('connected', chanOpenCb);
+		if (config.serverFn) {
+			this.handleRemoteWebRequest = config.serverFn;
 		}
 
 		// Internal state
 		this.isOfferExchanged = false;
 		this.isConnected = false;
 		this.candidateQueue = []; // cant add candidates till we get the offer
-
-		// Hook up to sse relay
-		this.onSigRelayMessageBound = onSigRelayMessage.bind(self);
-		this.config.signalStream.on('message', this.onSigRelayMessageBound);
-		this.peerSignalAPI = local.navigator(this.config.signalStream.getUrl())
-			.follow({ rel: 'collection', id: 'streams' })
-			.follow({ rel: 'item', id: this.config.peer.stream });
+		this.signalBacklog = []; // holds signal messages that have backed up due to an unavailable remote
+		this.retrySignalTimeout = null;
+		this.retrySignalWaitDuration = 500; // ms to wait between connection failures (ramps up linearly from .5s to 30s)
 
 		// Create the peer connection
-		var servers = defaultIceServers;
-		if (config.iceServers)
-			servers = config.iceServers.concat(servers); // :TODO: is concat what we want?
+		var servers = config.iceServers || defaultIceServers;
 		this.peerConn = new webkitRTCPeerConnection(servers, peerConstraints);
-		this.peerConn.onicecandidate = onIceCandidate.bind(this);
+		this.peerConn.onicecandidate             = onIceCandidate.bind(this);
+        this.peerConn.onicechange                = onIceConnectionStateChange.bind(this);
+		this.peerConn.oniceconnectionstatechange = onIceConnectionStateChange.bind(this);
+		this.peerConn.onsignalingstatechange     = onSignalingStateChange.bind(this);
 
-		// Create an HTTPL data channel
+		// Create the HTTPL data channel
 		this.httplChannel = this.peerConn.createDataChannel('httpl', { ordered: true, reliable: true });
-		this.httplChannel.onopen    = onHttplChannelOpen.bind(this);
-		this.httplChannel.onclose   = onHttplChannelClose.bind(this);
-		this.httplChannel.onerror   = onHttplChannelError.bind(this);
-		this.httplChannel.onmessage = onHttplChannelMessage.bind(this);
+		this.httplChannel.onopen     = onHttplChannelOpen.bind(this);
+		this.httplChannel.onclose    = onHttplChannelClose.bind(this);
+		this.httplChannel.onerror    = onHttplChannelError.bind(this);
+		this.httplChannel.onmessage  = onHttplChannelMessage.bind(this);
 
-		if (this.config.initiateAs) {
+		if (this.config.initiate) {
 			// Initiate event will be picked up by the peer
-			// If they want to connect, they'll create an RTCPeerServer and send the 'ready' signal
-			this.signal('initiate', this.config.initiateAs);
-		} else {
-			// Tell the initiator that we're ready to connect
-			this.signal('ready');
+			// If they want to connect, they'll send an answer back
+			this.sendOffer();
 		}
 	}
 	RTCPeerServer.prototype = Object.create(local.web.BridgeServer.prototype);
@@ -2029,24 +2012,20 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		console.debug.apply(console, args);
 	};
 
-	RTCPeerServer.prototype.terminate = function() {
-		this.isConnected = false;
-		this.signal('closed');
-		this.emit('closed');
+	RTCPeerServer.prototype.terminate = function(opts) {
+		if (this.isConnected) {
+			this.isConnected = false;
+			if (!(opts && opts.noSignal)) {
+				this.signal({ type: 'disconnect' });
+			}
+			var config = this.config;
+			this.emit('disconnected', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: this });
 
-		if (this.config.signalStream) {
-			this.config.signalStream.removeListener('message', this.onSigRelayMessageBound);
-			this.config.signalStream = null;
+			if (this.peerConn) {
+				this.peerConn.close();
+				this.peerConn = null;
+			}
 		}
-		if (this.peerConn) {
-			this.peerConn.close();
-			this.peerConn = null;
-		}
-	};
-
-	// Re-connects after the HTTPL channel is closed
-	RTCPeerServer.prototype.reconnect = function() {
-		// :TODO:
 	};
 
 	// Returns true if the channel is ready for activity
@@ -2072,76 +2051,79 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 	function onHttplChannelMessage(msg) {
 		this.debugLog('HTTPL CHANNEL MSG', msg);
+
+		// Pass on to method in parent prototype
 		this.onChannelMessage(msg.data);
 	}
 
 	function onHttplChannelOpen(e) {
 		this.debugLog('HTTPL CHANNEL OPEN', e);
+
+		// Update state
 		this.isConnected = true;
 		this.flushBufferedMessages();
-		this.emit('connected');
+
+		// Emit event
+		var config = this.config;
+		this.emit('connected', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: this });
 	}
 
 	function onHttplChannelClose(e) {
 		this.debugLog('HTTPL CHANNEL CLOSE', e);
-		this.isConnected = false;
-		this.emit('disconnected');
+		this.terminate({ noSignal: true });
 	}
 
 	function onHttplChannelError(e) {
 		// :TODO: anything?
 		this.debugLog('HTTPL CHANNEL ERR', e);
-		this.emit('error', e);
+		var config = this.config;
+		this.emit('error', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: this, err: e });
 	}
 
 	// Signal relay behaviors
 	// -
 
-	function onSigRelayMessage(m) {
+	RTCPeerServer.prototype.onSignal = function(msg) {
 		var self = this;
-		var data = m.data;
 
-		if (data && typeof data != 'object') {
-			console.warn('RTCPeerServer - Unparseable signal message from signal', m);
-			return;
-		}
-
-		this.debugLog('SIG', m);
-		switch (m.event) {
-			case 'ready':
-				// If we're the initiator, get it going
-				if (this.config.initiateAs) {
-					sendOffer.call(this);
-				}
-				break;
-
-			case 'closed':
+		this.debugLog('SIG', msg);
+		switch (msg.type) {
+			case 'disconnect':
 				// Peer's dead, shut it down
-				this.terminate();
+				this.terminate({ noSignal: true });
 				break;
 
 			case 'candidate':
-				this.debugLog('GOT CANDIDATE', data.candidate);
+				this.debugLog('GOT CANDIDATE', msg.candidate);
 				// Received address info from the peer
 				if (!this.isOfferExchanged) {
-					this.candidateQueue.push(data.candidate);
+					// Store for when offer/answer exchange has finished
+					this.candidateQueue.push(msg.candidate);
 				} else {
-					this.peerConn.addIceCandidate(new RTCIceCandidate({ candidate: data.candidate }));
+					// Pass into the peer connection
+					this.peerConn.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate }));
 				}
 				break;
 
 			case 'offer':
-				this.debugLog('GOT OFFER', data);
+				this.debugLog('GOT OFFER', msg);
 				// Received a session offer from the peer
-				var desc = new RTCSessionDescription({ type: 'offer', sdp: data.sdp });
+				// Update the peer connection
+				var desc = new RTCSessionDescription({ type: 'offer', sdp: msg.sdp });
 				this.peerConn.setRemoteDescription(desc);
+				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
+				// Send an answer
 				this.peerConn.createAnswer(
 					function(desc) {
 						self.debugLog('CREATED ANSWER', desc);
-						desc.sdp = higherBandwidthSDP(desc.sdp);
+
+						// Store the SDP
+						desc.sdp = increaseSDP_MTU(desc.sdp);
 						self.peerConn.setLocalDescription(desc);
-						self.signal('answer', { sdp: desc.sdp });
+
+						// Send answer msg
+						self.signal({ type: 'answer', sdp: desc.sdp });
 					},
 					null,
 					mediaConstraints
@@ -2149,39 +2131,97 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 				break;
 
 			case 'answer':
-				this.debugLog('GOT ANSWER', data);
+				this.debugLog('GOT ANSWER', msg);
 				// Received session confirmation from the peer
-				this.peerConn.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
+				// Update the peer connection
+				this.peerConn.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
 				break;
 
 			default:
-				console.warn('RTCPeerServer - Unrecognized signal message from signal', m);
+				console.warn('RTCPeerServer - Unrecognized signal message from relay', msg);
 		}
-	}
+	};
 
 	// Helper to send a message to peers on the relay
-	RTCPeerServer.prototype.signal = function(event, data) {
-		this.peerSignalAPI.post({ event: event, data: data })
-			.then(null, function(res) {
-				console.warn('RTCPeerServer - Failed to send signal message to relay', res);
+	RTCPeerServer.prototype.signal = function(msg) {
+		// Are there signal messages awaiting delivery?
+		if (this.retrySignalTimeout) {
+			// Add to the queue and wait for the line to open up again
+			this.signalBacklog.push(msg);
+			return;
+		}
+		// Send the message through our relay
+		var self = this;
+		this.config.relay.signal(this.config.peer, msg)
+			.fail(function(res) {
+				if (res.status == 504) {
+					// Upstream timeout -- the target isn't online yet, start the queue and initiate the retry process
+					self.signalBacklog.push(msg);
+					if (!self.retrySignalTimeout) {
+						self.retrySignalTimeout = setTimeout(self.retrySignal.bind(self), self.retrySignalWaitDuration);
+					}
+				}
+			});
+	};
+
+	// Helper to send a message to peers on the relay
+	RTCPeerServer.prototype.retrySignal = function(msg) {
+		this.retrySignalTimeout = null;
+		// Are there signal messages awaiting delivery?
+		if (this.signalBacklog.length === 0) {
+			// Nothing to do
+			return;
+		}
+		// Retry the first message
+		var self = this;
+		this.config.relay.signal(this.config.peer, this.signalBacklog[0])
+			.then(function() {
+				// Success
+				// Reset the wait duration
+				this.retrySignalWaitDuration = 500;
+				// Drain the queue
+				var signalBacklog = self.signalBacklog;
+				self.signalBacklog = [];
+				for (var i = 1; i < signalBacklog.length; i++) {
+					self.signal(signalBacklog[i]);
+				}
+			})
+			.fail(function(res) {
+				if (res.status == 504) {
+					// Retry again later
+					if (!self.retrySignalTimeout) {
+						// Extend the wait
+						if (self.retrySignalWaitDuration < 30000) {
+							self.retrySignalWaitDuration += 500;
+						}
+						// Queue the timeout
+						self.retrySignalTimeout = setTimeout(self.retrySignal.bind(self), self.retrySignalWaitDuration);
+					}
+				}
 			});
 	};
 
 	// Helper initiates a session with peers on the relay
-	function sendOffer() {
+	RTCPeerServer.prototype.sendOffer = function() {
 		var self = this;
+		// Generate offer
 		this.peerConn.createOffer(
 			function(desc) {
 				self.debugLog('CREATED OFFER', desc);
-				desc.sdp = higherBandwidthSDP(desc.sdp);
+
+				// store the SDP
+				desc.sdp = increaseSDP_MTU(desc.sdp);
 				self.peerConn.setLocalDescription(desc);
-				self.signal('offer', { sdp: desc.sdp });
+
+				// Send offer msg
+				self.signal({ type: 'offer', sdp: desc.sdp });
 			},
 			null,
 			mediaConstraints
 		);
-	}
+	};
 
 	// Helper called whenever we have a remote session description
 	// (candidates cant be added before then, so they're queued in case they come first)
@@ -2199,113 +2239,258 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (e && e.candidate) {
 			this.debugLog('FOUND ICE CANDIDATE', e.candidate);
 			// send connection info to peers on the relay
-			this.signal('candidate', { candidate: e.candidate.candidate });
+			this.signal({ type: 'candidate', candidate: e.candidate.candidate });
+		}
+	}
+
+	// Called by the RTCPeerConnection on connectivity events
+	function onIceConnectionStateChange(e) {
+		if (!!e.target && e.target.iceConnectionState === 'disconnected') {
+			this.debugLog('ICE CONNECTION STATE CHANGE: DISCONNECTED', e);
+			this.terminate({ noSignal: true });
+		}
+	}
+
+	// Called by the RTCPeerConnection on connectivity events
+	function onSignalingStateChange(e) {
+		if(e.target && e.target.signalingState == "closed"){
+			this.debugLog('SIGNALING STATE CHANGE: DISCONNECTED', e);
+			this.terminate({ noSignal: true });
 		}
 	}
 
 	// Increases the bandwidth allocated to our connection
 	// Thanks to michellebu (https://github.com/michellebu/reliable)
 	var higherBandwidthSDPRE = /b\=AS\:([\d]+)/i;
-	function higherBandwidthSDP(sdp) {
+	function increaseSDP_MTU(sdp) {
 		return sdp.replace(higherBandwidthSDPRE, 'b=AS:102400'); // 100 Mbps
 	}
 
 
-	// PeerRelay
-	// =========
+	// PeerWebRelay
+	// ============
 	// EXPORTED
-	// Helper class for managing a peer relay stream
-	function PeerRelay(urlOrStream) {
-		if (typeof urlOrStream == 'string') {
-			urlOrStream = local.subscribe(urlOrStream);
-		}
-		this.stream = urlOrStream;
-		this.streamAPI = local.navigator(this.stream.getUrl());
-		this.streamUsersAPI = this.streamAPI.follow({ rel: 'collection', id: 'users' });
-		this.initiations = {};
+	// Helper class for managing a peer web relay provider
+	// - `config.provider`: required string, the relay provider
+	// - `config.serverFn`: required function, the function for peerservers' handleRemoteWebRequest
+	// - `config.app`: optional string, the app to join as (defaults to window.location.host)
+	// - `config.stream`: optional number, the stream id (defaults to 0)
+	function PeerWebRelay(config) {
+		if (!config) throw new Error("PeerWebRelay requires the `config` parameter");
+		if (!config.provider) throw new Error("PeerWebRelay requires `config.provider`");
+		if (!config.serverFn) throw new Error("PeerWebRelay requires `config.serverFn`");
+		if (!config.app) config.app = window.location.host;
+		if (!config.stream) config.stream = 0;
+		this.config = config;
+		local.util.mixinEventEmitter(this);
 
-		// Store identity when provided
-		var self = this;
-		this.peerIdent = null;
-		this.stream.on('ident', function(e) { self.peerIdent = e.data; });
+		// Extract provider domain
+		var providerUrld = local.web.parseUri(config.provider);
+		this.providerDomain = providerUrld.authority.replace(/\:/g, '.');
+
+		// State
+		this.onMessageFromPopup = null;
+		this.userId = null;
+		this.accessToken = null;
+		this.srcObj = null; // used in outbound signal messages
+		this.bridges = [];
+
+		// APIs
+		this.p2pwServiceAPI = local.navigator(config.provider);
+		this.accessTokenAPI = this.p2pwServiceAPI.follow({ rel: 'grimwire.com/-access-token', app: config.app });
+		this.p2pwUsersAPI = this.p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
+		this.p2pwRelayAPI = null;
+		this.relayStream = null;
 	}
-	local.web.PeerRelay = PeerRelay;
+	local.web.PeerWebRelay = PeerWebRelay;
 
-	// Join event sugar
-	PeerRelay.prototype.onJoin = function(cb) {
-		this.stream.on('join', function(e) { cb(e.data); });
+	// Sets the access token and triggers a connect flow
+	// - `token`: required String?, the access token (null if denied access)
+	// - `token` should follow the form '<userId>:<'
+	PeerWebRelay.prototype.setAccessToken = function(token) {
+		if (token) {
+			// Extract user-id from the access token
+			var tokenParts = token.split(':');
+			if (tokenParts.length !== 2) {
+				throw new Error('Invalid access token');
+			}
+
+			// Store
+			this.userId = tokenParts[0];
+			this.accessToken = token;
+			this.p2pwServiceAPI.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
+			this.p2pwUsersAPI.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
+
+			// Emit an event
+			this.emit('accessGranted');
+		} else {
+			// Update state and emit event
+			this.userId = null;
+			this.accessToken = null;
+			this.emit('accessDenied');
+		}
 	};
-	// Part event sugar
-	PeerRelay.prototype.onPart = function(cb) {
-		this.stream.on('part', function(e) { cb(e.data); });
+	PeerWebRelay.prototype.getUserId = function() {
+		return this.userId;
 	};
-	// Initiate event handler
-	PeerRelay.prototype.onInitiate = function(cb) {
-		var self = this;
-		this.stream.on('initiate', function(e) {
-			var peer = e.data;
-			self.initiations[peer.stream] = peer;
-			cb(e.data);
+	PeerWebRelay.prototype.getStreamId = function() {
+		return this.config.stream;
+	};
+	PeerWebRelay.prototype.setStreamId = function(stream) {
+		this.config.stream = stream;
+	};
+	PeerWebRelay.prototype.getAccessToken = function() {
+		return this.accessToken;
+	};
+
+	// Gets an access token from the provider & user using a popup
+	// - Best if called within a DOM click handler, as that will avoid popup-blocking
+	PeerWebRelay.prototype.requestAccessToken = function() {
+		// Start listening for messages from the popup
+		if (!this.onMessageFromPopup) {
+			this.onMessageFromPopup = (function(e) {
+				console.debug('Message (from ' + e.origin + '): ' + e.data);
+
+				// Make sure this is from our popup
+				var originUrld = local.web.parseUri(e.origin);
+				var providerUrld = local.web.parseUri(this.config.provider);
+
+				if (originUrld.authority !== providerUrld.authority) {
+					return;
+				}
+
+				// Update our token
+				this.setAccessToken(e.data);
+
+				// Stop listening
+				window.removeEventListener('message', this.onMessageFromPopup);
+			}).bind(this);
+			window.addEventListener('message', this.onMessageFromPopup);
+		}
+
+		// Resolve the URL for getting access tokens
+		this.accessTokenAPI.resolve({ nohead: true }).then(function(url) {
+			// Open interface in a popup
+			window.open(url);
 		});
 	};
 
-	// Attempts to start the connection process with the given peer
-	PeerRelay.prototype.initiate = function(peer) {
-		return local.spawnRTCPeerServer(peer, this.stream, { initiateAs: this.peerIdent });
+	// Spawns an RTCPeerServer and starts the connection process with the given peer
+	// - `user`: required String, the id of the target user
+	// - `config.app`: optional String, the app of the peer to connect to (defaults to window.location.host)
+	// - `config.stream`: optional number, the stream id of the peer to connect to (defaults to 0)
+	// - `config.initiate`: optional Boolean, should the server initiate the connection?
+	//   - defaults to true
+	//   - should only be false if the connection was already initiated by the opposite end
+	PeerWebRelay.prototype.connect = function(user, config) {
+		if (!config) config = {};
+		if (!config.app) config.app = window.location.host;
+		if (typeof config.initiate == 'undefined') config.initiate = true;
+
+		// Spawn new server
+		var server = new local.web.RTCPeerServer({
+			peer: { user: user, app: config.app, stream: config.stream },
+			initiate: config.initiate,
+			relay: this,
+			serverFn: this.config.serverFn
+		});
+
+		// Bind events
+		server.on('connected', this.emit.bind(this, 'connected'));
+		server.on('disconnected', this.onBridgeDisconnected.bind(this));
+		server.on('disconnected', this.emit.bind(this, 'disconnected'));
+		server.on('error', this.emit.bind(this, 'error'));
+
+		// Add to hostmap
+		var domain = this.makeDomain(config.app, config.stream, user, this.providerDomain);
+		this.bridges[domain] = server;
+		local.web.registerLocal(domain, server);
+		return server;
 	};
 
-	// Accepts a connection with a peer that has previously initiated
-	PeerRelay.prototype.accept = function(peer) {
-		if (!this.initiations[peer.stream]) {
-			throw new Error("No initiation to accept from peer "+JSON.stringify(peer));
+	// Fetches users from p2pw service
+	// - opts.online: optional bool, only online users
+	// - opts.trusted: optional bool, only users trusted by our session
+	PeerWebRelay.prototype.getUsers = function(opts) {
+		var api = this.p2pwUsersAPI;
+		if (opts) {
+			opts.rel = 'self';
+			api = api.follow(opts);
 		}
-		return local.spawnRTCPeerServer(peer, this.stream);
+		return api.get({ accept: 'application/json' });
 	};
 
-	// Rejects a connection with a peer that has previously initiated
-	PeerRelay.prototype.reject = function(peer, opts) {
-		if (!this.initiations[peer.stream]) {
-			throw new Error("No initiation to reject from peer "+JSON.stringify(peer));
+	PeerWebRelay.prototype.startListening = function() {
+		var self = this;
+		// Update "src" object, for use in signal messages
+		this.srcObj = { user: this.getUserId(), app: this.config.app, stream: this.config.stream };
+		// Connect to the relay stream
+		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
+		this.p2pwRelayAPI.subscribe()
+			.then(function(stream) {
+				self.relayStream = stream;
+				stream.response_.then(function(response) {
+					self.emit('listening');
+					return response;
+				});
+				stream.on('signal', self.onSignal.bind(self));
+				stream.on('error', self.onRelayError.bind(self));
+			}, function(err) {
+				self.onRelayError({ event: 'error', data: err });
+			});
+	};
+
+	PeerWebRelay.prototype.signal = function(dst, msg) {
+		if (!this.p2pwRelayAPI) {
+			console.warn('PeerWebRelay - signal() called before relay is connected');
+			return;
 		}
-		// :TODO:
+		return this.p2pwRelayAPI.post({ src: this.srcObj, dst: dst, msg: msg });
 	};
 
-	// - returns a response promise
-	PeerRelay.prototype.getUsers = function() {
-		return this.streamUsersAPI.get({ accept: 'application/json' });
-	};
-
-	// - returns a response promise
-	PeerRelay.prototype.getUserInfo = function(userId) {
-		return this.streamUsersAPI
-			.follow({ rel: 'item', id: userId })
-			.get({ accept: 'application/json' });
-	};
-
-	// Creator guard function
-	local.web.peerRelay = function(urlOrStream) {
-		if (urlOrStream instanceof PeerRelay) {
-			return urlOrStream;
+	PeerWebRelay.prototype.onSignal = function(e) {
+		if (!e.data || !e.data.src || !e.data.msg) {
+			console.warn('discarding faulty signal message', err);
 		}
-		return new PeerRelay(urlOrStream);
+
+		// Find bridge that represents this origin
+		var src = e.data.src;
+		var domain = this.makeDomain(src.app, src.stream, src.user, this.providerDomain);
+		var bridgeServer = this.bridges[domain];
+
+		// Does bridge exist?
+		if (bridgeServer) {
+			// Let bridge handle it
+			bridgeServer.onSignal(e.data.msg);
+		} else {
+			// Create a server to handle the signal
+			bridgeServer = this.connect(src.user, { app: src.app, stream: src.stream, initiate: false });
+			bridgeServer.onSignal(e.data.msg);
+		}
 	};
 
+	PeerWebRelay.prototype.onRelayError = function(e) {
+		if (e.data && e.data.status == 423) { // locked
+			this.emit('streamTaken');
+		} else if (e.data && e.data.status == 401) { // unauthorized
+			this.emit('accessInvalid');
+		} else {
+			this.emit('error', e);
+		}
+	};
 
-/*var relay1 = local.peerRelay('httpl://relay');
-relay1.onJoin(function(peer) {
-	var server2 = relay1.initiate(peer);
-});
-relay1.onPart(function(peer) { ... });
+	PeerWebRelay.prototype.onBridgeDisconnected = function(data) {
+		// Stop tracking bridges that close
+		var bridge = this.bridges[data.domain];
+		if (bridge) {
+			delete this.bridges[data.domain];
+			local.web.unregisterLocal(data.domain);
+		}
+	};
 
-var relay2 = local.peerRelay('httpl://relay');
-relay2.onInitiate(function(peer) {
-	var server1 = relay2.accept(peer);
-	// or
-	relay2.reject(peer);
-	relay2.reject(peer, { banUser: true });
-	relay2.reject(peer, { banStream: true });
-	relay2.reject(peer, { banApp: true });
-});*/
+	PeerWebRelay.prototype.makeDomain = function(app, stream, user, provider) {
+		return app+(typeof stream != 'undefined'?stream:'')+'_.'+user+'_.'+provider;
+	};
 
 })();// schemes
 // =======
@@ -2759,6 +2944,7 @@ function EventStream(request, response_) {
 	local.util.EventEmitter.call(this);
 	this.request = request;
 	this.response = null;
+	this.response_ = null;
 	this.lastEventId = -1;
 	this.isConnOpen = true;
 
@@ -2770,6 +2956,7 @@ EventStream.prototype.getUrl = function() { return this.request.url; };
 EventStream.prototype.connect = function(response_) {
 	var self = this;
 	var buffer = '', eventDelimIndex;
+	this.response_ = response_;
 	response_.then(
 		function(response) {
 			self.isConnOpen = true;
@@ -2790,11 +2977,13 @@ EventStream.prototype.connect = function(response_) {
 			response.on('close', function() { if (self.isConnOpen) { self.isConnOpen = false; self.reconnect(); } });
 			// ^ a close event should be predicated by an end(), giving us time to close ourselves
 			//   if we get a close from the other side without an end message, we assume connection fault
+			return response;
 		},
 		function(response) {
 			self.response = response;
 			emitError.call(self, { event: 'error', data: response });
 			self.close();
+			throw response;
 		}
 	);
 };
@@ -4184,92 +4373,6 @@ local.web.registerLocal('hosts', function(req, res) {
 		return res.writeHead(204, 'ok, no content').end();
 	res.writeHead(200, 'ok', { 'content-type': 'application/json' });
 	res.end({ host_names: domains });
-});// Local Echo Host
-var relayBroadcast = local.web.broadcaster();
-local.web.registerLocal('relay', function(req, res) {
-
-	// Fake user info (local relay is just for debugging)
-	var authUserId = 'local';
-	var authAppDomain = window.location.host;
-
-	if (req.path == '/') {
-		res.setHeader('link', [
-			{ href: '/', rel: 'self service via grimwire.com/-webprn/relay', title: 'Local Peer Relay' },
-			{ href: '/streams', rel: 'collection', id: 'streams', title: 'Active Streams' },
-			{ href: '/users', rel: 'collection', id: 'users', title: 'Active Users' }
-		]);
-		if (req.method == 'HEAD') {
-			return res.writeHead(204, 'ok, no content').end();
-		}
-		if (req.method == 'GET') {
-			if (!local.web.preferredType(req, 'text/event-stream')) {
-				return res.writeHead(406, 'bad accept - only provides text/event-stream').end();
-			}
-			var streamId = relayBroadcast.addStream(res);
-			res.writeHead(200, 'ok', { 'content-type': 'text/event-stream' });
-			var ident = { stream: streamId, user: authUserId, app: authAppDomain };
-			relayBroadcast.emitTo(res, 'ident', ident);
-			relayBroadcast.emit('join', ident, { exclude: res });
-			return;
-		}
-		return res.writeHead(405, 'bad method').end();
-	}
-
-	var pathParts = req.path.split('/');
-	pathParts.shift(); // drop first entry (will always be blank)
-
-	if (pathParts.length === 1) {
-		if (pathParts[0] == 'streams') {
-			res.setHeader('link', [
-				{ href: '/', rel: 'up service via grimwire.com/-webprn/relay', title: 'Local Peer Relay' },
-				{ href: '/streams', rel: 'self collection', id: 'streams', title: 'Active Streams' },
-				{ href: '/streams/{id}', rel: 'item' }
-			]);
-			relayBroadcast.streams.forEach(function(stream, i) {
-				res.headers.link.push({ href: '/streams/'+i, rel: 'item', id: i });
-			});
-			if (req.method == 'HEAD') {
-				return res.writeHead(204, 'ok, no content').end();
-			}
-			return res.writeHead(405, 'bad method').end();
-		}
-		if (pathParts[0] == 'users') {
-			return res.writeHead(501, 'not yet implemented').end();
-		}
-		return res.writeHead(404, 'not found').end();
-	}
-
-	if (pathParts.length === 2) {
-		if (pathParts[0] == 'streams') {
-			var stream = relayBroadcast.streams[pathParts[1]];
-			if (!stream) {
-				return res.writeHead(404, 'not found').end();
-			}
-			if (req.method == 'HEAD') {
-				return res.writeHead(204, 'ok, no content').end();
-			}
-			if (req.method == 'POST') {
-				if (req.headers['content-type'] != 'application/json') {
-					return res.writeHead(415, 'bad content-type - only allows application/json').end();
-				}
-				req.finishStream().then(function(body) {
-					if (!body.event || typeof body.event != 'string') {
-						return res.writeHead(422, 'bad entity - `event` is a required string').end();
-					}
-					relayBroadcast.emitTo(stream, body.event, body.data);
-					res.writeHead(204, 'ok no content').end();
-				});
-				return;
-			}
-			return res.writeHead(405, 'bad method').end();
-		}
-		if (pathParts[0] == 'users') {
-			return res.writeHead(501, 'not yet implemented').end();
-		}
-		return res.writeHead(404, 'not found').end();
-	}
-
-	return res.writeHead(404, 'not found').end();
 });})();// Local Toplevel
 // ==============
 // pfraze 2013
@@ -4307,23 +4410,14 @@ local.spawnWorkerServer = function(src, opts) {
 	return server;
 };
 
-// - `peer`: required object, who we are connecting to (should be supplied by the peer relay)
-//   - `peer.stream`: required string, the peer's stream ID
-//   - `peer.user`: required string, the peer's user ID
-//   - `peer.app`: required string, the peer's app domain
-// - `signalStream`: required EventSource
-// - `opts.initiateAs`: optional object, if specified will initiate the connection using the object given
-//   - if given, should match the schema of `peer`
-local.spawnRTCPeerServer = function(peer, signalStream, opts) {
-	if (!opts) {
-		opts = {};
-	}
-	opts.peer = peer;
-	opts.signalStream = signalStream;
-	var server = new local.web.RTCPeerServer(opts);
-	var domain = getAvailableLocalDomain(peer.app.toLowerCase() + '{n}.' + peer.user.toLowerCase());
-	local.web.registerLocal(domain, server);
-	return server;
+// - `providerUrl`: required string, the relay provider
+// - `serverFn`: required function, the function for peerservers' handleRemoteWebRequest
+// - `config.app`: optional string, the app to join as (defaults to window.location.host)
+local.joinPeerWeb = function(providerUrl, serverFn, config) {
+	if (!config) config = {};
+	config.provider = providerUrl;
+	config.serverFn = serverFn;
+	return new local.web.PeerWebRelay(config);
 };
 
 function getAvailableLocalDomain(base) {

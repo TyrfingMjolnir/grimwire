@@ -34,11 +34,32 @@ module.exports = function(db) {
 	// Get session info
 	// ----------------
 	server.head('/', function(req, res) { return res.send(204); });
-	server.get('/', getSession, function(req, res) {
+	server.get('/', getSession, function(req, res, next) {
 		if (!req.accepts('json')) {
 			return res.send(406);
 		}
-		return res.json(res.locals.session);
+		if (res.locals.session) {
+			// Fetch user record
+			db.getUser(res.locals.session.user_id, function(err, dbres) {
+				if (err) {
+					console.error('Failed to load user from DB', err);
+					return res.send(500);
+				}
+				res.locals.user = dbres.rows[0];
+				next();
+			});
+		} else {
+			next();
+		}
+	}, function(req, res) {
+		// Send response
+		return res.json({
+			id: res.locals.session.id,
+			user_id: res.locals.session.user_id,
+			trusted_peers: (res.locals.user) ? res.locals.user.trusted_peers : [],
+			created_at: res.locals.session.created_at,
+			expires_at: res.locals.session.expires_at
+		});
 	});
 
 	// Start a new session
