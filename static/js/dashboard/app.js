@@ -2,7 +2,7 @@
 // ==========
 
 var _session = {trusted_peers:[]};
-var _active_users = [];
+var _users = [];
 function isPeer(user) {
 	if (!_session) return false;
 	return _session.user_id == user.id || _session.trusted_peers.indexOf(user.id) !== -1;
@@ -13,9 +13,9 @@ function isPeer(user) {
 // ===============
 
 // APIs
-var p2pwServiceAPI     = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-p2pw/service');
-var p2pwOnlineUsersAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection', online: true });
-var p2pwSessionAPI     = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
+var p2pwServiceAPI = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-p2pw/service');
+var p2pwUsersAPI   = p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
+var p2pwSessionAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
 
 // Load session
 p2pwSessionAPI.get({Accept:'application/json'}).then(setSession);
@@ -35,14 +35,14 @@ function refreshPage(res) {
 
 // Load active users
 function loadActiveUsers() {
-	p2pwOnlineUsersAPI.get({Accept: 'application/json'})
+	p2pwUsersAPI.get({Accept: 'application/json'})
 		.then(function(res) {
 			if (!res.body || !res.body.rows) {
 				return;
 			}
 
 			// Update state
-			_active_users = res.body.rows;
+			_users = res.body.rows;
 
 			// Udpate UI
 			renderAll();
@@ -53,7 +53,7 @@ loadActiveUsers();
 
 // Update trusted peers
 function syncTrustedPeers(users) {
-	p2pwOnlineUsersAPI.follow({ rel: 'grimwire.com/-user item', id: _session.user_id })
+	p2pwUsersAPI.follow({ rel: 'grimwire.com/-user item', id: _session.user_id })
 		.patch({ trusted_peers: users })
 		.fail(function(res) {
 			console.warn('Failed to update trusted users', res);
@@ -114,14 +114,18 @@ function renderAll() {
 
 	// Populate active users
 	var html = '';
-	for (var i=0; i < _active_users.length; i++) {
-		var user = _active_users[i];
-		if (user.trusts_this_session) {
-			var apps = '';
-			for (var app in user.streams) {
-				apps += '<a href=//'+app+' target=_blank>'+app+'</a><br/>';
+	for (var i=0; i < _users.length; i++) {
+		var user = _users[i];
+		if (user.online) {
+			if (user.trusts_this_session) {
+				var apps = '';
+				for (var app in user.streams) {
+					apps += '<a href=//'+app+' target=_blank>'+app+'</a><br/>';
+				}
+				html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
+			} else {
+				html += user.id+' ';
 			}
-			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
 		} else {
 			html += '<span class="text-muted">'+user.id+'</span> ';
 		}
