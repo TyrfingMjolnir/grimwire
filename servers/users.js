@@ -187,59 +187,63 @@ module.exports = function(db) {
 	// -----------------------------
 	server.head('/:userId', function(req, res) { return res.send(204); });
 	server.get('/:userId', function(req, res, next) {
+		// Content negotiation
+		if (!req.accepts('json')) {
+			return res.send(406);
+		}
+
+		// :TODO: get user when offline
+
+		// Get user
+		var user = _online_users[req.params.userId];
+		if (!user) {
+			return res.send(404);
+		}
+
+		// Send response
+		return res.json({ item: user });
+	});
+
+	// Subscribe to stream
+	// -------------------
+	server.subscribe('/:userId', function(req, res) {
 		var session = res.locals.session;
 
-		// JSON request
-		if (req.accepts('json')) {
-
-			// :TODO: get user when offline
-
-			// Get user
-			var user = _online_users[req.params.userId];
-			if (!user) {
-				return res.send(404);
-			}
-
-			// Send response
-			return res.json({ item: user });
+		// Content negotiation
+		if (!req.accepts('text/event-stream')) {
+			return res.send(406);
 		}
 
-		// Stream request
-		if (req.accepts('text/event-stream')) {
-			// Only allow users to subscribe to their own relays
-			if (req.params.userId != session.user_id) {
-				return res.send(403);
+		// Only allow users to subscribe to their own relays
+		if (req.params.userId != session.user_id) {
+			return res.send(403);
+		}
+
+		// Store params in response stream
+		res.locals.userId   = req.params.userId;
+		res.locals.app      = session.app;
+		res.locals.streamId = req.query.stream || 0;
+		res.locals.relayId  = createRelayId(res.locals.userId, res.locals.app, res.locals.streamId);
+
+		// Check stream availability
+		if ((res.locals.relayId in _online_relays)) {
+			return res.send(423);
+		}
+
+		// Store connection
+		return addStream(res, function(err) {
+			if (err) {
+				return res.send(500);
 			}
 
-			// Store params in response stream
-			res.locals.userId   = req.params.userId;
-			res.locals.app      = session.app;
-			res.locals.streamId = req.query.stream || 0;
-			res.locals.relayId  = createRelayId(res.locals.userId, res.locals.app, res.locals.streamId);
-
-			// Check stream availability
-			if ((res.locals.relayId in _online_relays)) {
-				return res.send(423);
-			}
-
-			// Store connection
-			return addStream(res, function(err) {
-				if (err) {
-					return res.send(500);
-				}
-
-				// Send back stream header
-				res.writeHead(200, 'ok', {
-					'content-type': 'text/event-stream',
-					'cache-control': 'no-cache',
-					'connection': 'keepalive'
-				});
-				res.write('\n'); // Writing to the stream lets the client know its open
+			// Send back stream header
+			res.writeHead(200, 'ok', {
+				'content-type': 'text/event-stream',
+				'cache-control': 'no-cache',
+				'connection': 'keepalive'
 			});
-		}
-
-		// Not acceptable
-		return res.send(406);
+			res.write('\n'); // Writing to the stream lets the client know its open
+		});
 	});
 
 	// Update user/settings
