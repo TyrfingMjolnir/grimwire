@@ -1,6 +1,8 @@
 var express = require('express');
 var middleware = require('../lib/middleware.js');
+var util = require('../lib/util.js');
 var bcrypt = require('bcrypt');
+var winston = require('winston');
 
 // Session
 // =======
@@ -39,28 +41,8 @@ module.exports = function(db) {
 		if (!req.accepts('json')) {
 			return res.send(406);
 		}
-		if (res.locals.session) {
-			// Fetch user record
-			db.getUser(res.locals.session.user_id, function(err, dbres) {
-				if (err) {
-					console.error('Failed to load user from DB', err);
-					return res.send(500);
-				}
-				res.locals.user = dbres.rows[0];
-				next();
-			});
-		} else {
-			next();
-		}
-	}, function(req, res) {
 		// Send response
-		return res.json({
-			id: res.locals.session.id,
-			user_id: res.locals.session.user_id,
-			trusted_peers: (res.locals.user) ? res.locals.user.trusted_peers : [],
-			created_at: res.locals.session.created_at,
-			expires_at: res.locals.session.expires_at
-		});
+		res.json(res.locals.session);
 	});
 
 	// Start a new session
@@ -101,7 +83,7 @@ module.exports = function(db) {
 			// Create the session
 			db.createSession(req.body.id, null, function(err, dbres) {
 				if (err || !dbres.rows[0]) {
-					console.error('Failed to create session info in DB', err);
+					winston.error('Failed to create session info in DB', { error: err, inputs: [req.body.id], request: util.formatReqForLog(req) });
 					res.send(500);
 					return;
 				}
@@ -123,7 +105,7 @@ module.exports = function(db) {
 		// Clear session records
 		db.deleteUserSessions(res.locals.session.user_id, function(err) {
 			if (err) {
-				console.error('Failed to delete sessions from DB', err);
+				winston.error('Failed to delete sessions from DB', { error: err, inputs: [res.locals.session.user_id], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
 
@@ -164,7 +146,7 @@ module.exports = function(db) {
 		// Generate access token
 		db.createSession(res.locals.session.user_id, req.params.app, function(err, dbres) {
 			if (err || !dbres.rows[0]) {
-				console.error('Failed to create app session in DB', err);
+				winston.error('Failed to create app session in DB', { error: err, inputs: [res.locals.session.user_id, req.params.app], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
 
@@ -205,7 +187,7 @@ module.exports = function(db) {
 		// Load session from DB
 		db.getSession(req.session, function(err, dbres) {
 			if (err) {
-				console.error('Failed to get session info from DB', err);
+				winston.error('Failed to get session info from DB', { error: err, inputs: [req.session], request: util.formatReqForLog(req) });
 				res.send(500);
 				return;
 			}

@@ -2289,7 +2289,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.providerDomain = providerUrld.authority.replace(/\:/g, '.');
 
 		// State
-		this.messageFromAuthPopupHandler = null;
+		this.onMessageFromPopup = null;
 		this.userId = null;
 		this.accessToken = null;
 		this.srcObj = null; // used in outbound signal messages
@@ -2321,23 +2321,13 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			this.p2pwServiceAPI.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
 			this.p2pwUsersAPI.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
 
-			// Try to validate our access now
-			var self = this;
-			this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
-			this.p2pwRelayAPI.resolve().then(
-				function() {
-					// Emit an event
-					self.emit('accessGranted');
-				},
-				function(res) {
-					// Handle error
-					self.onRelayError({ event: 'error', data: res });
-				}
-			);
+			// Emit an event
+			this.emit('accessGranted');
 		} else {
 			// Update state and emit event
 			this.userId = null;
 			this.accessToken = null;
+			this.emit('accessDenied');
 		}
 	};
 	PeerWebRelay.prototype.getUserId = function() {
@@ -2348,9 +2338,6 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	};
 	PeerWebRelay.prototype.setStreamId = function(stream) {
 		this.config.stream = stream;
-
-		// Rebuild endpoint
-		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 	};
 	PeerWebRelay.prototype.getAccessToken = function() {
 		return this.accessToken;
@@ -2360,13 +2347,14 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// - Best if called within a DOM click handler, as that will avoid popup-blocking
 	PeerWebRelay.prototype.requestAccessToken = function() {
 		// Start listening for messages from the popup
-		if (!this.messageFromAuthPopupHandler) {
-			this.messageFromAuthPopupHandler = (function(e) {
+		if (!this.onMessageFromPopup) {
+			this.onMessageFromPopup = (function(e) {
 				console.debug('Message (from ' + e.origin + '): ' + e.data);
 
 				// Make sure this is from our popup
 				var originUrld = local.web.parseUri(e.origin);
 				var providerUrld = local.web.parseUri(this.config.provider);
+
 				if (originUrld.authority !== providerUrld.authority) {
 					return;
 				}
@@ -2375,14 +2363,9 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 				this.setAccessToken(e.data);
 
 				// Stop listening
-				window.removeEventListener('message', this.messageFromAuthPopupHandler);
-
-				// If given a null, emit denial event
-				if (!e.data) {
-					this.emit('accessDenied');
-				}
+				window.removeEventListener('message', this.onMessageFromPopup);
 			}).bind(this);
-			window.addEventListener('message', this.messageFromAuthPopupHandler);
+			window.addEventListener('message', this.onMessageFromPopup);
 		}
 
 		// Resolve the URL for getting access tokens
@@ -2427,7 +2410,6 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 	// Fetches users from p2pw service
 	// - opts.online: optional bool, only online users
-	// - opts.trusted: optional bool, only users trusted by our session
 	PeerWebRelay.prototype.getUsers = function(opts) {
 		var api = this.p2pwUsersAPI;
 		if (opts) {
@@ -2442,6 +2424,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Update "src" object, for use in signal messages
 		this.srcObj = { user: this.getUserId(), app: this.config.app, stream: this.config.stream };
 		// Connect to the relay stream
+		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 		this.p2pwRelayAPI.subscribe()
 			.then(function(stream) {
 				self.relayStream = stream;
@@ -2486,6 +2469,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	};
 
 	PeerWebRelay.prototype.onRelayError = function(e) {
+		console.debug('relay error', e);
 		if (e.data && e.data.status == 423) { // locked
 			this.emit('streamTaken');
 		} else if (e.data && e.data.status == 401) { // unauthorized
@@ -3134,15 +3118,15 @@ var objectHelper = (function () {
     function isString (value) {
         return Object.prototype.toString.apply(value) === '[object String]';
     }
-    
+
     function isNumber (value) {
         return Object.prototype.toString.apply(value) === '[object Number]';
     }
-    
+
     function isBoolean (value) {
         return Object.prototype.toString.apply(value) === '[object Boolean]';
     }
-    
+
     function join (arr, separator) {
         var
             result = '',

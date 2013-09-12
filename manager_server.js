@@ -3,6 +3,12 @@ var pg = require('pg');
 var express = require('express');
 var middleware = require('./lib/middleware.js');
 
+var winston = require('winston');
+
+// Setup Logger
+// ============
+winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: true });
+
 // Server State
 // ============
 var server = express();
@@ -26,7 +32,7 @@ server.options('*', function(request, response) {
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
 		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-		'<http://grimwire.net:8000/u{?online,trusted}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+		'<http://grimwire.net:8000/u{?online}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
 		'<http://grimwire.net:8000/u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"',
 		'<http://grimwire.net:8000/session>; rel="service grimwire.com/-session"; id="session"',
 		'<http://grimwire.net:8000/session/{app}>; rel="service grimwire.com/-access-token"',
@@ -46,7 +52,8 @@ server.get('/',
 );
 // Servers
 server.use('/', express.static(__dirname + '/static'));
-server.use('/u',       require('./servers/users.js')(db));
+var usersServer = require('./servers/users.js')(db);
+server.use('/u',       usersServer);
 server.use('/session', require('./servers/session.js')(db));
 
 
@@ -63,7 +70,8 @@ server.get('/status', function(request, response) {
 		uptime_seconds: uptime/1000,
 		uptime_minutes: uptime/(60*1000),
 		uptime_hours: uptime/(60*60*1000),
-		uptime_days: uptime/(24*60*60*1000)
+		uptime_days: uptime/(24*60*60*1000),
+		relay: usersServer.getStatus()
 	});
 });
 
@@ -72,10 +80,10 @@ server.get('/status', function(request, response) {
 // =====
 pgClient.connect(function(err) {
 	if (err) {
-		console.error("Failed to connect to postgres", err);
+		winston.error("Failed to connect to postgres", err);
 		process.exit();
 	}
 });
 server.listen(8000);
 server.startTime = new Date();
-console.log('Management HTTP server listening on port 8000');
+winston.info('Management HTTP server listening on port 8000');

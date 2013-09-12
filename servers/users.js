@@ -1,6 +1,12 @@
 var express = require('express');
 var middleware = require('../lib/middleware.js');
+var util = require('../lib/util.js');
 var bcrypt = require('bcrypt');
+var winston = require('winston');
+
+// Setup email (temporary)
+var smtpTransport = require('../mail-cfg.js');
+
 
 // Users
 // =====
@@ -22,10 +28,17 @@ module.exports = function(db) {
 	function createOnlineUser(userRecord, session) {
 		return {
 			id: session.user_id,
-			streams: {},
-			trusted_peers: userRecord.trusted_peers
+			streams: {}
 		};
 	}
+
+	// For use in /status
+	server.getStatus = function() {
+		return {
+			num_streams: Object.keys(_online_relays).length,
+			num_online_users: Object.keys(_online_users).length
+		};
+	};
 
 	// Routes
 	// ======
@@ -41,7 +54,7 @@ module.exports = function(db) {
 		// Set links
 		res.setHeader('Link', [
 			'</>; rel="up via service grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-			'</u{?online,trusted}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+			'</u{?online}>; rel="self collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
 			'</u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"'
 		].join(', '));
 		next();
@@ -51,7 +64,7 @@ module.exports = function(db) {
 		var userId = req.params.userId;
 		res.setHeader('Link', [
 			'</>; rel="via service grimwire.com/-service"; title="Grimwire.net P2PW"',
-			'</u{?online,trusted}>; rel="up collection grimwire.com/-user"; id="users"',
+			'</u{?online}>; rel="up collection grimwire.com/-user"; id="users"',
 			'</u/'+userId+'{?stream,nc}>; rel="self item grimwire.com/-p2pw/relay grimwire.com/-user"; id="'+userId+'"'
 		].join(', '));
 		next();
@@ -67,23 +80,6 @@ module.exports = function(db) {
 				return res.send(406);
 			}
 
-			// Get user's trusted peers, if requested
-			if (req.query.trusted) {
-				// Get the session user
-				db.getUser(res.locals.session.user_id, function(err, dbres) {
-					if (err) {
-						console.error('Failed to load users from DB', err);
-						return res.send(500);
-					}
-					res.locals.sessionUser = dbres.rows[0];
-					res.locals.trusteds = res.locals.sessionUser.trusted_users;
-					next();
-				});
-			} else {
-				next();
-			}
-		},
-		function(req, res, next) {
 			// Give in-memory online users if requested
 			if (req.query.online) {
 				res.locals.users = _online_users;
@@ -93,7 +89,7 @@ module.exports = function(db) {
 			// Load full list from DB
 			db.getUsers(function(err, dbres) {
 				if (err) {
-					console.error('Failed to load users from DB', err);
+					winston.error('Failed to load users from DB', { error: err, inputs: [], request: util.formatReqForLog(req) });
 					return res.send(500);
 				}
 
@@ -103,25 +99,18 @@ module.exports = function(db) {
 		},
 		function(req, res) {
 			// Construct output
-			var rows = [], users = res.locals.users, trusteds = res.locals.trusteds;
+			var rows = [], users = res.locals.users;
 			var sessionUserId = res.locals.session.user_id;
-			var shouldFilter = (req.query.trusted && Array.isArray(trusteds));
 			var emptyObj = {};
 			for (var k in users) {
 				var user = users[k];
-				// Filter as requested
-				if (shouldFilter && trusteds.indexOf(user.id) == -1) {
-					continue;
-				}
 				// Get user's online status
 				var onlineUser = _online_users[user.id];
-				var isTrusting = (sessionIsTrusted(res.locals.session, onlineUser));
 				// Add row
 				rows.push({
 					id: user.id,
 					online: !!onlineUser,
-					trusts_this_session: isTrusting,
-					streams: (isTrusting) ? onlineUser.streams : emptyObj,
+					streams: (onlineUser) ? onlineUser.streams : {},
 					created_at: user.created_at
 				});
 			}
@@ -159,7 +148,7 @@ module.exports = function(db) {
 		bcrypt.genSalt(10, function(err, salt) {
 			bcrypt.hash(body.password, salt, function(err, hash) {
 				if (err) {
-					console.error('Failed to encrypt user password', err);
+					winston.error('Failed to encrypt user password', { error: err, inputs: [body.password, salt], request: util.formatReqForLog(req) });
 					return res.send(500);
 				}
 				body.password = hash;
@@ -170,10 +159,22 @@ module.exports = function(db) {
 						if (err.code == 23505) { // conflict
 							return res.send(409);
 						} else {
-							console.error('Failed to add user to database', err);
+							winston.error('Failed to add user to database', { error: err, inputs: [body], request: util.formatReqForLog(req) });
 							return res.send(500);
 						}
 					}
+
+					// Send an alert email
+					smtpTransport.sendMail({
+						from:    "pfrazee@gmail.com",
+						to:      "pfrazee@gmail.com",
+						subject: "New user on grimwire: "+body.id,
+						text:    "New user created\n"+(new Date())+"\n"+body.email
+					}, function(err, response) {
+						if (err) {
+							winston.error('Failed to send new user notification', { error: err, response: response });
+						}
+					});
 
 					// Send response
 					res.send(204);
@@ -197,11 +198,6 @@ module.exports = function(db) {
 			var user = _online_users[req.params.userId];
 			if (!user) {
 				return res.send(404);
-			}
-
-			// Check permissions
-			if (!sessionIsTrusted(res.locals.session, user)) {
-				return res.send(403);
 			}
 
 			// Send response
@@ -265,26 +261,29 @@ module.exports = function(db) {
 			return res.send(422, { error: 'Request body is required.' });
 		}
 		var updates = {};
-		if (req.body.trusted_peers) {
-			if (!Array.isArray(req.body.trusted_peers) || req.body.trusted_peers.filter(function(v) { return typeof v == 'string'; }).length !== req.body.trusted_peers.length) {
-				return res.send(422, { error: '`trusted_peers` must be an array of strings.'});
-			}
-			updates.trusted_peers = req.body.trusted_peers;
-		}
+		// :TODO: email
+		// if (req.body.trusted_peers) {
+		// 	if (!Array.isArray(req.body.trusted_peers) || req.body.trusted_peers.filter(function(v) { return typeof v == 'string'; }).length !== req.body.trusted_peers.length) {
+		// 		return res.send(422, { error: '`trusted_peers` must be an array of strings.'});
+		// 	}
+		// 	updates.trusted_peers = req.body.trusted_peers;
+		// }
+		// ^ old, just here for reference in the future
 		if (Object.keys(updates).length === 0) {
 			return res.send(422, { error: 'No valid fields in the request body.' });
 		}
 
 		// Update online user
 		var user = _online_users[req.params.userId];
-		if (user && updates.trusted_peers) {
-			user.trusted_peers = updates.trusted_peers;
+		if (user) {
+			// user.trusted_peers = updates.trusted_peers;
+			// ^ old, just here for reference in the future
 		}
 
 		// Update DB
 		db.updateUser(req.params.userId, updates, function(err, dbres) {
 			if (err) {
-				console.error('Failed to update user in DB', err);
+				winston.error('Failed to update user in DB', { error: err, inputs: [req.params.userId], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
 
@@ -330,12 +329,6 @@ module.exports = function(db) {
 			return res.send(504);
 		}
 
-		// Check permissions
-		var user = _online_users[body.dst.user];
-		if (!sessionIsTrusted(res.locals.session, user)) {
-			return res.send(403);
-		}
-
 		// Broadcast event to the stream owner
 		var data = {
 			src: body.src,
@@ -349,13 +342,6 @@ module.exports = function(db) {
 		// Send response
 		res.send(204);
 	});
-
-
-	// Business Logic
-	// ==============
-	function sessionIsTrusted(session, user) {
-		return (user && (user.id == session.user_id || user.trusted_peers.indexOf(session.user_id) !== -1));
-	}
 
 
 	// Stream Helpers
@@ -373,7 +359,7 @@ module.exports = function(db) {
 		// Load user record
 		db.getUser(session.user_id, function(err, dbres) {
 			if (err || !dbres) {
-				console.error('Failed to load user from DB', err);
+				winston.error('Failed to load user from DB', { error: err, inputs: [session.user_id], session: session });
 				return cb(err);
 			}
 
