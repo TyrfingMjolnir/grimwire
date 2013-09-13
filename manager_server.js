@@ -11,14 +11,15 @@ var config = {
 	hostname: process.env.HOST || os.hostname(),
 	port: process.env.PORT || 80,
 	ssl: process.env.SSL || false,
-	livemode: process.env.LIVE || false
+	livemode: process.env.LIVE || false,
+	pgconnstr: process.env.PG || 'postgres://pfraze:password@localhost:5433/grimwire'
 };
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
 
 // Server State
 // ============
 var server = express();
-var pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
+var pgClient = new pg.Client(config.pgconnstr);
 var db = require('./lib/queries')(pgClient);
 winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.livemode ? true  : false });
 
