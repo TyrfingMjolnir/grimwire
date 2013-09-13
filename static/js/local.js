@@ -984,11 +984,23 @@ local.web.isRelSchemeUri = function(v) {
 // takes a context url and a relative path and forms a new valid url
 // eg joinRelPath('http://grimwire.com/foo/bar', '../fuz/bar') -> 'http://grimwire.com/foo/fuz/bar'
 local.web.joinRelPath = function(urld, relpath) {
-	if (typeof urld == 'string')
+	if (typeof urld == 'string') {
 		urld = local.web.parseUri(urld);
-	if (relpath.charAt(0) == '/')
+	}
+	var protocol = (urld.protocol) ? urld.protocol + '://' : false;
+	if (!protocol) {
+		if (urld.source.indexOf('//') === 0) {
+			protocol = '//';
+		} else if (urld.source.indexOf('||') === 0) {
+			protocol = '||';
+		} else {
+			protocol = 'httpl://';
+		}
+	}
+	if (relpath.charAt(0) == '/') {
 		// "absolute" relative, easy stuff
-		return urld.protocol + '://' + urld.authority + relpath;
+		return protocol + urld.authority + relpath;
+	}
 	// totally relative, oh god
 	// (thanks to geoff parker for this)
 	var hostpath = urld.path;
@@ -1002,7 +1014,7 @@ local.web.joinRelPath = function(urld, relpath) {
 		else
 			hostpathParts.push(relpathParts[i]);
 	}
-	return local.web.joinUrl(urld.protocol + '://' + urld.authority, hostpathParts.join('/'));
+	return local.web.joinUrl(protocol + urld.authority, hostpathParts.join('/'));
 };
 
 // EXPORTED
@@ -1947,6 +1959,10 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	};
 	var defaultIceServers = { iceServers: [{ url: 'stun:stun.l.google.com:19302' }] };
 
+	function randomStreamId() {
+		return Math.random()*10000000;
+	}
+
 	// RTCPeerServer
 	// =============
 	// EXPORTED
@@ -1955,7 +1971,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// - `config.peer`: required object, who we are connecting to (should be supplied by the peer relay)
 	//   - `config.peer.user`: required string, the peer's user ID
 	//   - `config.peer.app`: required string, the peer's app domain
-	//   - `config.peer.stream`: optional number, the stream id of the peer to connect to (defaults to 0)
+	//   - `config.peer.stream`: optional number, the stream id of the peer to connect to (defaults to pseudo-random)
 	// - `config.relay`: required PeerWebRelay
 	// - `config.initiate`: optional bool, if true will initiate the connection processes
 	// - `config.serverFn`: optional function, the handleRemoteWebRequest function
@@ -1966,7 +1982,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (!config.peer) throw new Error("`config.peer` is required");
 		if (typeof config.peer.user == 'undefined') throw new Error("`config.peer.user` is required");
 		if (typeof config.peer.app == 'undefined') throw new Error("`config.peer.app` is required");
-		if (typeof config.peer.stream == 'undefined') config.peer.stream = 0;
+		if (typeof config.peer.stream == 'undefined') config.peer.stream = randomStreamId();
 		if (!config.relay) throw new Error("`config.relay` is required");
 		local.web.BridgeServer.call(this, config);
 		local.util.mixinEventEmitter(this);
@@ -2274,13 +2290,13 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// - `config.provider`: required string, the relay provider
 	// - `config.serverFn`: required function, the function for peerservers' handleRemoteWebRequest
 	// - `config.app`: optional string, the app to join as (defaults to window.location.host)
-	// - `config.stream`: optional number, the stream id (defaults to 0)
+	// - `config.stream`: optional number, the stream id (defaults to pseudo-random)
 	function PeerWebRelay(config) {
 		if (!config) throw new Error("PeerWebRelay requires the `config` parameter");
 		if (!config.provider) throw new Error("PeerWebRelay requires `config.provider`");
 		if (!config.serverFn) throw new Error("PeerWebRelay requires `config.serverFn`");
 		if (!config.app) config.app = window.location.host;
-		if (!config.stream) config.stream = 0;
+		if (!config.stream) config.stream = randomStreamId();
 		this.config = config;
 		local.util.mixinEventEmitter(this);
 
@@ -2348,9 +2364,6 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	};
 	PeerWebRelay.prototype.setStreamId = function(stream) {
 		this.config.stream = stream;
-
-		// Rebuild endpoint
-		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 	};
 	PeerWebRelay.prototype.getAccessToken = function() {
 		return this.accessToken;
@@ -2395,7 +2408,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// Spawns an RTCPeerServer and starts the connection process with the given peer
 	// - `user`: required String, the id of the target user
 	// - `config.app`: optional String, the app of the peer to connect to (defaults to window.location.host)
-	// - `config.stream`: optional number, the stream id of the peer to connect to (defaults to 0)
+	// - `config.stream`: optional number, the stream id of the peer to connect to (defaults to pseudo-random)
 	// - `config.initiate`: optional Boolean, should the server initiate the connection?
 	//   - defaults to true
 	//   - should only be false if the connection was already initiated by the opposite end
@@ -2442,6 +2455,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Update "src" object, for use in signal messages
 		this.srcObj = { user: this.getUserId(), app: this.config.app, stream: this.config.stream };
 		// Connect to the relay stream
+		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 		this.p2pwRelayAPI.subscribe({ method: 'subscribe' })
 			.then(function(stream) {
 				self.relayStream = stream;
@@ -2487,10 +2501,26 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 	PeerWebRelay.prototype.onRelayError = function(e) {
 		if (e.data && e.data.status == 423) { // locked
+			// Fire event
 			this.emit('streamTaken');
 		} else if (e.data && e.data.status == 401) { // unauthorized
+			// Fire event
 			this.emit('accessInvalid');
+		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost
+			// Update state
+			this.relayStream = null;
+
+			// Fire event
+			this.emit('relayDown');
+
+			var self = this;
+			// Attempt to reconnect in 2 seconds
+			setTimeout(function() {
+				self.startListening();
+				// Note - if this fails, an error will be rethrown and take us back here
+			}, 2000);
 		} else {
+			// Fire event
 			this.emit('error', e);
 		}
 	};
@@ -2862,6 +2892,8 @@ local.web.dispatch = function dispatch(request) {
 		if (!schemeHandler) {
 			response.writeHead(0, 'unsupported scheme "'+scheme+'"');
 			response.end();
+			request.resumeEvents();
+			response.resumeEvents();
 		} else {
 			// dispatch according to scheme
 			schemeHandler(request, response);

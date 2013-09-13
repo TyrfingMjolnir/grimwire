@@ -10,7 +10,7 @@ var smtpTransport = require('../mail-cfg.js');
 
 // Users
 // =====
-module.exports = function(db) {
+module.exports = function(config, db) {
 
 	// Server State
 	// ============

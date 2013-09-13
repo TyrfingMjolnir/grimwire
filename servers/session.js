@@ -6,7 +6,7 @@ var winston = require('winston');
 
 // Session
 // =======
-module.exports = function(db) {
+module.exports = function(config, db) {
 	var server = express();
 
 	// Routes

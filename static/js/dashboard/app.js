@@ -1,6 +1,7 @@
 // Page state
 // ==========
 
+var host = window.location.host;
 var _session = {};
 var _users = [];
 
@@ -9,7 +10,7 @@ var _users = [];
 // ===============
 
 // APIs
-var p2pwServiceAPI = local.navigator('rel:http://grimwire.net:8000||self+grimwire.com/-p2pw/service');
+var p2pwServiceAPI = local.navigator('rel://'+host+'||self+grimwire.com/-p2pw/service');
 var p2pwUsersAPI   = p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
 var p2pwSessionAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
 

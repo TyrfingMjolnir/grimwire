@@ -2,18 +2,25 @@ var http = require('http');
 var pg = require('pg');
 var express = require('express');
 var middleware = require('./lib/middleware.js');
-
 var winston = require('winston');
 
-// Setup Logger
-// ============
-winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: true });
+// Config
+// ======
+var os = require("os");
+var config = {
+	hostname: process.env.HOST || os.hostname(),
+	port: process.env.PORT || 80,
+	ssl: process.env.SSL || false,
+	livemode: process.env.LIVE || false
+};
+config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
 
 // Server State
 // ============
 var server = express();
 var pgClient = new pg.Client("postgres://pfraze:password@localhost:5433/grimwire");
 var db = require('./lib/queries')(pgClient);
+winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.livemode ? true  : false });
 
 // Common Handlers
 // ===============
@@ -31,12 +38,12 @@ server.options('*', function(request, response) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-		'<http://grimwire.net:8000/u{?online}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
-		'<http://grimwire.net:8000/u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"',
-		'<http://grimwire.net:8000/session>; rel="service grimwire.com/-session"; id="session"',
-		'<http://grimwire.net:8000/session/{app}>; rel="service grimwire.com/-access-token"',
-		'<http://grimwire.net:8000/status>; rel="service"; id="status"'
+		'</>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
+		'</u{?online}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
+		'</u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"',
+		'</session>; rel="service grimwire.com/-session"; id="session"',
+		'</session/{app}>; rel="service grimwire.com/-access-token"',
+		'</status>; rel="service"; id="status"'
 	].join(', '));
 	next();
 });
@@ -52,17 +59,17 @@ server.get('/',
 );
 // Servers
 server.use('/', express.static(__dirname + '/static'));
-var usersServer = require('./servers/users.js')(db);
+var usersServer = require('./servers/users.js')(config, db);
 server.use('/u',       usersServer);
-server.use('/session', require('./servers/session.js')(db));
+server.use('/session', require('./servers/session.js')(config, db));
 
 
 // Admin
 // =====
 server.get('/status', function(request, response) {
 	response.setHeader('Link', [
-		'<http://grimwire.net:8000/>; rel="up service via grimwire.com/-service"; title="Grimwire.net P2PW"',
-		'<http://grimwire.net:8000/status>; rel="self service"; id="status"'
+		'</>; rel="up service via grimwire.com/-service"; title="Grimwire.net P2PW"',
+		'</status>; rel="self service"; id="status"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
 	response.json({
@@ -84,6 +91,6 @@ pgClient.connect(function(err) {
 		process.exit();
 	}
 });
-server.listen(8000);
+server.listen(config.port);
 server.startTime = new Date();
-winston.info('Management HTTP server listening on port 8000');
+winston.info('Management HTTP server listening on port '+config.port);
