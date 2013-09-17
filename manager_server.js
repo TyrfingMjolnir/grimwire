@@ -13,6 +13,7 @@ var config = {
 	port: process.env.PORT || (process.env.SSL ? 443 : 80),
 	ssl: process.env.SSL || false,
 	livemode: process.env.LIVE || false,
+	is_upstream: process.env.IS_UPSTREAM || false,
 	pgconnstr: process.env.PG || 'postgres://pfraze:password@localhost:5433/grimwire'
 };
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
@@ -28,7 +29,11 @@ winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExcepti
 // ===============
 server.use(express.bodyParser());
 server.use(express.cookieParser());
-server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl, maxAge: 86400 } }));
+if (config.is_upstream) {
+	server.use(express.cookieSession({ proxy: true, secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: true } }));
+} else {
+	server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
+}
 server.all('*', middleware.setCorsHeaders);
 server.options('*', function(request, response) {
 	response.writeHead(204);

@@ -2313,7 +2313,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.connectedToRelay = false;
 		this.userId = null;
 		this.accessToken = null;
-		this.bridges = [];
+		this.bridges = {};
 
 		// :TEMP: Extract provider domain for use in HTTPL domain assignment
 		// when multiple providers are supported, the signal should include this info
@@ -2330,6 +2330,9 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.p2pwUsersAPI = this.p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
 		this.p2pwRelayAPI = null;
 		this.relayStream = null;
+
+		// Bind window close behavior
+		window.addEventListener('beforeunload', this.onPageClose.bind(this));
 	}
 	local.web.PeerWebRelay = PeerWebRelay;
 
@@ -2574,6 +2577,24 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (bridge) {
 			delete this.bridges[data.domain];
 			local.web.unregisterLocal(data.domain);
+		}
+	};
+
+	PeerWebRelay.prototype.onPageClose = function() {
+		var bridgeDomains = Object.keys(this.bridges);
+		if (this.connectedToRelay && bridgeDomains.length !== 0) {
+			// Collect connected peer destination info
+			var dst = [];
+			for (var i=0; i < bridgeDomains.length; i++) {
+				dst.push(this.bridges[bridgeDomains[i]].config.peer);
+			}
+
+			// Send a synchronous disconnect signal to all connected peers
+			var req = new XMLHttpRequest();
+			req.open('POST', this.p2pwRelayAPI.context.url, false);
+			req.setRequestHeader('Authorization', 'Bearer '+this.accessToken);
+			req.setRequestHeader('Content-type', 'application/json');
+			req.send(JSON.stringify({ src: this.srcObj, dst: dst, msg: { type: 'disconnect' } }));
 		}
 	};
 

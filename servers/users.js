@@ -315,10 +315,6 @@ module.exports = function(config, db) {
 		if (!body || !body.msg || !body.dst || !body.src) {
 			return res.send(422, { error: 'Request body must include `msg`, `dst`, and `src`.' });
 		}
-		body.dst.stream = +body.dst.stream;
-		if (typeof body.dst.user != 'string' || typeof body.dst.app != 'string' || isNaN(body.dst.stream)) {
-			return res.send(422, { error: '`dst` must include `user` (string), `app` (string), and `stream` (number).' });
-		}
 		body.src.stream = +body.src.stream;
 		if (typeof body.src.user != 'string' || typeof body.src.app != 'string' || isNaN(body.src.stream)) {
 			return res.send(422, { error: '`src` must include `user` (string), `app` (string), and `stream` (number).' });
@@ -327,21 +323,26 @@ module.exports = function(config, db) {
 			return res.send(422, { error: '`src.user` and `src.app` must match the sending application (your session shows '+session.user_id+' and '+session.app+')' });
 		}
 
-		// Make sure the target relay is online
-		var relayId = createRelayId(body.dst.user, body.dst.app, body.dst.stream);
-		if (!(relayId in _online_relays)) {
-			return res.send(504);
-		}
+		// Iterate destinations
+		var relayId, data = { dst: null, src: body.src, msg: body.msg };
+		if (!Array.isArray(body.dst)) { body.dst = [body.dst]; }
+		for (var i=0; i < body.dst.length; i++) {
+			// Validate
+			body.dst[i].stream = +body.dst[i].stream;
+			if (typeof body.dst[i].user != 'string' || typeof body.dst[i].app != 'string' || isNaN(body.dst[i].stream)) {
+				return res.send(422, { error: '`dst` objects must include `user` (string), `app` (string), and `stream` (number).' });
+			}
 
-		// Broadcast event to the stream owner
-		var data = {
-			src: body.src,
-			dst: body.dst,
-			msg: body.msg
-		};
-		msg = 'event: signal\r\n';
-		msg += 'data: '+JSON.stringify(data)+'\r\n';
-		emitTo(relayId, msg+'\r\n');
+			// Make sure the target relay is online
+			relayId = createRelayId(body.dst[i].user, body.dst[i].app, body.dst[i].stream);
+			if (!(relayId in _online_relays)) {
+				continue;
+			}
+
+			// Broadcast event to relay stream
+			data.dst = body.dst[i];
+			emitTo(relayId, 'event: signal\r\ndata: '+JSON.stringify(data)+'\r\n\r\n');
+		}
 
 		// Send response
 		res.send(204);
