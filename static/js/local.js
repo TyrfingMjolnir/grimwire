@@ -2124,6 +2124,9 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			case 'offer':
 				this.debugLog('GOT OFFER', msg);
 				// Received a session offer from the peer
+				// Emit event
+				var config = this.config;
+				this.emit('connecting', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: this });
 				// Update the peer connection
 				var desc = new RTCSessionDescription({ type: 'offer', sdp: msg.sdp });
 				this.peerConn.setRemoteDescription(desc);
@@ -2237,6 +2240,12 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			null,
 			mediaConstraints
 		);
+		// Emit 'connecting' on next tick
+		// (next tick to make sure objects creating us get a chance to wire up the event)
+		setTimeout(function() {
+			var config = self.config;
+			self.emit('connecting', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: self });
+		}, 0);
 	};
 
 	// Helper called whenever we have a remote session description
@@ -2300,16 +2309,20 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.config = config;
 		local.util.mixinEventEmitter(this);
 
-		// Extract provider domain
+		// State
+		this.connectedToRelay = false;
+		this.userId = null;
+		this.accessToken = null;
+		this.bridges = [];
+
+		// :TEMP: Extract provider domain for use in HTTPL domain assignment
+		// when multiple providers are supported, the signal should include this info
 		var providerUrld = local.web.parseUri(config.provider);
 		this.providerDomain = providerUrld.authority.replace(/\:/g, '.');
 
-		// State
+		// Internal helpers
 		this.messageFromAuthPopupHandler = null;
-		this.userId = null;
-		this.accessToken = null;
-		this.srcObj = null; // used in outbound signal messages
-		this.bridges = [];
+		this.srcObj = null; // cached object to be used in outbound signal messages
 
 		// APIs
 		this.p2pwServiceAPI = local.navigator(config.provider);
@@ -2352,21 +2365,35 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			);
 		} else {
 			// Update state and emit event
+			var hadToken = !!this.accessToken;
 			this.userId = null;
 			this.accessToken = null;
+			if (hadToken) {
+				this.emit('accessRemoved');
+			}
 		}
 	};
-	PeerWebRelay.prototype.getUserId = function() {
-		return this.userId;
-	};
-	PeerWebRelay.prototype.getStreamId = function() {
-		return this.config.stream;
-	};
-	PeerWebRelay.prototype.setStreamId = function(stream) {
-		this.config.stream = stream;
-	};
-	PeerWebRelay.prototype.getAccessToken = function() {
-		return this.accessToken;
+	PeerWebRelay.prototype.isListening    = function() { return this.connectedToRelay; };
+	PeerWebRelay.prototype.getUserId      = function() { return this.userId; };
+	PeerWebRelay.prototype.getPeer        = function(domain) { return this.bridges[domain]; };
+	PeerWebRelay.prototype.getApp         = function() { return this.config.app; };
+	PeerWebRelay.prototype.getStreamId    = function() { return this.config.stream; };
+	PeerWebRelay.prototype.setStreamId    = function(stream) { this.config.stream = stream; };
+	PeerWebRelay.prototype.getAccessToken = function() { return this.accessToken; };
+	PeerWebRelay.prototype.getProvider    = function() { return this.config.provider; };
+	PeerWebRelay.prototype.setProvider = function(providerUrl) {
+		// Abort if already connected
+		if (this.connectedToRelay) {
+			throw new Error("Can not change provider while connected to the relay. Call stopListening() first.");
+		}
+		// Update config and APIs
+		this.config.provider = providerUrl;
+		this.p2pwServiceAPI.rebase(providerUrl);
+		this.accessTokenAPI.unresolve();
+		this.p2pwUsersAPI.unresolve();
+		if (this.p2pwRelayAPI) {
+			this.p2pwRelayAPI.unresolve();
+		}
 	};
 
 	// Gets an access token from the provider & user using a popup
@@ -2426,6 +2453,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		});
 
 		// Bind events
+		server.on('connecting', this.emit.bind(this, 'connecting'));
 		server.on('connected', this.emit.bind(this, 'connected'));
 		server.on('disconnected', this.onBridgeDisconnected.bind(this));
 		server.on('disconnected', this.emit.bind(this, 'disconnected'));
@@ -2435,6 +2463,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		var domain = this.makeDomain(config.app, config.stream, user, this.providerDomain);
 		this.bridges[domain] = server;
 		local.web.registerLocal(domain, server);
+
 		return server;
 	};
 
@@ -2459,6 +2488,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.p2pwRelayAPI.subscribe({ method: 'subscribe' })
 			.then(function(stream) {
 				self.relayStream = stream;
+				self.connectedToRelay = true;
 				stream.response_.then(function(response) {
 					self.emit('listening');
 					return response;
@@ -2468,6 +2498,18 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			}, function(err) {
 				self.onRelayError({ event: 'error', data: err });
 			});
+	};
+
+	PeerWebRelay.prototype.stopListening = function() {
+		if (this.connectedToRelay) {
+			// Update state
+			this.relayStream.close();
+			this.relayStream = null;
+			this.connectedToRelay = false;
+
+			// Fire event
+			this.emit('relayDown');
+		}
 	};
 
 	PeerWebRelay.prototype.signal = function(dst, msg) {
@@ -2509,6 +2551,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost
 			// Update state
 			this.relayStream = null;
+			this.connectedToRelay = false;
 
 			// Fire event
 			this.emit('relayDown');
@@ -4243,6 +4286,25 @@ Navigator.prototype.follow = function(query) {
 	} while (query[0]);
 
 	return nav;
+};
+
+// Resets the navigator's resolution state, causing it to reissue HEAD requests (relative to any parent navigators)
+Navigator.prototype.unresolve = function() {
+	this.context.resetResolvedState();
+	this.links = null;
+	return this;
+};
+
+// Reassigns the navigator to a new absolute URL
+// - `url`: required string, the URL to rebase the navigator to
+// - resets the resolved state
+Navigator.prototype.rebase = function(url) {
+	this.unresolve();
+	this.context.query = url;
+	this.context.queryIsAbsolute = true;
+	this.context.url  = url;
+	this.context.urld = local.web.parseUri(url);
+	return this;
 };
 
 // Resolves the navigator's URL, reporting failure if a link or resource is unfound

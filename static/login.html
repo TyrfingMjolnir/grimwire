@@ -46,6 +46,7 @@
           <input name="id" type="text" class="form-control" placeholder="Username" autofocus="" name="id">
           <input name="password" type="password" class="form-control" placeholder="Password" name="password">
           <p id="login-error" class="text-danger"></p>
+          <p id="login-status" class="text-info"></p>
           <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
         </form>
         <form class="form-newuser">
@@ -54,6 +55,7 @@
           <input type="text" class="form-control" placeholder="Email (optional)" name="email">
           <input name="password" type="password" class="form-control" placeholder="Password" name="password">
           <p id="newuser-error" class="text-danger"></p>
+          <p id="newuser-status" class="text-info"></p>
           <button class="btn btn-lg btn-success btn-block" type="submit">Start</button>
         </form>
       </div> <!-- /row -->
@@ -70,13 +72,17 @@
 
     $('.form-login').on('submit', function(e) {
       var creds = $('.form-login').serializeArray();
+      $('#login-status').html('Processing...');
+      $('#login-error').html('');
       sessionAPI.post({ id: creds[0].value, password: creds[1].value })
         .then(function(res) {
+          $('#login-status').html('Processing... Authenticated.');
           // Success, reload
           window.location.href = window.location.href;
           window.location.reload();
         })
         .fail(function(res) {
+          $('#login-status').html('');
           if (res.status == 422) {
             $('#login-error').html('Invalid username or password.');
           } else {
@@ -87,11 +93,14 @@
     });
     $('.form-newuser').on('submit', function(e) {
       var creds = $('.form-newuser').serializeArray();
+      $('#newuser-status').html('Processing...');
+      $('#newuser-error').html('');
       usersAPI.post({ id: creds[0].value, email: creds[1].value, password: creds[2].value })
         .then(function(res) {
           // Success, sign in
           sessionAPI.post({ id: creds[0].value, password: creds[2].value })
             .then(function(res) {
+              $('#newuser-status').html('Processing... Account created.');
               // Success, reload
               window.location.href = window.location.href;
               window.location.reload();
@@ -101,6 +110,7 @@
             })
         })
         .fail(function(res) {
+          $('#newuser-status').html('');
           if (res.status == 409) {
             $('#newuser-error').html('That username has been taken.');
           } else if (res.status == 422) {

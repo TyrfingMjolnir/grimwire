@@ -132,7 +132,7 @@ module.exports = function(config, db) {
 		}
 
 		// Generate html
-		var html = require('fs').readFileSync('./static/app-auth.html').toString();
+		var html = getAuthpageHtml();
 		html = html.replace(/\{APP_DOMAIN\}/g, req.params.app);
 		html = html.replace(/\{SESSION_USER\}/g, res.locals.session.user_id);
 
@@ -195,6 +195,12 @@ module.exports = function(config, db) {
 			next();
 		});
 	}
+
+
+	// Helpers
+	// =======
+	var authpageHtml = require('fs').readFileSync('./static/app-auth.html').toString();
+	function getAuthpageHtml() { return authpageHtml; }
 
 	return server;
 };

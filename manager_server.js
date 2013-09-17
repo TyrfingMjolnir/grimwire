@@ -28,7 +28,7 @@ winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExcepti
 // ===============
 server.use(express.bodyParser());
 server.use(express.cookieParser());
-server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE' }));
+server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl, maxAge: 86400 } }));
 server.all('*', middleware.setCorsHeaders);
 server.options('*', function(request, response) {
 	response.writeHead(204);
@@ -54,11 +54,13 @@ server.get('/',
 	middleware.authenticate(db),
 	function(req, res, next) {
 		return res.format({
-			'text/html': function() { res.send(require('fs').readFileSync('./static/dashboard.html').toString()); },
+			'text/html': function() { res.send(getHomepageHtml()); },
 			'application/json': function() { res.json({ msg: 'hello' }); }
 		});
 	}
 );
+var homepageHtml = require('fs').readFileSync('./static/dashboard.html').toString();
+function getHomepageHtml() { return homepageHtml; }
 // Servers
 server.use('/', express.static(__dirname + '/static'));
 var usersServer = require('./servers/users.js')(config, db);

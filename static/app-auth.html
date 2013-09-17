@@ -65,7 +65,9 @@
 
     <script>
     // Get API
-    var accessAPI = local.navigator(['//'+window.location.host, { rel: 'grimwire.com/-access-token', app: '{APP_DOMAIN}' }]);
+    var serviceAPI = local.navigator('//'+window.location.host);
+    var accessAPI = serviceAPI.follow({ rel: 'grimwire.com/-access-token', app: '{APP_DOMAIN}' });
+    var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
     accessAPI.resolve({ nohead: true });
 
     // Create the app session and send it back
@@ -88,6 +90,17 @@
       sendMsgToParent(null);
       window.close()
     }
+
+    // Logout link
+    $('#logout').on('click', function(e) {
+      sessionAPI.delete()
+        .then(function() {
+          window.location.reload();
+        }, function() {
+          console.warn('Failed to delete session');
+        });
+      return false;
+    });
     </script>
 
   </body>
