@@ -1,6 +1,5 @@
 var http = require('http');
 var https = require('https');
-var pg = require('pg');
 var express = require('express');
 var middleware = require('./lib/middleware.js');
 var winston = require('winston');
@@ -13,16 +12,14 @@ var config = {
 	port: process.env.PORT || (process.env.SSL ? 443 : 80),
 	ssl: process.env.SSL || false,
 	livemode: process.env.LIVE || false,
-	is_upstream: process.env.IS_UPSTREAM || false,
-	pgconnstr: process.env.PG || 'postgres://pfraze:password@localhost:5433/grimwire'
+	is_upstream: process.env.IS_UPSTREAM || false
 };
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
 
 // Server State
 // ============
 var server = express();
-var pgClient = new pg.Client(config.pgconnstr);
-var db = require('./lib/queries')(pgClient);
+var db = require('./lib/db')();
 winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.livemode ? true  : false });
 
 // Common Handlers
@@ -94,12 +91,6 @@ server.get('/status', function(request, response) {
 
 // Setup
 // =====
-pgClient.connect(function(err) {
-	if (err) {
-		winston.error("Failed to connect to postgres", err);
-		process.exit();
-	}
-});
 if (config.ssl) {
 	var sslOpts = {
 		key: require('fs').readFileSync('ssl-key.pem'),

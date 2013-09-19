@@ -87,13 +87,13 @@ module.exports = function(config, db) {
 			}
 
 			// Load full list from DB
-			db.getUsers(function(err, dbres) {
+			db.getUsers(function(err, users) {
 				if (err) {
 					winston.error('Failed to load users from DB', { error: err, inputs: [], request: util.formatReqForLog(req) });
 					return res.send(500);
 				}
 
-				res.locals.users = dbres.rows;
+				res.locals.users = users;
 				next();
 			});
 		},
@@ -139,6 +139,10 @@ module.exports = function(config, db) {
 			res.writeHead(422, 'bad ent - `id` and `password` must be strings');
 			return res.end();
 		}
+		if (!/^[-a-z0-9_]+$/i.test(body.id)) {
+			res.writeHead(422, 'bad ent - `id` must pass /^[-a-z0-9_]+$/i');
+			return res.end();
+		}
 		if (body.email && typeof body.email != 'string') {
 			res.writeHead(422, 'bad ent - (when included) `email` must be a string');
 			return res.end();
@@ -154,9 +158,9 @@ module.exports = function(config, db) {
 				body.password = hash;
 
 				// Try to insert
-				db.createUser(body, function(err, dbres) {
+				db.createUser(body, function(err) {
 					if (err) {
-						if (err.code == 23505) { // conflict
+						if (err.conflict) {
 							return res.send(409);
 						} else {
 							winston.error('Failed to add user to database', { error: err, inputs: [body], request: util.formatReqForLog(req) });
@@ -285,7 +289,7 @@ module.exports = function(config, db) {
 		}
 
 		// Update DB
-		db.updateUser(req.params.userId, updates, function(err, dbres) {
+		db.updateUser(req.params.userId, updates, function(err) {
 			if (err) {
 				winston.error('Failed to update user in DB', { error: err, inputs: [req.params.userId], request: util.formatReqForLog(req) });
 				return res.send(500);
@@ -362,14 +366,14 @@ module.exports = function(config, db) {
 
 	function addUser(session, cb) {
 		// Load user record
-		db.getUser(session.user_id, function(err, dbres) {
-			if (err || !dbres) {
+		db.getUser(session.user_id, function(err, user) {
+			if (err || !user) {
 				winston.error('Failed to load user from DB', { error: err, inputs: [session.user_id], session: session });
-				return cb(err);
+				return cb(err || true);
 			}
 
 			// Add to memory
-			_online_users[session.user_id] = createOnlineUser(dbres.rows[0], session);
+			_online_users[session.user_id] = createOnlineUser(user, session);
 			cb(null, _online_users[session.user_id]);
 		});
 	}

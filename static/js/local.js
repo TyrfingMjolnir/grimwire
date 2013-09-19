@@ -1991,6 +1991,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		}
 
 		// Internal state
+		this.isConnecting = true;
 		this.isOfferExchanged = false;
 		this.isConnected = false;
 		this.candidateQueue = []; // cant add candidates till we get the offer
@@ -2029,11 +2030,12 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	};
 
 	RTCPeerServer.prototype.terminate = function(opts) {
-		if (this.isConnected) {
-			this.isConnected = false;
+		if (this.isConnecting || this.isConnected) {
 			if (!(opts && opts.noSignal)) {
 				this.signal({ type: 'disconnect' });
 			}
+			this.isConnecting = false;
+			this.isConnected = false;
 			var config = this.config;
 			this.emit('disconnected', { user: config.peer.user, app: config.peer.app, stream: config.peer.stream, domain: config.domain, server: this });
 
@@ -2076,6 +2078,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		this.debugLog('HTTPL CHANNEL OPEN', e);
 
 		// Update state
+		this.isConnecting = false;
 		this.isConnected = true;
 		this.flushBufferedMessages();
 
@@ -2251,6 +2254,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// Helper called whenever we have a remote session description
 	// (candidates cant be added before then, so they're queued in case they come first)
 	function handleOfferExchanged() {
+		console.log(this.isConnecting, this.isConnected)
 		var self = this;
 		this.isOfferExchanged = true;
 		this.candidateQueue.forEach(function(candidate) {
@@ -2305,7 +2309,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (!config.provider) throw new Error("PeerWebRelay requires `config.provider`");
 		if (!config.serverFn) throw new Error("PeerWebRelay requires `config.serverFn`");
 		if (!config.app) config.app = window.location.host;
-		if (!config.stream) config.stream = randomStreamId();
+		if (typeof config.stream == 'undefined') config.stream = randomStreamId();
 		this.config = config;
 		local.util.mixinEventEmitter(this);
 
@@ -2425,49 +2429,14 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 					this.emit('accessDenied');
 				}
 			}).bind(this);
-			window.addEventListener('message', this.messageFromAuthPopupHandler);
 		}
+		window.addEventListener('message', this.messageFromAuthPopupHandler);
 
 		// Resolve the URL for getting access tokens
 		this.accessTokenAPI.resolve({ nohead: true }).then(function(url) {
 			// Open interface in a popup
 			window.open(url);
 		});
-	};
-
-	// Spawns an RTCPeerServer and starts the connection process with the given peer
-	// - `user`: required String, the id of the target user
-	// - `config.app`: optional String, the app of the peer to connect to (defaults to window.location.host)
-	// - `config.stream`: optional number, the stream id of the peer to connect to (defaults to pseudo-random)
-	// - `config.initiate`: optional Boolean, should the server initiate the connection?
-	//   - defaults to true
-	//   - should only be false if the connection was already initiated by the opposite end
-	PeerWebRelay.prototype.connect = function(user, config) {
-		if (!config) config = {};
-		if (!config.app) config.app = window.location.host;
-		if (typeof config.initiate == 'undefined') config.initiate = true;
-
-		// Spawn new server
-		var server = new local.web.RTCPeerServer({
-			peer: { user: user, app: config.app, stream: config.stream },
-			initiate: config.initiate,
-			relay: this,
-			serverFn: this.config.serverFn
-		});
-
-		// Bind events
-		server.on('connecting', this.emit.bind(this, 'connecting'));
-		server.on('connected', this.emit.bind(this, 'connected'));
-		server.on('disconnected', this.onBridgeDisconnected.bind(this));
-		server.on('disconnected', this.emit.bind(this, 'disconnected'));
-		server.on('error', this.emit.bind(this, 'error'));
-
-		// Add to hostmap
-		var domain = this.makeDomain(config.app, config.stream, user, this.providerDomain);
-		this.bridges[domain] = server;
-		local.web.registerLocal(domain, server);
-
-		return server;
 	};
 
 	// Fetches users from p2pw service
@@ -2482,6 +2451,8 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		return api.get({ accept: 'application/json' });
 	};
 
+	// Subscribes to the event relay and begins handling signals
+	// - enables peers to connect
 	PeerWebRelay.prototype.startListening = function() {
 		var self = this;
 		// Update "src" object, for use in signal messages
@@ -2489,30 +2460,72 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Connect to the relay stream
 		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 		this.p2pwRelayAPI.subscribe({ method: 'subscribe' })
-			.then(function(stream) {
-				self.relayStream = stream;
-				self.connectedToRelay = true;
-				stream.response_.then(function(response) {
-					self.emit('listening');
-					return response;
-				});
-				stream.on('signal', self.onSignal.bind(self));
-				stream.on('error', self.onRelayError.bind(self));
-			}, function(err) {
-				self.onRelayError({ event: 'error', data: err });
-			});
+			.then(
+				function(stream) {
+					self.relayStream = stream;
+					self.connectedToRelay = true;
+					stream.response_.then(function(response) {
+						self.emit('listening');
+						return response;
+					});
+					stream.on('signal', self.onSignal.bind(self));
+					stream.on('error', self.onRelayError.bind(self));
+					stream.on('close', self.onRelayClose.bind(self));
+				},
+				function(err) {
+					self.onRelayError({ event: 'error', data: err });
+				}
+			);
 	};
 
+	// Disconnects from the relay
+	// - peers will no longer be able to connect
 	PeerWebRelay.prototype.stopListening = function() {
 		if (this.connectedToRelay) {
 			// Update state
+			this.connectedToRelay = false;
 			this.relayStream.close();
 			this.relayStream = null;
-			this.connectedToRelay = false;
-
-			// Fire event
-			this.emit('relayDown');
 		}
+	};
+
+	// Spawns an RTCPeerServer and starts the connection process with the given peer
+	// - `peerUrl`: required String, the domain/url of the target peer
+	// - `config.initiate`: optional Boolean, should the server initiate the connection?
+	//   - defaults to true
+	//   - should only be false if the connection was already initiated by the opposite end
+	PeerWebRelay.prototype.connect = function(peerUrl, config) {
+		if (!config) config = {};
+		if (typeof config.initiate == 'undefined') config.initiate = true;
+
+		// Parse the url
+		var peerUrld = local.web.parseUri(peerUrl);
+		var hostParts = peerUrld.host.split('!');
+		var provider = hostParts[0], app = hostParts[1];
+		if (!peerUrld.user || !provider || !app || !peerUrld.port) {
+			throw new Error("Invalid peer url given to connect(): "+peerUrl);
+		}
+
+		// Spawn new server
+		var server = new local.web.RTCPeerServer({
+			peer: { user: peerUrld.user, app: app, stream: peerUrld.port },
+			initiate: config.initiate,
+			relay: this,
+			serverFn: this.config.serverFn
+		});
+
+		// Bind events
+		server.on('connecting', this.emit.bind(this, 'connecting'));
+		server.on('connected', this.emit.bind(this, 'connected'));
+		server.on('disconnected', this.onBridgeDisconnected.bind(this));
+		server.on('disconnected', this.emit.bind(this, 'disconnected'));
+		server.on('error', this.emit.bind(this, 'error'));
+
+		// Add to hostmap
+		this.bridges[peerUrld.authority] = server;
+		local.web.registerLocal(peerUrld.authority, server);
+
+		return server;
 	};
 
 	PeerWebRelay.prototype.signal = function(dst, msg) {
@@ -2530,7 +2543,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 		// Find bridge that represents this origin
 		var src = e.data.src;
-		var domain = this.makeDomain(src.app, src.stream, src.user, this.providerDomain);
+		var domain = this.makeDomain(src.user, src.app, src.stream);
 		var bridgeServer = this.bridges[domain];
 
 		// Does bridge exist?
@@ -2538,29 +2551,32 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			// Let bridge handle it
 			bridgeServer.onSignal(e.data.msg);
 		} else {
-			// Create a server to handle the signal
-			bridgeServer = this.connect(src.user, { app: src.app, stream: src.stream, initiate: false });
-			bridgeServer.onSignal(e.data.msg);
+			if (e.data.msg.type == 'offer') {
+				// Create a server to handle the signal
+				bridgeServer = this.connect(domain, { initiate: false });
+				bridgeServer.onSignal(e.data.msg);
+			}
 		}
 	};
 
 	PeerWebRelay.prototype.onRelayError = function(e) {
 		if (e.data && e.data.status == 423) { // locked
-			// Fire event
-			this.emit('streamTaken');
-		} else if (e.data && e.data.status == 401) { // unauthorized
-			// Fire event
-			this.emit('accessInvalid');
-		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost
 			// Update state
 			this.relayStream = null;
 			this.connectedToRelay = false;
 
 			// Fire event
-			this.emit('relayDown');
+			this.emit('streamTaken');
+		} else if (e.data && e.data.status == 401) { // unauthorized
+			// Fire event
+			this.emit('accessInvalid');
+		} else if (e.data && (e.data.status == 404 || e.data.status >= 500)) { // connection lost
+			// Update state
+			this.relayStream = null;
+			this.connectedToRelay = false;
 
-			var self = this;
 			// Attempt to reconnect in 2 seconds
+			var self = this;
 			setTimeout(function() {
 				self.startListening();
 				// Note - if this fails, an error will be rethrown and take us back here
@@ -2568,6 +2584,21 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		} else {
 			// Fire event
 			this.emit('error', e);
+		}
+	};
+
+	PeerWebRelay.prototype.onRelayClose = function() {
+		// Update state
+		var wasConnected = this.connectedToRelay;
+		this.connectedToRelay = false;
+
+		// Fire event
+		this.emit('notlistening');
+
+		// Did we expect this close event?
+		if (wasConnected) {
+			// No, we should reconnect
+			this.startListening();
 		}
 	};
 
@@ -2585,8 +2616,8 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (this.connectedToRelay && bridgeDomains.length !== 0) {
 			// Collect connected peer destination info
 			var dst = [];
-			for (var i=0; i < bridgeDomains.length; i++) {
-				dst.push(this.bridges[bridgeDomains[i]].config.peer);
+			for (var domain in this.bridges) {
+				dst.push(this.bridges[domain].config.peer);
 			}
 
 			// Send a synchronous disconnect signal to all connected peers
@@ -2598,8 +2629,8 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		}
 	};
 
-	PeerWebRelay.prototype.makeDomain = function(app, stream, user, provider) {
-		return app+(typeof stream != 'undefined'?stream:'')+'_.'+user+'_.'+provider;
+	PeerWebRelay.prototype.makeDomain = function(user, app, stream) {
+		return user+'@'+this.providerDomain+'!'+app+':'+(stream||'0');
 	};
 
 })();// schemes
@@ -2789,7 +2820,8 @@ local.web.schemes.register('httpl', function(request, response) {
 	response.suspendEvents();
 
 	// find the local server
-	var server = local.web.getLocal(request.urld.host);
+	// console.log(request.urld, Object.keys(local.web.getLocalRegistry()))
+	var server = local.web.getLocal(request.urld.authority);
 	if (!server)
 		server = localNotFoundServer;
 
@@ -3086,7 +3118,7 @@ EventStream.prototype.connect = function(response_) {
 				buffer = payload;
 			});
 			response.on('end', function() { self.close(); });
-			response.on('close', function() { if (self.isConnOpen) { self.isConnOpen = false; self.reconnect(); } });
+			response.on('close', function() { if (self.isConnOpen) { self.reconnect(); } });
 			// ^ a close event should be predicated by an end(), giving us time to close ourselves
 			//   if we get a close from the other side without an end message, we assume connection fault
 			return response;
@@ -3100,9 +3132,13 @@ EventStream.prototype.connect = function(response_) {
 	);
 };
 EventStream.prototype.reconnect = function() {
-	if (this.isConnOpen)
-		this.close();
+	// Shut down anything old
+	if (this.isConnOpen) {
+		this.isConnOpen = false;
+		this.request.close();
+	}
 
+	// Re-establish the connection
 	this.request = new local.web.Request(this.request);
 	if (!this.request.headers) this.request.headers = {};
 	if (this.lastEventId) this.request.headers['last-event-id'] = this.lastEventId;
@@ -3110,10 +3146,11 @@ EventStream.prototype.reconnect = function() {
 	this.request.end();
 };
 EventStream.prototype.close = function() {
-	this.isConnOpen = false;
-	this.request.close();
-	this.emit('close');
-	this.removeAllListeners();
+	if (this.isConnOpen) {
+		this.isConnOpen = false;
+		this.request.close();
+		this.emit('close');
+	}
 };
 function emitError(e) {
 	this.emit('message', e);
@@ -4267,7 +4304,7 @@ Navigator.prototype.dispatch = function(req) {
 Navigator.prototype.subscribe = function(req) {
 	var self = this;
 	if (!req) req = {};
-	return this.resolve().succeed(function(url) {
+	return this.resolve({ nohead: true }).succeed(function(url) {
 		req.url = url;
 
 		if (self.requestDefaults)

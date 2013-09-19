@@ -1,3 +1,0 @@
-DROP TYPE basicStatusEnum;
-DROP TABLE users CASCADE;
-DROP TABLE sessions CASCADE;

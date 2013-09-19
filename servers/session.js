@@ -58,13 +58,13 @@ module.exports = function(config, db) {
 			}
 
 			// Fetch the user
-			db.getUser(req.body.id, function(err, dbres) {
-				if (err || !dbres.rows[0]) {
+			db.getUser(req.body.id, function(err, user) {
+				if (err || !user) {
 					res.writeHead(422, 'bad entity', {'Content-Type': 'application/json'});
 					res.end(JSON.stringify({errors:['Invalid username or password.']}));
 					return;
 				}
-				res.locals.user = dbres.rows[0];
+				res.locals.user = user;
 				next();
 			});
 		},
@@ -81,15 +81,15 @@ module.exports = function(config, db) {
 		},
 		function (req, res, next) {
 			// Create the session
-			db.createSession(req.body.id, null, function(err, dbres) {
-				if (err || !dbres.rows[0]) {
+			db.createSession(req.body.id, null, function(err, sessionId) {
+				if (err) {
 					winston.error('Failed to create session info in DB', { error: err, inputs: [req.body.id], request: util.formatReqForLog(req) });
 					res.send(500);
 					return;
 				}
 
 				// Set new session cookie
-				req.session = dbres.rows[0].id;
+				req.session = sessionId;
 				res.send(204);
 			});
 		}
@@ -144,14 +144,14 @@ module.exports = function(config, db) {
 	// -------------------
 	server.post('/:app', function(req, res) {
 		// Generate access token
-		db.createSession(res.locals.session.user_id, req.params.app, function(err, dbres) {
-			if (err || !dbres.rows[0]) {
+		db.createSession(res.locals.session.user_id, req.params.app, function(err, sessionId) {
+			if (err) {
 				winston.error('Failed to create app session in DB', { error: err, inputs: [res.locals.session.user_id, req.params.app], request: util.formatReqForLog(req) });
 				return res.send(500);
 			}
 
 			// Respond
-			res.send({ token: res.locals.session.user_id + ':' + dbres.rows[0].id });
+			res.send({ token: res.locals.session.user_id + ':' + sessionId });
 		});
 	});
 
@@ -185,13 +185,8 @@ module.exports = function(config, db) {
 	// ==========
 	function getSession(req, res, next) {
 		// Load session from DB
-		db.getSession(req.session, function(err, dbres) {
-			if (err) {
-				winston.error('Failed to get session info from DB', { error: err, inputs: [req.session], request: util.formatReqForLog(req) });
-				res.send(500);
-				return;
-			}
-			res.locals.session = dbres ? dbres.rows[0] : null;
+		db.getSession(req.session, function(err, session) {
+			res.locals.session = session;
 			next();
 		});
 	}
