@@ -25,8 +25,7 @@ function setSession(res) {
 	$('#userid').html(_session.user_id+' <b class="caret"></b>');
 	renderAll();
 }
-function refreshPage(res) {
-	window.location.href = window.location.href;
+function refreshPage() {
 	window.location.reload();
 }
 
@@ -43,10 +42,19 @@ function loadActiveUsers() {
 
 			// Udpate UI
 			renderAll();
-		});
+		}, handleFailedRequest);
 	return false;
 }
 loadActiveUsers();
+
+// Request error handling
+function handleFailedRequest(res) {
+	if (res.status == 401) {
+		// session lost
+		alert('Your session has expired, redirecting you to the login page.');
+		refreshPage();
+	}
+}
 
 
 // UI
