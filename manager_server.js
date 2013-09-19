@@ -65,9 +65,9 @@ var homepageHtml = require('fs').readFileSync('./static/dashboard.html').toStrin
 function getHomepageHtml() { return homepageHtml; }
 // Servers
 server.use('/', express.static(__dirname + '/static'));
-var usersServer = require('./servers/users.js')(config, db);
+var usersServer = require('./lib/servers/users.js')(config, db);
 server.use('/u',       usersServer);
-server.use('/session', require('./servers/session.js')(config, db));
+server.use('/session', require('./lib/servers/session.js')(config, db));
 
 
 // Admin
