@@ -8,7 +8,7 @@ var winston = require('winston');
 // ======
 var os = require("os");
 var config = {
-	hostname: process.env.HOST || os.hostname(),
+	hostname: process.env.HOSTNAME || os.hostname(),
 	port: process.env.PORT || (process.env.SSL ? 443 : 80),
 	ssl: process.env.SSL || false,
 	livemode: process.env.LIVE || false,
