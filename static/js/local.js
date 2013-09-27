@@ -50,7 +50,7 @@
 			var newValue;
 			try { newValue = fn(parentPromise.value); }
 			catch (e) {
-				if (e instanceof Error) {
+				if (local.logAllExceptions || e instanceof Error) {
 					if (console.error)
 						console.error(e, e.stack);
 					else console.log("Promise exception thrown", e, e.stack);
@@ -763,8 +763,6 @@ local.util.deepClone = function(obj) {
 
 if (typeof this.local == 'undefined')
 	this.local = {};
-if (typeof this.local.web == 'undefined')
-	this.local.web = {};
 
 (function() {
 // Local status codes
@@ -772,58 +770,31 @@ if (typeof this.local.web == 'undefined')
 // used to specify client operation states
 
 // link query failed to match
-local.web.LINK_NOT_FOUND = 1;// Helpers
+local.LINK_NOT_FOUND = 1;// Helpers
 // =======
-
-// EXPORTED
-// breaks a link header into a javascript object
-var linkHeaderRE1 = /<(.*?)>(?:;[\s]*([^,]*))/g;
-var linkHeaderRE2 = /([\-a-z0-9\.]+)=?(?:(?:"([^"]+)")|([^;\s]+))?/g;
-local.web.parseLinkHeader = function parseLinkHeader(headerStr) {
-	if (typeof headerStr !== 'string') {
-		return headerStr;
-	}
-	var links = [], linkParse1, linkParse2, link;
-	// '</foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah"'
-	// Extract individual links
-	while ((linkParse1 = linkHeaderRE1.exec(headerStr))) { // Splits into href [1] and params [2]
-		link = { href: linkParse1[1] };
-		// 'rel="baz"; id="blah"'
-		// Extract individual params
-		while ((linkParse2 = linkHeaderRE2.exec(linkParse1[2]))) { // Splits into key [1] and value [2]/[3]
-			link[linkParse2[1]] = linkParse2[2] || linkParse2[3] || true; // if no parameter value is given, just set to true
-		}
-		links.push(link);
-	}
-	return links;
-};
 
 // EXPORTED
 // takes parsed a link header and a query object, produces an array of matching links
 // - `links`: [object]/object, either the parsed array of links or the request/response object
-local.web.queryLinks = function queryLinks(links, query) {
+local.queryLinks = function queryLinks(links, query) {
 	if (!links) return [];
-	if (links.headers) links = links.headers.link; // actually a request or response object
+	if (links.headers) links = links.parsedHeaders.link; // actually a request or response object
 	if (!Array.isArray(links)) return [];
-	return links.filter(function(link) { return local.web.queryLink(link, query); });
+	return links.filter(function(link) { return local.queryLink(link, query); });
 };
 
 // EXPORTED
-// gives the first result from queryLinks
-local.web.queryLinks1 = function queryLinks1(links, query) {
-	var matches = local.web.queryLinks(links, query);
-	return matches[0];
-};
-
-// EXPORTED
-// takes parsed link and a query object, produces a boolean `isMatch`
+// takes parsed link and a query object, produces boolean `isMatch`
 // - `query`: object, keys are attributes to test, values are values to test against (strings)
 //            eg { rel: 'foo bar', id: 'x' }
 // - Query rules
+//   - if a query attribute is present on the link, but does not match, returns false
+//   - if a query attribute is not present on the link, and is not present in the href as a URI Template token, returns false
+//   - otherwise, returns true
 //   - rel: can take multiple values, space-separated, which are ANDed logically
 //   - rel: will ignore the preceding scheme and trailing slash on URI values
 //   - rel: items preceded by an exclamation-point will invert (logical NOT)
-local.web.queryLink = function queryLink(link, query) {
+local.queryLink = function queryLink(link, query) {
 	for (var attr in query) {
 		if (attr == 'rel') {
 			var terms = query.rel.split(/\s+/);
@@ -838,7 +809,11 @@ local.web.queryLink = function queryLink(link, query) {
 			}
 		}
 		else {
-			if (link[attr] != query[attr])
+			if (typeof link[attr] == 'undefined') {
+				if (RegExp('\\{[^\\}]*'+attr+'[^\\{]*\\}','i').test(link.href) === false)
+					return false;
+			}
+			else if (link[attr] != query[attr])
 				return false;
 		}
 	}
@@ -846,47 +821,7 @@ local.web.queryLink = function queryLink(link, query) {
 };
 
 // <https://github.com/federomero/negotiator>
-// for to ^ for the content negotation helpers below
-
-// EXPORTED
-// breaks an accept header into a javascript object
-// - `accept`: string, the accept header
-local.web.parseAcceptHeader = function parseAcceptHeader(accept) {
-	return accept.split(',')
-		.map(function(e) { return parseMediaType(e.trim()); })
-		.filter(function(e) { return e && e.q > 0; });
-};
-
-// INTERNAL
-function parseMediaType(s) {
-	var match = s.match(/\s*(\S+)\/([^;\s]+)\s*(?:;(.*))?/);
-	if (!match) return null;
-
-	var type = match[1];
-	var subtype = match[2];
-	var full = "" + type + "/" + subtype;
-	var params = {}, q = 1;
-
-	if (match[3]) {
-		params = match[3].split(';')
-			.map(function(s) { return s.trim().split('='); })
-			.reduce(function (set, p) { set[p[0]] = p[1]; return set; }, params);
-
-		if (params.q !== null) {
-			q = parseFloat(params.q);
-			delete params.q;
-		}
-	}
-
-	return {
-		type: type,
-		subtype: subtype,
-		params: params,
-		q: q,
-		full: full
-	};
-}
-
+// thanks to ^ for the content negotation helpers below
 // INTERNAL
 function getMediaTypePriority(type, accepted) {
 	var matches = accepted
@@ -894,12 +829,10 @@ function getMediaTypePriority(type, accepted) {
 		.sort(function (a, b) { return a.q > b.q ? -1 : 1; }); // revsort
 	return matches[0] ? matches[0].q : 0;
 }
-
 // INTERNAL
 function specifies(spec, type) {
 	return spec === '*' || spec === type;
 }
-
 // INTERNAL
 function specify(type, spec) {
 	var p = parseMediaType(type);
@@ -921,11 +854,11 @@ function specify(type, spec) {
 // returns an array of preferred media types ordered by priority from a list of available media types
 // - `accept`: string/object, given accept header or request object
 // - `provided`: optional [string], allowed media types
-local.web.preferredTypes = function preferredTypes(accept, provided) {
+local.preferredTypes = function preferredTypes(accept, provided) {
 	if (typeof accept == 'object') {
-		accept = accept.headers.accept;
+		accept = accept.parsedHeaders.accept;
 	}
-	accept = local.web.parseAcceptHeader(accept || '');
+	accept = local.httpHeaders.deserialize('accept', accept || '');
 	if (provided) {
 		if (!Array.isArray(provided)) {
 			provided = [provided];
@@ -943,15 +876,15 @@ local.web.preferredTypes = function preferredTypes(accept, provided) {
 // returns the top preferred media type from a list of available media types
 // - `accept`: string/object, given accept header or request object
 // - `provided`: optional [string], allowed media types
-local.web.preferredType = function preferredType(accept, provided) {
-	return local.web.preferredTypes(accept, provided)[0];
+local.preferredType = function preferredType(accept, provided) {
+	return local.preferredTypes(accept, provided)[0];
 };
 // </https://github.com/federomero/negotiator>
 
 // EXPORTED
 // correctly joins together all url segments given in the arguments
 // eg joinUrl('/foo/', '/bar', '/baz/') -> '/foo/bar/baz/'
-local.web.joinUrl = function joinUrl() {
+local.joinUrl = function joinUrl() {
 	var parts = Array.prototype.map.call(arguments, function(arg, i) {
 		arg = ''+arg;
 		var lo = 0, hi = arg.length;
@@ -967,25 +900,25 @@ local.web.joinUrl = function joinUrl() {
 // tests to see if a URL is absolute
 // - "absolute" means that the URL can reach something without additional context
 // - eg http://foo.com, //foo.com, httpl://bar.app, rel:http://foo.com, rel:foo.com
-var isAbsUriRE = /^(http(s|l)?:)|(rel:[^|])|(\/\/)/;
-local.web.isAbsUri = function(v) {
+var isAbsUriRE = /^((http(s|l)?:)?\/\/)|((nav:)?\|\|)/;
+local.isAbsUri = function(v) {
 	return isAbsUriRE.test(v);
 };
 
 // EXPORTED
-// tests to see if a URL is using the rel scheme
-var isRelSchemeUriRE = /\|\||rel:/;
-local.web.isRelSchemeUri = function(v) {
-	return isRelSchemeUriRE.test(v);
+// tests to see if a URL is using the nav scheme
+var isNavSchemeUriRE = /^(nav:)?\|?\|/i;
+local.isNavSchemeUri = function(v) {
+	return isNavSchemeUriRE.test(v);
 };
 
 
 // EXPORTED
 // takes a context url and a relative path and forms a new valid url
 // eg joinRelPath('http://grimwire.com/foo/bar', '../fuz/bar') -> 'http://grimwire.com/foo/fuz/bar'
-local.web.joinRelPath = function(urld, relpath) {
+local.joinRelPath = function(urld, relpath) {
 	if (typeof urld == 'string') {
-		urld = local.web.parseUri(urld);
+		urld = local.parseUri(urld);
 	}
 	var protocol = (urld.protocol) ? urld.protocol + '://' : false;
 	if (!protocol) {
@@ -1014,15 +947,15 @@ local.web.joinRelPath = function(urld, relpath) {
 		else
 			hostpathParts.push(relpathParts[i]);
 	}
-	return local.web.joinUrl(protocol + urld.authority, hostpathParts.join('/'));
+	return local.joinUrl(protocol + urld.authority, hostpathParts.join('/'));
 };
 
 // EXPORTED
 // parseUri 1.2.2, (c) Steven Levithan <stevenlevithan.com>, MIT License
-local.web.parseUri = function parseUri(str) {
+local.parseUri = function parseUri(str) {
 	if (typeof str === 'object') {
 		if (str.url) { str = str.url; }
-		else if (str.host || str.path) { str = local.web.joinUrl(req.host, req.path); }
+		else if (str.host || str.path) { str = local.joinUrl(req.host, req.path); }
 	}
 
 	// handle data-uris specially - performance characteristics are much different
@@ -1030,7 +963,7 @@ local.web.parseUri = function parseUri(str) {
 		return { protocol: 'data', source: str };
 	}
 
-	var	o   = local.web.parseUri.options,
+	var	o   = local.parseUri.options,
 		m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str),
 		uri = {},
 		i   = 14;
@@ -1045,7 +978,7 @@ local.web.parseUri = function parseUri(str) {
 	return uri;
 };
 
-local.web.parseUri.options = {
+local.parseUri.options = {
 	strictMode: false,
 	key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
 	q:   {
@@ -1059,23 +992,21 @@ local.web.parseUri.options = {
 };
 
 // EXPORTED
-// Converts a 'rel:' URI into an array of http/s/l URIs and link query objects
-local.web.parseRelUri = function(str) {
+// Converts a 'nav:' URI into an array of http/s/l URIs and link query objects
+local.parseNavUri = function(str) {
 	if (!str) return [];
 
-	// Split into navigations
-	var parts = str.split('||');
-
-	// First entry - starting URL
-	// eg rel:http://foo.com||...
-	if (parts[0]) {
-		// Drop the scheme
-		if (parts[0].indexOf('rel:') === 0)
-			parts[0] = parts[0].slice(4);
+	// Check (and strip out) scheme
+	var schemeIndex = str.indexOf('||');
+	if (schemeIndex !== -1) {
+		str = str.slice(schemeIndex+2);
 	}
 
-	// Remaining entries - queries
-	// eg ...||rel=id,attr1=value1,attr2=value2||...
+	// Split into navigations
+	var parts = str.split('|');
+
+	// Parse queries
+	// eg ...|rel=id,attr1=value1,attr2=value2|...
 	for (var i=1; i < parts.length; i++) {
 		var query = {};
 		var attrs = parts[i].split(',');
@@ -1091,12 +1022,39 @@ local.web.parseRelUri = function(str) {
 		parts[i] = query;
 	}
 
-	// Drop first entry if empty
+	// Drop first entry if empty (a relative nav uri)
 	if (!parts[0])
 		parts.shift();
 
 	return parts;
 };
+
+// EXPORTED
+// breaks a peer domain into its constituent parts
+// - returns { user:, relay:, provider:, app:, stream: }
+//   (relay == provider -- they are synonmyms)
+var peerDomainRE = /^(.+)@(.+)!(.+):([\d]+)$/i;
+local.parsePeerDomain = function parsePeerDomain(domain) {
+	var match = peerDomainRE.exec(domain);
+	if (match) {
+		return {
+			user: match[1],
+			relay: match[2],
+			provider: match[2],
+			app: match[3],
+			stream: match[4]
+		};
+	}
+	return null;
+};
+
+// EXPORTED
+// constructs a peer domain from its constituent parts
+// - returns string
+local.makePeerDomain = function makePeerDomain(user, relay, app, stream) {
+	return user+'@'+relay+'!'+app+':'+(stream||'0');
+};
+
 
 // sends the given response back verbatim
 // - if `writeHead` has been previously called, it will not change
@@ -1105,7 +1063,7 @@ local.web.parseRelUri = function(str) {
 //   - `source`: the response to pull data from
 //   - `headersCb`: (optional) takes `(headers)` from source and responds updated headers for target
 //   - `bodyCb`: (optional) takes `(body)` from source and responds updated body for target
-local.web.pipe = function(target, source, headersCB, bodyCb) {
+local.pipe = function(target, source, headersCB, bodyCb) {
 	headersCB = headersCB || function(v) { return v; };
 	bodyCb = bodyCb || function(v) { return v; };
 	return local.promise(source)
@@ -1147,11 +1105,11 @@ var contentTypes = {
 	register    : contentTypes__register
 };
 var contentTypes__registry = {};
-local.web.contentTypes = contentTypes;
+local.contentTypes = contentTypes;
 
 // EXPORTED
 // serializes an object into a string
-function contentTypes__serialize(obj, type) {
+function contentTypes__serialize(type, obj) {
 	if (!obj || typeof(obj) != 'object' || !type) {
 		return obj;
 	}
@@ -1164,7 +1122,7 @@ function contentTypes__serialize(obj, type) {
 
 // EXPORTED
 // deserializes a string into an object
-function contentTypes__deserialize(str, type) {
+function contentTypes__deserialize(type, str) {
 	if (!str || typeof(str) != 'string' || !type) {
 		return str;
 	}
@@ -1218,7 +1176,7 @@ function contentTypes__find(type, fn) {
 
 // Default Types
 // =============
-local.web.contentTypes.register('application/json',
+local.contentTypes.register('application/json',
 	function (obj) {
 		try {
 			return JSON.stringify(obj);
@@ -1234,7 +1192,7 @@ local.web.contentTypes.register('application/json',
 		}
 	}
 );
-local.web.contentTypes.register('application/x-www-form-urlencoded',
+local.contentTypes.register('application/x-www-form-urlencoded',
 	function (obj) {
 		var enc = encodeURIComponent;
 		var str = [];
@@ -1286,7 +1244,7 @@ local.web.contentTypes.register('application/x-www-form-urlencoded',
 		return result;
 	}
 );
-local.web.contentTypes.register('text/event-stream',
+local.contentTypes.register('text/event-stream',
 	function (obj) {
 		if (typeof obj.data != 'undefined')
 			return "event: "+obj.event+"\r\ndata: "+JSON.stringify(obj.data)+"\r\n\r\n";
@@ -1309,6 +1267,156 @@ local.web.contentTypes.register('text/event-stream',
 function splitEventstreamKV(kv) {
 	var i = kv.indexOf(':');
 	return [kv.slice(0, i).trim(), kv.slice(i+1).trim()];
+}// headers
+// =======
+// EXPORTED
+// provides serializers and deserializers for HTTP headers
+var httpHeaders = {
+	serialize   : httpheaders__serialize,
+	deserialize : httpheaders__deserialize,
+	register    : httpheaders__register
+};
+var httpheaders__registry = {};
+local.httpHeaders = httpHeaders;
+
+// EXPORTED
+// serializes an object into a string
+function httpheaders__serialize(header, obj) {
+	if (!obj || typeof(obj) != 'object' || !header) {
+		return obj;
+	}
+	var fn = httpheaders__find(header, 'serializer');
+	if (!fn) {
+		return obj;
+	}
+	return fn(obj);
+}
+
+// EXPORTED
+// deserializes a string into an object
+function httpheaders__deserialize(header, str) {
+	if (!str || typeof(str) != 'string' || !header) {
+		return str;
+	}
+	var fn = httpheaders__find(header, 'deserializer');
+	if (!fn) {
+		return str;
+	}
+	try {
+		return fn(str);
+	} catch (e) {
+		console.warn('Failed to deserialize content', header, str);
+		return str;
+	}
+}
+
+// EXPORTED
+// adds a header to the registry
+function httpheaders__register(header, serializer, deserializer) {
+	httpheaders__registry[header.toLowerCase()] = {
+		serializer   : serializer,
+		deserializer : deserializer
+	};
+}
+
+// INTERNAL
+// finds the header's de/serialization functions
+function httpheaders__find(header, fn) {
+	var headerFns = httpheaders__registry[header.toLowerCase()];
+	if (headerFns) {
+		return headerFns[fn];
+	}
+	return null;
+}
+
+// Default Headers
+// ===============
+
+var linkHeaderRE1 = /<(.*?)>(?:;[\s]*([^,]*))/g;
+var linkHeaderRE2 = /([\-a-z0-9\.]+)=?(?:(?:"([^"]+)")|([^;\s]+))?/g;
+local.httpHeaders.register('link',
+	function (obj) {
+		var links = [];
+		obj.forEach(function(link) {
+			var linkParts = ['<'+link.href+'>'];
+			for (var attr in link) {
+				if (attr == 'href') {
+					continue;
+				}
+				if (typeof link[attr] == 'boolean') {
+					linkParts.push(attr);
+				} else {
+					linkParts.push(attr+'="'+link[attr]+'"');
+				}
+			}
+			links.push(linkParts.join('; '));
+		});
+		return links.join(', ');
+	},
+	function (str) {
+		var links = [], linkParse1, linkParse2, link;
+		// '</foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah", </foo/bar>; rel="baz"; id="blah"'
+		// Extract individual links
+		while ((linkParse1 = linkHeaderRE1.exec(str))) { // Splits into href [1] and params [2]
+			link = { href: linkParse1[1] };
+			// 'rel="baz"; id="blah"'
+			// Extract individual params
+			while ((linkParse2 = linkHeaderRE2.exec(linkParse1[2]))) { // Splits into key [1] and value [2]/[3]
+				link[linkParse2[1]] = linkParse2[2] || linkParse2[3] || true; // if no parameter value is given, just set to true
+			}
+			links.push(link);
+		}
+		return links;
+	}
+);
+
+local.httpHeaders.register('accept',
+	function (obj) {
+		return obj.map(function(type) {
+			var parts = [type.full];
+			if (type.q !== 1) {
+				parts.push('q='+type.q);
+			}
+			for (var k in type.params) {
+				parts.push(k+'='+type.params[k]);
+			}
+			return parts.join('; ');
+		}).join(', ');
+	},
+	function (str) {
+		return str.split(',')
+			.map(function(e) { return parseMediaType(e.trim()); })
+			.filter(function(e) { return e && e.q > 0; });
+	}
+);
+// thanks to https://github.com/federomero/negotiator
+function parseMediaType(s) {
+	var match = s.match(/\s*(\S+)\/([^;\s]+)\s*(?:;(.*))?/);
+	if (!match) return null;
+
+	var type = match[1];
+	var subtype = match[2];
+	var full = "" + type + "/" + subtype;
+	var params = {}, q = 1;
+
+	if (match[3]) {
+		params = match[3].split(';')
+			.map(function(s) { return s.trim().split('='); })
+			.reduce(function (set, p) { set[p[0]] = p[1]; return set; }, params);
+
+		if (params.q !== null) {
+			q = parseFloat(params.q);
+			delete params.q;
+		}
+	}
+
+	return {
+		type: type,
+		subtype: subtype,
+		params: params,
+		q: q,
+		full: full
+	};
 }// Request
 // =======
 // EXPORTED
@@ -1331,8 +1439,18 @@ function Request(options) {
 	if (options.body && !this.headers['content-type']) {
 		this.headers['content-type'] = (typeof options.body == 'string') ? 'text/plain' : 'application/json';
 	}
+	// Make sure we have an accept header
+	if (!this.headers['accept']) {
+		this.headers['accept'] = '*/*';
+	}
 
 	// non-enumerables (dont include in request messages)
+	Object.defineProperty(this, 'parsedHeaders', {
+		value: {},
+		configurable: true,
+		enumerable: false,
+		writable: true
+	});
 	Object.defineProperty(this, 'body', {
 		value: '',
 		configurable: true,
@@ -1369,12 +1487,12 @@ function Request(options) {
 		self.on('data', function(data) { self.body += data; });
 		self.on('end', function() {
 			if (self.headers['content-type'])
-				self.body = local.web.contentTypes.deserialize(self.body, self.headers['content-type']);
+				self.body = local.contentTypes.deserialize(self.headers['content-type'], self.body);
 			self.body_.fulfill(self.body);
 		});
 	})(this);
 }
-local.web.Request = Request;
+local.Request = Request;
 Request.prototype = Object.create(local.util.EventEmitter.prototype);
 
 Request.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
@@ -1391,34 +1509,23 @@ Request.prototype.setTimeout = function(ms) {
 };
 
 // EXPORTED
-// converts any known header objects into their string versions
-// - used on remote connections
-Request.prototype.serializeHeaders = function(headers) {
-	if (this.headers.authorization && typeof this.headers.authorization == 'object') {
-		if (!this.headers.authorization.scheme) { throw new Error("`scheme` required for auth headers"); }
-		var auth;
-		switch (this.headers.authorization.scheme.toLowerCase()) {
-			case 'basic':
-				auth = 'Basic '+btoa(this.headers.authorization.name+':'+this.headers.authorization.password);
-				break;
-			case 'persona':
-				auth = 'Persona name='+this.headers.authorization.name+' assertion='+this.headers.authorization.assertion;
-				break;
-			default:
-				throw new Error("unknown auth sceme: "+this.headers.authorization.scheme);
-		}
-		this.headers.authorization = auth;
+// calls any registered header serialization functions
+// - enables apps to use objects during their operation, but remain conformant with specs during transfer
+Request.prototype.serializeHeaders = function() {
+	for (var k in this.headers) {
+		this.headers[k] = local.httpHeaders.serialize(k, this.headers[k]);
 	}
-	if (this.headers.via && typeof this.headers.via == 'object') {
-		var via = this.headers.via;
-		if (!Array.isArray(via)) via = [via];
-		this.headers.via = via.map(function(v) {
-			return [
-				((v.protocol.name) ? (v.protocol.name + '/') : '') + v.protocol.version,
-				v.host,
-				((v.comment) ? v.comment : '')
-			].join(' ');
-		}).join(', ');
+};
+
+// EXPORTED
+// calls any registered header deserialization functions
+// - enables apps to use objects during their operation, but remain conformant with specs during transfer
+Request.prototype.deserializeHeaders = function() {
+	for (var k in this.headers) {
+		var parsedHeader = local.httpHeaders.deserialize(k, this.headers[k]);
+		if (parsedHeader && typeof parsedHeader != 'string') {
+			this.parsedHeaders[k] = parsedHeader;
+		}
 	}
 };
 
@@ -1428,7 +1535,7 @@ Request.prototype.write = function(data) {
 	if (!this.isConnOpen)
 		return;
 	if (typeof data != 'string')
-		data = local.web.contentTypes.serialize(data, this.headers['content-type']);
+		data = local.contentTypes.serialize(this.headers['content-type'], data);
 	this.emit('data', data);
 };
 
@@ -1472,8 +1579,20 @@ function Response() {
 	this.body = '';
 
 	// non-enumerables (dont include in response messages)
+	Object.defineProperty(this, 'parsedHeaders', {
+		value: {},
+		configurable: true,
+		enumerable: false,
+		writable: true
+	});
 	Object.defineProperty(this, 'isConnOpen', {
 		value: true,
+		configurable: true,
+		enumerable: false,
+		writable: true
+	});
+	Object.defineProperty(this, 'latency', {
+		value: undefined,
 		configurable: true,
 		enumerable: false,
 		writable: true
@@ -1495,21 +1614,44 @@ function Response() {
 		});
 		self.on('end', function() {
 			if (self.headers['content-type'])
-				self.body = local.web.contentTypes.deserialize(self.body, self.headers['content-type']);
+				self.body = local.contentTypes.deserialize(self.headers['content-type'], self.body);
 			self.body_.fulfill(self.body);
 		});
 	})(this);
 }
-local.web.Response = Response;
+local.Response = Response;
 Response.prototype = Object.create(local.util.EventEmitter.prototype);
 
 Response.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
 Response.prototype.getHeader    = function(k) { return this.headers[k]; };
 Response.prototype.removeHeader = function(k) { delete this.headers[k]; };
 
+// EXPORTED
+// calls any registered header serialization functions
+// - enables apps to use objects during their operation, but remain conformant with specs during transfer
+Response.prototype.serializeHeaders = function() {
+	for (var k in this.headers) {
+		this.headers[k] = local.httpHeaders.serialize(k, this.headers[k]);
+	}
+};
+
+// EXPORTED
+// calls any registered header deserialization functions
+// - enables apps to use objects during their operation, but remain conformant with specs during transfer
+Response.prototype.deserializeHeaders = function() {
+	for (var k in this.headers) {
+		var parsedHeader = local.httpHeaders.deserialize(k, this.headers[k]);
+		if (parsedHeader && typeof parsedHeader != 'string') {
+			this.parsedHeaders[k] = parsedHeader;
+		}
+	}
+};
+
 // writes the header to the response
 // - emits the 'headers' event
 Response.prototype.writeHead = function(status, reason, headers) {
+	if (!this.isConnOpen)
+		return;
 	this.status = status;
 	this.reason = reason;
 	if (headers) {
@@ -1518,6 +1660,7 @@ Response.prototype.writeHead = function(status, reason, headers) {
 				this.setHeader(k, headers[k]);
 		}
 	}
+	this.serializeHeaders();
 
 	this.emit('headers', this);
 	return this;
@@ -1529,7 +1672,7 @@ Response.prototype.write = function(data) {
 	if (!this.isConnOpen)
 		return;
 	if (typeof data != 'string') {
-		data = local.web.contentTypes.serialize(data, this.headers['content-type']);
+		data = local.contentTypes.serialize(this.headers['content-type'], data);
 	}
 	this.emit('data', data);
 };
@@ -1572,7 +1715,7 @@ function Server(config) {
 			this.config[k] = config[k];
 	}
 }
-local.web.Server = Server;
+local.Server = Server;
 
 Server.prototype.getUrl = function() {
 	return 'httpl://' + this.config.domain;
@@ -1596,7 +1739,7 @@ Server.prototype.terminate = function() {
 // BridgeServer
 // ============
 // EXPORTED
-// Core type for all servers which pipe requests between separated namespaces (eg WorkerServer, RTCPeerServer)
+// Core type for all servers which pipe requests between separated namespaces (eg WorkerBridgeServer, RTCBridgeServer)
 // - Should be used as a prototype
 // - Provides HTTPL implementation using the channel methods (which should be overridden by the subclasses)
 // - Underlying channel must be:
@@ -1604,7 +1747,7 @@ Server.prototype.terminate = function() {
 //   - order-guaranteed
 // - Underlying channel is assumed not to be:
 //   - multiplexed
-// - :NOTE: WebRTC's SCTP should eventually support multiplexing, in which case RTCPeerServer should
+// - :NOTE: WebRTC's SCTP should eventually support multiplexing, in which case RTCBridgeServer should
 //   abstract multiple streams into the one "channel" to prevent head-of-line blocking
 function BridgeServer(config) {
 	Server.call(this, config);
@@ -1615,7 +1758,7 @@ function BridgeServer(config) {
 	this.msgBuffer = []; // buffer of messages kept until channel is active
 }
 BridgeServer.prototype = Object.create(Server.prototype);
-local.web.BridgeServer = BridgeServer;
+local.BridgeServer = BridgeServer;
 
 // Returns true if the channel is ready for activity
 // - should be overridden
@@ -1668,6 +1811,7 @@ BridgeServer.prototype.handleLocalWebRequest = function(request, response) {
 		sid: sid,
 		method: request.method,
 		path: request.path,
+		query: request.query,
 		headers: request.headers
 	};
 
@@ -1676,12 +1820,11 @@ BridgeServer.prototype.handleLocalWebRequest = function(request, response) {
 
 	// Send over the channel
 	this.channelSendMsgWhenReady(JSON.stringify(msg));
-	if (!msg.end) {
-		// Wire up request stream events
-		var this2 = this;
-		request.on('data',  function(data) { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, body: data })); });
-		request.on('end', function()       { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, end: true })); });
-	}
+
+	// Wire up request stream events
+	var this2 = this;
+	request.on('data',  function(data) { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, body: data })); });
+	request.on('end', function()       { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, end: true })); });
 };
 
 // HTTPL implementation for incoming messages
@@ -1706,12 +1849,13 @@ BridgeServer.prototype.onChannelMessage = function(msg) {
 		// Incoming requests have a positive sid
 		if (msg.sid > 0) {
 			// Create request & response
-			var request = new local.web.Request({
+			var request = new local.Request({
 				method: msg.method,
 				path: msg.path,
+				query: msg.query,
 				headers: msg.headers
 			});
-			var response = new local.web.Response();
+			var response = new local.Response();
 
 			// Wire response into the stream
 			var this2 = this;
@@ -1776,24 +1920,30 @@ function validateHttplMessage(parsedmsg) {
 	if (isNaN(parsedmsg.sid))
 		return false;
 	return true;
-}// WorkerServer
+}// WorkerBridgeServer
 // ============
 // EXPORTED
 // wrapper for servers run within workers
 // - `config.src`: required URL
+// - `config.serverFn`: optional function to replace handleRemoteWebRequest
 // - `config.shared`: boolean, should the workerserver be shared?
 // - `config.namespace`: optional string, what should the shared worker be named?
 //   - defaults to `config.src` if undefined
+// - `config.nullify`: optional [string], a list of objects to nullify when the worker loads
 // - `config.bootstrapUrl`: optional string, specifies the URL of the worker bootstrap script
 // - `config.log`: optional bool, enables logging of all message traffic
 // - `loadCb`: optional function(message)
-function WorkerServer(config, loadCb) {
+function WorkerBridgeServer(config, loadCb) {
 	if (!config || !config.src)
-		throw new Error("WorkerServer requires config with `src` attribute.");
-	local.web.BridgeServer.call(this, config);
+		throw new Error("WorkerBridgeServer requires config with `src` attribute.");
+	local.BridgeServer.call(this, config);
 	this.isUserScriptActive = false; // when true, ready for activity
 	this.hasHostPrivileges = true; // do we have full control over the worker?
 	// ^ set to false by the ready message of a shared worker (if we're not the first page to connect)
+	if (config.serverFn) {
+		this.configServerFn = config.serverFn;
+		delete this.config.serverFn; // clear out the function from config, so we dont get an error when we send config to the worker
+	}
 	this.loadCb = loadCb;
 
 	// Prep config
@@ -1840,16 +1990,16 @@ function WorkerServer(config, loadCb) {
 		}
 	}).bind(this));
 }
-WorkerServer.prototype = Object.create(local.web.BridgeServer.prototype);
-local.web.WorkerServer = WorkerServer;
+WorkerBridgeServer.prototype = Object.create(local.BridgeServer.prototype);
+local.WorkerBridgeServer = WorkerBridgeServer;
 
 // Returns the worker's messaging interface
 // - varies between shared and normal workers
-WorkerServer.prototype.getPort = function() {
+WorkerBridgeServer.prototype.getPort = function() {
 	return this.worker.port ? this.worker.port : this.worker;
 };
 
-WorkerServer.prototype.terminate = function() {
+WorkerBridgeServer.prototype.terminate = function() {
 	this.worker.terminate();
 	this.worker = null;
 	this.isUserScriptActive = false;
@@ -1857,46 +2007,52 @@ WorkerServer.prototype.terminate = function() {
 
 // Instructs the worker to set the given name to null
 // - eg worker.nullify('XMLHttpRequest'); // no ajax
-WorkerServer.prototype.nullify = function(name) {
+WorkerBridgeServer.prototype.nullify = function(name) {
 	this.channelSendMsg({ op: 'nullify', body: name });
 };
 
-// Instructs the WorkerServer to import the JS given by the URL
+// Instructs the WorkerBridgeServer to import the JS given by the URL
 // - eg worker.importScripts('/my/script.js');
 // - `urls`: required string|[string]
-WorkerServer.prototype.importScripts = function(urls) {
+WorkerBridgeServer.prototype.importScripts = function(urls) {
 	this.channelSendMsg({ op: 'importScripts', body: urls });
 };
 
 // Returns true if the channel is ready for activity
 // - returns boolean
-WorkerServer.prototype.isChannelActive = function() {
+WorkerBridgeServer.prototype.isChannelActive = function() {
 	return this.isUserScriptActive;
 };
 
 // Sends a single message across the channel
 // - `msg`: required string
-WorkerServer.prototype.channelSendMsg = function(msg) {
+WorkerBridgeServer.prototype.channelSendMsg = function(msg) {
 	if (this.config.log) { console.debug('WORKER sending', msg); }
 	this.getPort().postMessage(msg);
 };
 
 // Remote request handler
-WorkerServer.prototype.handleRemoteWebRequest = function(request, response) {
-	// :TODO: proxyyy
-	console.warn('WORKER handleRemoteWebRequest not defined', this);
-	response.writeHead(500, 'server not implemented');
-	response.end();
+// - should be overridden
+BridgeServer.prototype.handleRemoteWebRequest = function(request, response) {
+	if (this.configServerFn) {
+		this.configServerFn.call(this, request, response, this);
+	} else {
+		response.writeHead(500, 'server not implemented');
+		response.end();
+	}
 };
 
 // Sends initialization commands
 // - called when the bootstrap signals that it has finished loading
-WorkerServer.prototype.onWorkerReady = function(message) {
+WorkerBridgeServer.prototype.onWorkerReady = function(message) {
 	this.hasHostPrivileges = message.hostPrivileges;
 	if (this.hasHostPrivileges) {
 		// Disable undesirable APIs
-		this.nullify('XMLHttpRequest');
-		this.nullify('Worker');
+		if (this.config.nullify) {
+			this.config.nullify.forEach(function(api) {
+				this.nullify(api);
+			}, this);
+		}
 
 		// Load user script
 		var src = this.config.src;
@@ -1911,7 +2067,7 @@ WorkerServer.prototype.onWorkerReady = function(message) {
 
 // Starts normal operation
 // - called when the user script has finished loading
-WorkerServer.prototype.onWorkerUserScriptLoaded = function(message) {
+WorkerBridgeServer.prototype.onWorkerUserScriptLoaded = function(message) {
 	if (this.loadCb && typeof this.loadCb == 'function') {
 		this.loadCb(message);
 	}
@@ -1926,7 +2082,7 @@ WorkerServer.prototype.onWorkerUserScriptLoaded = function(message) {
 };
 
 // Logs message data from the worker
-WorkerServer.prototype.onWorkerLog = function(message) {
+WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	if (!message)
 		return;
 	if (!Array.isArray(message))
@@ -1963,62 +2119,50 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		return Math.round(Math.random()*10000);
 	}
 
-	// RTCPeerServer
-	// =============
+	// RTCBridgeServer
+	// ===============
 	// EXPORTED
 	// server wrapper for WebRTC connections
 	// - currently only supports Chrome
 	// - `config.peer`: required string, who we are connecting to (a valid peer domain)
 	// - `config.relay`: required PeerWebRelay
 	// - `config.initiate`: optional bool, if true will initiate the connection processes
-	// - `config.serverFn`: optional function, the handleRemoteWebRequest function
-	function RTCPeerServer(config) {
+	function RTCBridgeServer(config) {
 		// Config
 		var self = this;
 		if (!config) config = {};
 		if (!config.peer) throw new Error("`config.peer` is required");
 		if (!config.relay) throw new Error("`config.relay` is required");
-		local.web.BridgeServer.call(this, config);
+		local.BridgeServer.call(this, config);
 		local.util.mixinEventEmitter(this);
-		if (config.serverFn) {
-			this.handleRemoteWebRequest = config.serverFn;
-		}
 
 		// Parse config.peer
-		var peerParsed = peerDomainRE.exec(config.peer);
-		if (!peerParsed) {
+		var peerd = local.parsePeerDomain(config.peer);
+		if (!peerd) {
 			throw new Error("Invalid peer URL: "+config.peer);
 		}
-		this.peerInfo = {
-			user: peerParsed[1],
-			provider: peerParsed[2],
-			app: peerParsed[3],
-			stream: peerParsed[4]
-		};
+		this.peerInfo = peerd;
 
 		// Internal state
 		this.isConnecting = true;
 		this.isOfferExchanged = false;
 		this.isConnected = false;
 		this.candidateQueue = []; // cant add candidates till we get the offer
-		this.signalBacklog = []; // holds signal messages that have backed up due to an unavailable remote
-		this.retrySignalTimeout = null;
-		this.retrySignalWaitDuration = 500; // ms to wait between connection failures (ramps up linearly from .5s to 30s)
 
 		// Create the peer connection
 		var servers = config.iceServers || defaultIceServers;
-		this.peerConn = new webkitRTCPeerConnection(servers, peerConstraints);
-		this.peerConn.onicecandidate             = onIceCandidate.bind(this);
-        this.peerConn.onicechange                = onIceConnectionStateChange.bind(this);
-		this.peerConn.oniceconnectionstatechange = onIceConnectionStateChange.bind(this);
-		this.peerConn.onsignalingstatechange     = onSignalingStateChange.bind(this);
+		this.rtcPeerConn = new webkitRTCPeerConnection(servers, peerConstraints);
+		this.rtcPeerConn.onicecandidate             = onIceCandidate.bind(this);
+		this.rtcPeerConn.onicechange                = onIceConnectionStateChange.bind(this);
+		this.rtcPeerConn.oniceconnectionstatechange = onIceConnectionStateChange.bind(this);
+		this.rtcPeerConn.onsignalingstatechange     = onSignalingStateChange.bind(this);
 
 		// Create the HTTPL data channel
-		this.httplChannel = this.peerConn.createDataChannel('httpl', { ordered: true, reliable: true });
-		this.httplChannel.onopen     = onHttplChannelOpen.bind(this);
-		this.httplChannel.onclose    = onHttplChannelClose.bind(this);
-		this.httplChannel.onerror    = onHttplChannelError.bind(this);
-		this.httplChannel.onmessage  = onHttplChannelMessage.bind(this);
+		this.rtcDataChannel = this.rtcPeerConn.createDataChannel('httpl', { ordered: true, reliable: true });
+		this.rtcDataChannel.onopen     = onHttplChannelOpen.bind(this);
+		this.rtcDataChannel.onclose    = onHttplChannelClose.bind(this);
+		this.rtcDataChannel.onerror    = onHttplChannelError.bind(this);
+		this.rtcDataChannel.onmessage  = onHttplChannelMessage.bind(this);
 
 		if (this.config.initiate) {
 			// Initiate event will be picked up by the peer
@@ -2026,20 +2170,20 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			this.sendOffer();
 		}
 	}
-	RTCPeerServer.prototype = Object.create(local.web.BridgeServer.prototype);
-	local.web.RTCPeerServer = RTCPeerServer;
+	RTCBridgeServer.prototype = Object.create(local.BridgeServer.prototype);
+	local.RTCBridgeServer = RTCBridgeServer;
 
-	RTCPeerServer.prototype.getPeerInfo = function() {
+	RTCBridgeServer.prototype.getPeerInfo = function() {
 		return this.peerInfo;
 	};
 
 	// :DEBUG:
-	RTCPeerServer.prototype.debugLog = function() {
+	RTCBridgeServer.prototype.debugLog = function() {
 		var args = [this.config.domain].concat([].slice.call(arguments));
 		console.debug.apply(console, args);
 	};
 
-	RTCPeerServer.prototype.terminate = function(opts) {
+	RTCBridgeServer.prototype.terminate = function(opts) {
 		if (this.isConnecting || this.isConnected) {
 			if (!(opts && opts.noSignal)) {
 				this.signal({ type: 'disconnect' });
@@ -2048,29 +2192,33 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			this.isConnected = false;
 			this.emit('disconnected', { peer: this.peerInfo, domain: this.config.domain, server: this });
 
-			if (this.peerConn) {
-				this.peerConn.close();
-				this.peerConn = null;
+			if (this.rtcPeerConn) {
+				this.rtcPeerConn.close();
+				this.rtcPeerConn = null;
 			}
 		}
 	};
 
 	// Returns true if the channel is ready for activity
 	// - returns boolean
-	RTCPeerServer.prototype.isChannelActive = function() {
+	RTCBridgeServer.prototype.isChannelActive = function() {
 		return this.isConnected;
 	};
 
 	// Sends a single message across the channel
 	// - `msg`: required string
-	RTCPeerServer.prototype.channelSendMsg = function(msg) {
-		this.httplChannel.send(msg);
+	RTCBridgeServer.prototype.channelSendMsg = function(msg) {
+		this.rtcDataChannel.send(msg);
 	};
 
 	// Remote request handler
-	RTCPeerServer.prototype.handleRemoteWebRequest = function(request, response) {
-		response.writeHead(500, 'not implemented');
-		response.end();
+	RTCBridgeServer.prototype.handleRemoteWebRequest = function(request, response) {
+		if (this.config.serverFn) {
+			this.config.serverFn.call(this, request, response, this);
+		} else {
+			response.writeHead(500, 'not implemented');
+			response.end();
+		}
 	};
 
 	// HTTPL channel event handlers
@@ -2109,7 +2257,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// Signal relay behaviors
 	// -
 
-	RTCPeerServer.prototype.onSignal = function(msg) {
+	RTCBridgeServer.prototype.onSignal = function(msg) {
 		var self = this;
 
 		this.debugLog('SIG', msg);
@@ -2127,7 +2275,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 					this.candidateQueue.push(msg.candidate);
 				} else {
 					// Pass into the peer connection
-					this.peerConn.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate }));
+					this.rtcPeerConn.addIceCandidate(new RTCIceCandidate({ candidate: msg.candidate }));
 				}
 				break;
 
@@ -2138,17 +2286,17 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 				this.emit('connecting', { peer: this.peerInfo, domain: this.config.domain, server: this });
 				// Update the peer connection
 				var desc = new RTCSessionDescription({ type: 'offer', sdp: msg.sdp });
-				this.peerConn.setRemoteDescription(desc);
+				this.rtcPeerConn.setRemoteDescription(desc);
 				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
 				// Send an answer
-				this.peerConn.createAnswer(
+				this.rtcPeerConn.createAnswer(
 					function(desc) {
 						self.debugLog('CREATED ANSWER', desc);
 
 						// Store the SDP
 						desc.sdp = increaseSDP_MTU(desc.sdp);
-						self.peerConn.setLocalDescription(desc);
+						self.rtcPeerConn.setLocalDescription(desc);
 
 						// Send answer msg
 						self.signal({ type: 'answer', sdp: desc.sdp });
@@ -2162,86 +2310,50 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 				this.debugLog('GOT ANSWER', msg);
 				// Received session confirmation from the peer
 				// Update the peer connection
-				this.peerConn.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+				this.rtcPeerConn.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
 				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
 				break;
 
 			default:
-				console.warn('RTCPeerServer - Unrecognized signal message from relay', msg);
+				console.warn('RTCBridgeServer - Unrecognized signal message from relay', msg);
 		}
 	};
 
 	// Helper to send a message to peers on the relay
-	RTCPeerServer.prototype.signal = function(msg) {
-		// Are there signal messages awaiting delivery?
-		if (this.retrySignalTimeout) {
-			// Add to the queue and wait for the line to open up again
-			this.signalBacklog.push(msg);
+	RTCBridgeServer.prototype.signal = function(msg) {
+		if (!this.isConnecting || this.isConnected) {
 			return;
 		}
 		// Send the message through our relay
 		var self = this;
 		this.config.relay.signal(this.config.peer, msg)
 			.fail(function(res) {
-				if (res.status == 504) {
-					// Upstream timeout -- the target isn't online yet, start the queue and initiate the retry process
-					self.signalBacklog.push(msg);
-					if (!self.retrySignalTimeout) {
-						self.retrySignalTimeout = setTimeout(self.retrySignal.bind(self), self.retrySignalWaitDuration);
-					}
+				if (!self.isConnecting || self.isConnected) {
+					return;
 				}
-			});
-	};
-
-	// Helper to send a message to peers on the relay
-	RTCPeerServer.prototype.retrySignal = function(msg) {
-		this.retrySignalTimeout = null;
-		// Are there signal messages awaiting delivery?
-		if (this.signalBacklog.length === 0) {
-			// Nothing to do
-			return;
-		}
-		// Retry the first message
-		var self = this;
-		this.config.relay.signal(this.config.peer, this.signalBacklog[0])
-			.then(function() {
-				// Success
-				// Reset the wait duration
-				this.retrySignalWaitDuration = 500;
-				// Drain the queue
-				var signalBacklog = self.signalBacklog;
-				self.signalBacklog = [];
-				for (var i = 1; i < signalBacklog.length; i++) {
-					self.signal(signalBacklog[i]);
-				}
-			})
-			.fail(function(res) {
-				if (res.status == 504) {
-					// Retry again later
-					if (!self.retrySignalTimeout) {
-						// Extend the wait
-						if (self.retrySignalWaitDuration < 30000) {
-							self.retrySignalWaitDuration += 500;
-						}
-						// Queue the timeout
-						self.retrySignalTimeout = setTimeout(self.retrySignal.bind(self), self.retrySignalWaitDuration);
+				if (res.status == 404) {
+					// Peer not online
+					for (var k in self.incomingStreams) {
+						self.incomingStreams[k].writeHead(404, 'not found').end();
 					}
+					self.terminate({ noSignal: true });
+					local.unregisterLocal(self.config.domain);
 				}
 			});
 	};
 
 	// Helper initiates a session with peers on the relay
-	RTCPeerServer.prototype.sendOffer = function() {
+	RTCBridgeServer.prototype.sendOffer = function() {
 		var self = this;
 		// Generate offer
-		this.peerConn.createOffer(
+		this.rtcPeerConn.createOffer(
 			function(desc) {
 				self.debugLog('CREATED OFFER', desc);
 
 				// store the SDP
 				desc.sdp = increaseSDP_MTU(desc.sdp);
-				self.peerConn.setLocalDescription(desc);
+				self.rtcPeerConn.setLocalDescription(desc);
 
 				// Send offer msg
 				self.signal({ type: 'offer', sdp: desc.sdp });
@@ -2259,11 +2371,10 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// Helper called whenever we have a remote session description
 	// (candidates cant be added before then, so they're queued in case they come first)
 	function handleOfferExchanged() {
-		console.log(this.isConnecting, this.isConnected)
 		var self = this;
 		this.isOfferExchanged = true;
 		this.candidateQueue.forEach(function(candidate) {
-			self.peerConn.addIceCandidate(new RTCIceCandidate({ candidate: candidate }));
+			self.rtcPeerConn.addIceCandidate(new RTCIceCandidate({ candidate: candidate }));
 		});
 		this.candidateQueue.length = 0;
 	}
@@ -2309,33 +2420,38 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 	// - `config.serverFn`: required function, the function for peerservers' handleRemoteWebRequest
 	// - `config.app`: optional string, the app to join as (defaults to window.location.host)
 	// - `config.stream`: optional number, the stream id (defaults to pseudo-random)
+	// - `config.ping`: optional number, sends a ping to self via the relay at the given interval (in ms) to keep the stream alive
+	//   - set to false to disable keepalive pings
+	//   - defaults to 45000
 	function PeerWebRelay(config) {
 		if (!config) throw new Error("PeerWebRelay requires the `config` parameter");
 		if (!config.provider) throw new Error("PeerWebRelay requires `config.provider`");
-		if (!config.serverFn) throw new Error("PeerWebRelay requires `config.serverFn`");
 		if (!config.app) config.app = window.location.host;
 		if (typeof config.stream == 'undefined') config.stream = randomStreamId();
+		if (typeof config.ping == 'undefined') { config.ping = 45000; }
 		this.config = config;
 		local.util.mixinEventEmitter(this);
 
 		// State
+		this.myPeerDomain = null;
 		this.connectedToRelay = false;
 		this.userId = null;
 		this.accessToken = null;
 		this.bridges = {};
+		this.pingInterval = null;
 
 		// :TEMP: Extract provider domain for use in HTTPL domain assignment
 		// when multiple providers are supported, the signal should include this info
-		var providerUrld = local.web.parseUri(config.provider);
+		var providerUrld = local.parseUri(config.provider);
 		this.providerDomain = providerUrld.host;
 
 		// Internal helpers
 		this.messageFromAuthPopupHandler = null;
-		this.myUrl = null; // cached for use in outbound signal messages
 
 		// APIs
 		this.p2pwServiceAPI = local.navigator(config.provider);
 		this.accessTokenAPI = this.p2pwServiceAPI.follow({ rel: 'grimwire.com/-access-token', app: config.app });
+		this.accessTokenAPI.resolve({ nohead: true }); // immediately resolve so requestAccessToken() can use it
 		this.p2pwUsersAPI = this.p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
 		this.p2pwRelayAPI = null;
 		this.relayStream = null;
@@ -2343,7 +2459,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Bind window close behavior
 		window.addEventListener('beforeunload', this.onPageClose.bind(this));
 	}
-	local.web.PeerWebRelay = PeerWebRelay;
+	local.PeerWebRelay = PeerWebRelay;
 
 	// Sets the access token and triggers a connect flow
 	// - `token`: required String?, the access token (null if denied access)
@@ -2386,6 +2502,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		}
 	};
 	PeerWebRelay.prototype.isListening    = function() { return this.connectedToRelay; };
+	PeerWebRelay.prototype.getDomain      = function() { return this.myPeerDomain; };
 	PeerWebRelay.prototype.getUserId      = function() { return this.userId; };
 	PeerWebRelay.prototype.getPeer        = function(domain) { return this.bridges[domain]; };
 	PeerWebRelay.prototype.getApp         = function() { return this.config.app; };
@@ -2400,9 +2517,9 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		}
 		// Update config and APIs
 		this.config.provider = providerUrl;
-		this.providerDomain = local.web.parseUri(providerUrl).host;
+		this.providerDomain = local.parseUri(providerUrl).host;
 		this.p2pwServiceAPI.rebase(providerUrl);
-		this.accessTokenAPI.unresolve();
+		this.accessTokenAPI.unresolve().resolve({ nohead: true }); // immediately resolve so requestAccessToken() can use it
 		this.p2pwUsersAPI.unresolve();
 		if (this.p2pwRelayAPI) {
 			this.p2pwRelayAPI.unresolve();
@@ -2411,15 +2528,19 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 	// Gets an access token from the provider & user using a popup
 	// - Best if called within a DOM click handler, as that will avoid popup-blocking
+	//   (note, however, if the accessTokenAPI hasnt resolved its api yet, there will be an async callback that breaks that)
+	// - returns promise(string), fulfills with token on success and rejects with null on failure
 	PeerWebRelay.prototype.requestAccessToken = function() {
+		var token_ = local.promise();
+
 		// Start listening for messages from the popup
 		if (!this.messageFromAuthPopupHandler) {
 			this.messageFromAuthPopupHandler = (function(e) {
 				console.debug('Message (from ' + e.origin + '): ' + e.data);
 
 				// Make sure this is from our popup
-				var originUrld = local.web.parseUri(e.origin);
-				var providerUrld = local.web.parseUri(this.config.provider);
+				var originUrld = local.parseUri(e.origin);
+				var providerUrld = local.parseUri(this.config.provider);
 				if (originUrld.authority !== providerUrld.authority) {
 					return;
 				}
@@ -2433,17 +2554,26 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 				// If given a null, emit denial event
 				if (!e.data) {
 					this.emit('accessDenied');
+					token_.reject(null);
+				} else {
+					token_.fulfill(e.data);
 				}
 			}).bind(this);
 		}
 		window.addEventListener('message', this.messageFromAuthPopupHandler);
 
-		// Resolve the URL for getting access tokens
-		// :TODO: I think this resolve call is causing the popup blocker to hit
-		this.accessTokenAPI.resolve({ nohead: true }).then(function(url) {
-			// Open interface in a popup
-			window.open(url);
-		});
+		// Open interface in a popup
+		if (this.accessTokenAPI.context.url) {
+			// Try to open immediately, to avoid popup blocking
+			window.open(this.accessTokenAPI.context.url);
+		} else {
+			// access token URI hasnt resolved yet, we have to wait for that
+			this.accessTokenAPI.resolve({ nohead: true }).always(function(url) {
+				window.open(url);
+			});
+		}
+
+		return token_;
 	};
 
 	// Fetches users from p2pw service
@@ -2467,21 +2597,33 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			return;
 		}
 		// Update "src" object, for use in signal messages
-		this.myUrl = this.makeDomain(this.getUserId(), this.config.app, this.config.stream);
+		this.myPeerDomain = this.makeDomain(this.getUserId(), this.config.app, this.config.stream);
 		// Connect to the relay stream
 		this.p2pwRelayAPI = this.p2pwServiceAPI.follow({ rel: 'item grimwire.com/-p2pw/relay', id: this.getUserId(), stream: this.getStreamId(), nc: Date.now() });
 		this.p2pwRelayAPI.subscribe({ method: 'subscribe' })
 			.then(
 				function(stream) {
+					// Update state
+					__peer_relay_registry[self.providerDomain] = self;
 					self.relayStream = stream;
 					self.connectedToRelay = true;
 					stream.response_.then(function(response) {
 						self.emit('listening');
 						return response;
 					});
+
+					// Setup handlers
 					stream.on('signal', self.onSignal.bind(self));
 					stream.on('error', self.onRelayError.bind(self));
 					stream.on('close', self.onRelayClose.bind(self));
+
+					// Initiate the ping interval
+					if (self.pingInterval) { clearInterval(self.pingInterval); }
+					if (self.config.ping) {
+						self.pingInterval = setInterval(function() {
+							self.signal(self.getDomain(), { type: 'noop' });
+						}, self.config.ping);
+					}
 				},
 				function(err) {
 					self.onRelayError({ event: 'error', data: err });
@@ -2497,10 +2639,11 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			this.connectedToRelay = false;
 			this.relayStream.close();
 			this.relayStream = null;
+			delete __peer_relay_registry[self.providerDomain];
 		}
 	};
 
-	// Spawns an RTCPeerServer and starts the connection process with the given peer
+	// Spawns an RTCBridgeServer and starts the connection process with the given peer
 	// - `peerUrl`: required String, the domain/url of the target peer
 	// - `config.initiate`: optional Boolean, should the server initiate the connection?
 	//   - defaults to true
@@ -2509,8 +2652,13 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		if (!config) config = {};
 		if (typeof config.initiate == 'undefined') config.initiate = true;
 
+		// Make sure we're not already connected
+		if (peerUrl in this.bridges) {
+			return this.bridges[peerUrl];
+		}
+
 		// Parse the url
-		var peerUrld = local.web.parseUri(peerUrl);
+		var peerUrld = local.parseUri(peerUrl);
 		var hostParts = peerUrld.host.split('!');
 		var provider = hostParts[0], app = hostParts[1];
 		if (!peerUrld.user || !provider || !app || !peerUrld.port) {
@@ -2518,7 +2666,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		}
 
 		// Spawn new server
-		var server = new local.web.RTCPeerServer({
+		var server = new local.RTCBridgeServer({
 			peer: peerUrl,
 			initiate: config.initiate,
 			relay: this,
@@ -2534,7 +2682,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 
 		// Add to hostmap
 		this.bridges[peerUrld.authority] = server;
-		local.web.registerLocal(peerUrld.authority, server);
+		local.registerLocal(peerUrld.authority, server);
 
 		return server;
 	};
@@ -2544,13 +2692,14 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			console.warn('PeerWebRelay - signal() called before relay is connected');
 			return;
 		}
-		return this.p2pwRelayAPI.post({ src: this.myUrl, dst: dst, msg: msg });
+		return this.p2pwRelayAPI.post({ src: this.myPeerDomain, dst: dst, msg: msg }, null, { retry: true });
 	};
 
 	PeerWebRelay.prototype.onSignal = function(e) {
 		if (!e.data || !e.data.src || !e.data.msg) {
 			console.warn('discarding faulty signal message', err);
 		}
+		if (e.data.msg.type == 'noop') { return; } // used for heartbeats to keep the stream alive
 
 		// Find bridge that represents this origin
 		var domain = e.data.src;
@@ -2582,7 +2731,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			this.setAccessToken(null);
 			// Fire event
 			this.emit('accessInvalid');
-		} else if (e.data && (e.data.status == 404 || e.data.status >= 500)) { // connection lost
+		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost
 			// Update state
 			this.relayStream = null;
 			this.connectedToRelay = false;
@@ -2603,6 +2752,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		// Update state
 		var wasConnected = this.connectedToRelay;
 		this.connectedToRelay = false;
+		if (self.pingInterval) { clearInterval(self.pingInterval); }
 
 		// Fire event
 		this.emit('notlistening');
@@ -2619,7 +2769,7 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 		var bridge = this.bridges[data.domain];
 		if (bridge) {
 			delete this.bridges[data.domain];
-			local.web.unregisterLocal(data.domain);
+			local.unregisterLocal(data.domain);
 		}
 	};
 
@@ -2637,13 +2787,12 @@ WorkerServer.prototype.onWorkerLog = function(message) {
 			req.open('POST', this.p2pwRelayAPI.context.url, false);
 			req.setRequestHeader('Authorization', 'Bearer '+this.accessToken);
 			req.setRequestHeader('Content-type', 'application/json');
-			req.send(JSON.stringify({ src: this.myUrl, dst: dst, msg: { type: 'disconnect' } }));
+			req.send(JSON.stringify({ src: this.myPeerDomain, dst: dst, msg: { type: 'disconnect' } }));
 		}
 	};
 
-	var peerDomainRE = /^(.+)@(.+)!(.+):([\d]+)$/i;
 	PeerWebRelay.prototype.makeDomain = function(user, app, stream) {
-		return user+'@'+this.providerDomain+'!'+app+':'+(stream||'0');
+		return local.makePeerDomain(user, this.providerDomain, app, stream);
 	};
 
 })();// schemes
@@ -2656,7 +2805,7 @@ var schemes = {
 	get: schemes__get
 };
 var schemes__registry = {};
-local.web.schemes = schemes;
+local.schemes = schemes;
 
 function schemes__register(scheme, handler) {
 	if (scheme && Array.isArray(scheme)) {
@@ -2677,13 +2826,13 @@ function schemes__get(scheme) {
 
 // HTTP
 // ====
-local.web.schemes.register(['http', 'https'], function(request, response) {
+local.schemes.register(['http', 'https'], function(request, response) {
 	// parse URL
-	var urld = local.web.parseUri(request.url);
+	var urld = local.parseUri(request.url);
 
 	// if a query was given in the options, mix it into the urld
 	if (request.query) {
-		var q = local.web.contentTypes.serialize(request.query, 'application/x-www-form-urlencoded');
+		var q = local.contentTypes.serialize('application/x-www-form-urlencoded', request.query);
 		if (q) {
 			if (urld.query) {
 				urld.query    += '&' + q;
@@ -2779,10 +2928,6 @@ local.web.schemes.register(['http', 'https'], function(request, response) {
 					extractHeader('Warning');
 					extractHeader('WWW-Authenticate');
 				}
-
-				// parse any headers we use often
-				if (headers.link)
-					headers.link = local.web.parseLinkHeader(headers.link);
 			}
 
 			response.writeHead(xhrRequest.status, xhrRequest.statusText, headers);
@@ -2827,38 +2972,63 @@ var localNotFoundServer = {
 	},
 	context: null
 };
-local.web.schemes.register('httpl', function(request, response) {
-	// need additional time to get the worker wired up
-	request.suspendEvents();
-	response.suspendEvents();
+var localRelayNotOnlineServer = {
+	fn: function(request, response) {
+		response.writeHead(407, 'peer relay not authenticated');
+		response.end();
+	},
+	context: null
+};
+local.schemes.register('httpl', function(request, response) {
+	// Find the local server
+	var server = local.getLocal(request.urld.authority);
+	if (!server) {
+		// Check if this is a peerweb URI
+		var peerd = local.parsePeerDomain(request.urld.authority);
+		if (peerd) {
+			if (peerd.relay in __peer_relay_registry) {
+				// Try connecting to the peer
+				// console.log(peerd,'not found, connecting');
+				__peer_relay_registry[peerd.relay].connect(request.urld.authority);
+				server = local.getLocal(request.urld.authority);
+				// console.log(server);
+			} else {
+				// We're not connected to the relay
+				server = localRelayNotOnlineServer;
+			}
+		} else
+			server = localNotFoundServer;
+	}
 
-	// find the local server
-	// console.log(request.urld, Object.keys(local.web.getLocalRegistry()))
-	var server = local.web.getLocal(request.urld.authority);
-	if (!server)
-		server = localNotFoundServer;
+	// Deserialize the headers
+	request.deserializeHeaders();
 
-	// pull out and standardize the path
+	// Pull out and standardize the path
 	request.path = request.urld.path;
 	if (!request.path) request.path = '/'; // no path, give a '/'
 	else request.path = request.path.replace(/(.)\/$/, '$1'); // otherwise, never end with a '/'
 
-	// support warnings
+	// Pull out any query params in the path
+	if (request.urld.query) {
+		var query = local.contentTypes.deserialize('application/x-www-form-urlencoded', request.urld.query);
+		if (!request.query) { request.query = {}; }
+		for (var k in query) {
+			request.query[k] = query[k];
+		}
+	}
+
+	// Support warnings
 	if (request.binary)
 		console.warn('Got HTTPL request with binary=true - sorry, not currently supported', request);
 
-	// pass on to the server (async)
-	setTimeout(function() {
-		server.fn.call(server.context, request, response);
-		request.resumeEvents();
-		response.resumeEvents();
-	}, 0);
+	// Pass on to the server
+	server.fn.call(server.context, request, response);
 });
 
 
 // Data
 // ====
-local.web.schemes.register('data', function(request, response) {
+local.schemes.register('data', function(request, response) {
 	var firstColonIndex = request.url.indexOf(':');
 	var firstCommaIndex = request.url.indexOf(',');
 
@@ -2889,12 +3059,13 @@ local.web.schemes.register('data', function(request, response) {
 // Local Server Registry
 // =====================
 var __httpl_registry = {};
+var __peer_relay_registry = {}; // populated by PeerWebRelay startListening() and stopListening()
 
 // EXPORTED
-local.web.registerLocal = function registerLocal(domain, server, serverContext) {
+local.registerLocal = function registerLocal(domain, server, serverContext) {
 	if (__httpl_registry[domain]) throw new Error("server already registered at domain given to registerLocal");
 
-	var isServerObj = (server instanceof local.web.Server);
+	var isServerObj = (server instanceof local.Server);
 	if (isServerObj) {
 		serverContext = server;
 		server = server.handleLocalWebRequest;
@@ -2905,19 +3076,19 @@ local.web.registerLocal = function registerLocal(domain, server, serverContext) 
 };
 
 // EXPORTED
-local.web.unregisterLocal = function unregisterLocal(domain) {
+local.unregisterLocal = function unregisterLocal(domain) {
 	if (__httpl_registry[domain]) {
 		delete __httpl_registry[domain];
 	}
 };
 
 // EXPORTED
-local.web.getLocal = function getLocal(domain) {
+local.getLocal = function getLocal(domain) {
 	return __httpl_registry[domain];
 };
 
 // EXPORTED
-local.web.getLocalRegistry = function getLocalRegistry() {
+local.getLocalRegistry = function getLocalRegistry() {
 	return __httpl_registry;
 };
 var webDispatchWrapper;
@@ -2939,51 +3110,62 @@ var webDispatchWrapper;
 //   - on success (status code 2xx), the promise is fulfilled with a `ClientResponse` object
 //   - on failure (status code 4xx,5xx), the promise is rejected with a `ClientResponse` object
 //   - all protocol (status code 1xx,3xx) is handled internally
-local.web.dispatch = function dispatch(request) {
+local.dispatch = function dispatch(request) {
 	if (!request) { throw new Error("no request param provided to request"); }
 	if (typeof request == 'string')
 		request = { url: request };
-	if (!request.url)
-		throw new Error("no url on request");
+	if (!request.url) { throw new Error("no url on request"); }
 
-	// If given a rel: scheme, spawn a navigator to handle it
+	// If given a nav: scheme, spawn a navigator to handle it
 	var scheme = parseScheme(request.url);
-	if (scheme == 'rel') {
+	if (scheme == 'nav') {
 		var url = request.url;
 		delete request.url;
-		return local.web.navigator(url).dispatch(request);
+		return local.navigator(url).dispatch(request);
 	}
 
 	// Prepare the request
 	var body = null, shouldAutoSendRequestBody = false;
-	if (!(request instanceof local.web.Request)) {
+	if (!(request instanceof local.Request)) {
 		body = request.body;
-		request = new local.web.Request(request);
+		request = new local.Request(request);
 		shouldAutoSendRequestBody = true; // we're going to end()
 	}
-	request.urld = local.web.parseUri(request.url); // (urld = url description)
+	Object.defineProperty(request, 'urld', { value: local.parseUri(request.url), configurable: true, enumerable: false, writable: true }); // (urld = url description)
 	if (request.urld.query) {
 		// Extract URL query parameters into the request's query object
-		var q = local.web.contentTypes.deserialize(request.urld.query, 'application/x-www-form-urlencoded');
+		var q = local.contentTypes.deserialize('application/x-www-form-urlencoded', request.urld.query);
 		for (var k in q)
 			request.query[k] = q[k];
 		request.urld.relative = request.urld.path + ((request.urld.anchor) ? ('#'+request.urld.anchor) : '');
-		request.url = request.urld.protocol+'://'+request.urld.authority+request.urld.relative;
+		request.url = scheme+'://'+request.urld.authority+request.urld.relative;
 	}
+	request.serializeHeaders();
 
-	// Generate response
-	var response = new local.web.Response();
+	// Setup response object
+	var requestStartTime;
+	var response = new local.Response();
 	var response_ = local.promise();
-	response.on('headers', function() { processResponseHeaders(request, response); });
+	request.on('close', function() { response.close(); });
+	response.on('headers', function() {
+		response.deserializeHeaders();
+		processResponseHeaders(request, response);
+	});
+	response.on('close', function() {
+		// Track latency
+		response.latency = Date.now() - requestStartTime;
+		// Close the request
+		request.close();
+	});
 	if (request.stream) {
 		// streaming, fulfill on 'headers'
 		response.on('headers', function(response) {
-			local.web.fulfillResponsePromise(response_, response);
+			local.fulfillResponsePromise(response_, response);
 		});
 	} else {
 		// buffering, fulfill on 'close'
 		response.on('close', function() {
-			local.web.fulfillResponsePromise(response_, response);
+			local.fulfillResponsePromise(response_, response);
 		});
 	}
 
@@ -2992,12 +3174,11 @@ local.web.dispatch = function dispatch(request) {
 	request.suspendEvents();
 	response.suspendEvents();
 
-	// Pull any extra arguments that may have been passed
-	// form the paramlist: (request, response, dispatch, args...)
-	var args = Array.prototype.slice.call(arguments, 1);
-	args.unshift(function(request, response, schemeHandler) {
+	// Create function to be called by the dispatch wrapper
+	var dispatchFn = function(request, response, schemeHandler) {
 		// execute by scheme
-		schemeHandler = schemeHandler || local.web.schemes.get(scheme);
+		requestStartTime = Date.now();
+		schemeHandler = schemeHandler || local.schemes.get(scheme);
 		if (!schemeHandler) {
 			response.writeHead(0, 'unsupported scheme "'+scheme+'"');
 			response.end();
@@ -3009,16 +3190,25 @@ local.web.dispatch = function dispatch(request) {
 			// now that the scheme handler has wired up, the spice must flow
 			request.resumeEvents();
 			response.resumeEvents();
-			// autosend request body if not given a local.web.Request `request`
-			if (shouldAutoSendRequestBody) request.end(body);
+			// autosend request body if not given a local.Request `request`
+			if (shouldAutoSendRequestBody) { request.end(body); }
 		}
 		return response_;
-	});
+	};
+
+	// Setup the arguments list for the dispatch wrapper to include any additional params passed to dispatch()
+	// aka (request, response, dispatch, args...)
+	// this allows apps to do something like local.dispatch(request, extraParam1, extraParam2) and have the dispatch wrapper use those params
+	var args = Array.prototype.slice.call(arguments, 1);
+	args.unshift(dispatchFn);
 	args.unshift(response);
 	args.unshift(request);
 
-	// Allow the wrapper to audit the message
-	webDispatchWrapper.apply(null, args);
+	// Wait until next tick, to make sure dispatch() is always async
+	setTimeout(function() {
+		// Allow the wrapper to audit the message
+		webDispatchWrapper.apply(null, args);
+	}, 0);
 
 	response_.request = request;
 	return response_;
@@ -3027,7 +3217,7 @@ local.web.dispatch = function dispatch(request) {
 // EXPORTED
 // fulfills/reject a promise for a response with the given response
 // - exported because its pretty useful
-local.web.fulfillResponsePromise = function(promise, response) {
+local.fulfillResponsePromise = function(promise, response) {
 	// wasnt streaming, fulfill now that full response is collected
 	if (response.status >= 200 && response.status < 400)
 		promise.fulfill(response);
@@ -3037,11 +3227,11 @@ local.web.fulfillResponsePromise = function(promise, response) {
 		promise.fulfill(response); // :TODO: 1xx protocol handling
 };
 
-local.web.setDispatchWrapper = function(wrapperFn) {
+local.setDispatchWrapper = function(wrapperFn) {
 	webDispatchWrapper = wrapperFn;
 };
 
-local.web.setDispatchWrapper(function(request, response, dispatch) {
+local.setDispatchWrapper(function(request, response, dispatch) {
 	dispatch(request, response);
 });
 
@@ -3049,10 +3239,10 @@ local.web.setDispatchWrapper(function(request, response, dispatch) {
 // Makes sure response header links are absolute
 var isUrlAbsoluteRE = /(:\/\/)|(^[-A-z0-9]*\.[-A-z0-9]*)/; // has :// or starts with ___.___
 function processResponseHeaders(request, response) {
-	if (response.headers.link) {
-		response.headers.link.forEach(function(link) {
+	if (response.parsedHeaders.link) {
+		response.parsedHeaders.link.forEach(function(link) {
 			if (isUrlAbsoluteRE.test(link.href) === false)
-				link.href = local.web.joinRelPath(request.urld, link.href);
+				link.href = local.joinRelPath(request.urld, link.href);
 		});
 	}
 }
@@ -3080,7 +3270,7 @@ function parseScheme(url) {
 // - sends a GET request with 'text/event-stream' as the Accept header
 // - `request`: request object, formed as in `dispatch()`
 // - returns a `EventStream` object
-local.web.subscribe = function subscribe(request) {
+local.subscribe = function subscribe(request) {
 	if (typeof request == 'string')
 		request = { url: request };
 	request.stream = true; // stream the response
@@ -3088,7 +3278,7 @@ local.web.subscribe = function subscribe(request) {
 	if (!request.headers) request.headers = { accept : 'text/event-stream' };
 	if (!request.headers.accept) request.headers.accept = 'text/event-stream';
 
-	var response_ = local.web.dispatch(request);
+	var response_ = local.dispatch(request);
 	return new EventStream(response_.request, response_);
 };
 
@@ -3107,7 +3297,7 @@ function EventStream(request, response_) {
 
 	this.connect(response_);
 }
-local.web.EventStream = EventStream;
+local.EventStream = EventStream;
 EventStream.prototype = Object.create(local.util.EventEmitter.prototype);
 EventStream.prototype.getUrl = function() { return this.request.url; };
 EventStream.prototype.connect = function(response_) {
@@ -3152,10 +3342,10 @@ EventStream.prototype.reconnect = function() {
 	}
 
 	// Re-establish the connection
-	this.request = new local.web.Request(this.request);
+	this.request = new local.Request(this.request);
 	if (!this.request.headers) this.request.headers = {};
 	if (this.lastEventId) this.request.headers['last-event-id'] = this.lastEventId;
-	this.connect(local.web.dispatch(this.request));
+	this.connect(local.dispatch(this.request));
 	this.request.end();
 };
 EventStream.prototype.close = function() {
@@ -3170,7 +3360,7 @@ function emitError(e) {
 	this.emit('error', e);
 }
 function emitEvent(e) {
-	e = local.web.contentTypes.deserialize(e, 'text/event-stream');
+	e = local.contentTypes.deserialize('text/event-stream', e);
 	var id = parseInt(e.id, 10);
 	if (typeof id != 'undefined' && id > this.lastEventId)
 		this.lastEventId = id;
@@ -3186,7 +3376,7 @@ function emitEvent(e) {
 function Broadcaster() {
 	this.streams = [];
 }
-local.web.Broadcaster = Broadcaster;
+local.Broadcaster = Broadcaster;
 
 // listener management
 Broadcaster.prototype.addStream = function(responseStream) {
@@ -3220,7 +3410,7 @@ Broadcaster.prototype.emit = function(eventName, data, opts) {
 		}
 		// Convert to ids
 		opts.exclude = opts.exclude.map(function(v) {
-			if (v instanceof local.web.Response) {
+			if (v instanceof local.Response) {
 				return v.broadcastStreamId;
 			}
 			return v;
@@ -3243,7 +3433,7 @@ Broadcaster.prototype.emitTo = function(responseStream, eventName, data) {
 };
 
 // wrap helper
-local.web.broadcaster = function() {
+local.broadcaster = function() {
 	return new Broadcaster();
 };
 /*
@@ -3280,15 +3470,15 @@ var objectHelper = (function () {
     function isString (value) {
         return Object.prototype.toString.apply(value) === '[object String]';
     }
-    
+
     function isNumber (value) {
         return Object.prototype.toString.apply(value) === '[object Number]';
     }
-    
+
     function isBoolean (value) {
         return Object.prototype.toString.apply(value) === '[object Boolean]';
     }
-    
+
     function join (arr, separator) {
         var
             result = '',
@@ -4117,7 +4307,7 @@ var UriTemplate = (function () {
 
 }(function (UriTemplate) {
         "use strict";
-        local.web.UriTemplate = UriTemplate;
+        local.UriTemplate = UriTemplate;
 }));// Navigator
 // =========
 
@@ -4140,10 +4330,10 @@ function NavigatorContext(query) {
 	this.query = query;
 	this.resolveState = NavigatorContext.UNRESOLVED;
 	this.error = null;
-	this.queryIsAbsolute = (typeof query == 'string' && local.web.isAbsUri(query));
+	this.queryIsAbsolute = (typeof query == 'string' && local.isAbsUri(query));
 	if (this.queryIsAbsolute) {
 		this.url  = query;
-		this.urld = local.web.parseUri(this.url);
+		this.urld = local.parseUri(this.url);
 	} else {
 		this.url = null;
 		this.urld = null;
@@ -4167,7 +4357,7 @@ NavigatorContext.prototype.setResolved = function(url) {
 	this.resolveState = NavigatorContext.RESOLVED;
 	if (url) {
 		this.url          = url;
-		this.urld         = local.web.parseUri(this.url);
+		this.urld         = local.parseUri(this.url);
 	}
 };
 NavigatorContext.prototype.setFailed = function(error) {
@@ -4187,8 +4377,9 @@ NavigatorContext.prototype.setFailed = function(error) {
 // EXAMPLE 1. Get Bob from Foobar.com
 // - basic navigation
 // - requests
-var foobarService = local.web.navigator('https://foobar.com');
-var bob = foobarService.follow('rel:||collection=users||item=bob');
+var foobarService = local.navigator('https://foobar.com');
+var bob = foobarService.follow('|collection=users|item=bob');
+// ^ or local.navigator('nav:||https://foobar.com|collection=users|item=bob')
 // ^ or foobarService.follow([{ rel: 'collection', id: 'users' }, { rel: 'item', id:'bob' }]);
 // ^ or foobarService.follow({ rel: 'collection', id: 'users' }).follow({ rel: 'item', id:'bob' });
 bob.get()
@@ -4207,7 +4398,7 @@ bob.get()
 // EXAMPLE 2. Get all users who joined after 2013, in pages of 150
 // - additional navigation query parameters
 // - server-driven batching
-var pageCursor = foobarService.follow('rel:||collection=users,since=2013-01-01,limit=150');
+var pageCursor = foobarService.follow('|collection=users,since=2013-01-01,limit=150');
 pageCursor.get()
 	// -> GET https://foobar.com/users?since=2013-01-01&limit=150 (Accept: application/json)
 	.then(function readNextPage(response) {
@@ -4215,22 +4406,22 @@ pageCursor.get()
 		emailNewbieGreetings(response.body); // -- emailNewbieGreetings is a fake utility function
 
 		// Go to the 'next page' link, as supplied by the response
-		pageCursor = pageCursor.follow('rel:||next');
+		pageCursor = pageCursor.follow('|next');
 		return pageCursor.get().then(readNextPage);
 		// -> GET https://foobar.com/users?since=2013-01-01&limit=150&offset=150 (Accept: application/json)
 	})
 	.fail(function(response, request) {
 		// Not finding a 'rel=next' link means the server didn't give us one.
-		if (response.status == local.web.LINK_NOT_FOUND) { // 001 Local: Link not found - termination condition
+		if (response.status == local.LINK_NOT_FOUND) { // 001 Local: Link not found - termination condition
 			// Tell Bob his greeting was sent
-			bob.follow('rel:||grimwire.com/-mail/inbox').post({
+			bob.follow('|grimwire.com/-mail/inbox').post({
 				title: '2013 Welcome Emails Sent',
 				body: 'Good work, Bob.'
 			});
 			// -> POST https://foobar.com/mail/users/bob/inbox (Content-Type: application/json)
 		} else {
 			// Tell Bob something went wrong
-			bob.follow('rel:||grimwire.com/-mail/inbox').post({
+			bob.follow('|grimwire.com/-mail/inbox').post({
 				title: 'ERROR! 2013 Welcome Emails Failed!',
 				body: 'Way to blow it, Bob.',
 				attachments: {
@@ -4254,7 +4445,7 @@ function Navigator(context, parentNavigator) {
 	if (this.context.isRelative() && !parentNavigator)
 		throw new Error("A parentNavigator is required for navigators with relative contexts");
 }
-local.web.Navigator = Navigator;
+local.Navigator = Navigator;
 
 // Sets defaults to be used in all requests
 // - eg nav.setRequestDefaults({ method: 'GET', headers: { authorization: 'bob:pass', accept: 'text/html' }})
@@ -4296,18 +4487,18 @@ Navigator.prototype.dispatch = function(req) {
 	return ((req.url) ? local.promise(req.url) : this.resolve({ retry: req.retry, nohead: true }))
 		.succeed(function(url) {
 			req.url = url;
-			return local.web.dispatch(req);
+			return local.dispatch(req);
 		})
 		.succeed(function(res) {
 			// After every successful request, update our links and mark our context as good (in case it had been bad)
 			self.context.setResolved();
-			if (res.headers.link) self.links = res.headers.link;
+			if (res.parsedHeaders.link) self.links = res.parsedHeaders.link;
 			else self.links = self.links || []; // cache an empty link list so we dont keep trying during resolution
 			return res;
 		})
 		.fail(function(res) {
 			// Let a 1 or 404 indicate a bad context (as opposed to some non-navigational error like a bad request body)
-			if (res.status === local.web.LINK_NOT_FOUND || res.status === 404)
+			if (res.status === local.LINK_NOT_FOUND || res.status === 404)
 				self.context.setFailed(res);
 			throw res;
 		});
@@ -4323,16 +4514,16 @@ Navigator.prototype.subscribe = function(req) {
 		if (self.requestDefaults)
 			copyDefaults(req, self.requestDefaults);
 
-		return local.web.subscribe(req);
+		return local.subscribe(req);
 	});
 };
 
 // Follows a link relation from our context, generating a new navigator
 // - `query` may be:
-//   - an object in the same form of a `local.web.queryLink()` parameter
+//   - an object in the same form of a `local.queryLink()` parameter
 //   - an array of link query objects (to be followed sequentially)
 //   - a URI string
-//     - if using the 'rel:' scheme, will convert the URI into a link query object
+//     - if using the 'nav:' scheme, will convert the URI into a link query object
 //     - if a relative URI using the HTTP/S/L scheme, will follow the relation relative to the current context
 //     - if an absolute URI using the HTTP/S/L scheme, will go to that URI
 // - uses URI Templates to generate URLs
@@ -4340,9 +4531,9 @@ Navigator.prototype.subscribe = function(req) {
 //   - the exception to this is: `rel` matches and the HREF has an {id} token
 //   - all other attributes are used to fill URI Template tokens and are not required to match
 Navigator.prototype.follow = function(query) {
-	// convert rel: uri to a query array
-	if (typeof query == 'string' && local.web.isRelSchemeUri(query))
-		query = local.web.parseRelUri(query);
+	// convert nav: uri to a query array
+	if (typeof query == 'string' && local.isNavSchemeUri(query))
+		query = local.parseNavUri(query);
 
 	// make sure we always have an array
 	if (!Array.isArray(query))
@@ -4374,7 +4565,7 @@ Navigator.prototype.rebase = function(url) {
 	this.context.query = url;
 	this.context.queryIsAbsolute = true;
 	this.context.url  = url;
-	this.context.urld = local.web.parseUri(url);
+	this.context.urld = local.parseUri(url);
 	return this;
 };
 
@@ -4422,8 +4613,8 @@ Navigator.prototype.resolve = function(options) {
 					}
 
 					// Error - Link not found
-					var response = new local.web.Response();
-					response.writeHead(local.web.LINK_NOT_FOUND, 'link query failed to match').end();
+					var response = new local.Response();
+					response.writeHead(local.LINK_NOT_FOUND, 'link query failed to match').end();
 					throw response;
 				})
 				.fail(function(error) {
@@ -4450,31 +4641,15 @@ Navigator.prototype.resolve = function(options) {
 Navigator.prototype.lookupLink = function(context) {
 	if (context.query) {
 		if (typeof context.query == 'object') {
-			// Search only by rel and ID
-			var reducedQuery = {};
-			if (typeof context.query.rel != 'undefined')
-				reducedQuery.rel = context.query.rel;
-			if (typeof context.query.id != 'undefined')
-				reducedQuery.id = context.query.id;
-
 			// Try to find a link that matches
-			var link = local.web.queryLinks1(this.links, reducedQuery);
-			if (!link && reducedQuery.id) {
-				// Try again without the id
-				reducedQuery.id = undefined;
-				link = local.web.queryLinks1(this.links, reducedQuery);
-				// Make sure we got a link with an id templating token
-				if (!link || /{id}/.test(link.href) === false)
-					link = null;
-			}
-
+			var link = local.queryLinks(this.links, context.query)[0];
 			if (link)
-				return local.web.UriTemplate.parse(link.href).expand(context.query);
+				return local.UriTemplate.parse(link.href).expand(context.query);
 		}
 		else if (typeof context.query == 'string') {
 			// A URL
-			if (!local.web.isAbsUrl(context.query))
-				return local.web.joinRelPath(this.context.urld, context.query);
+			if (!local.isAbsUrl(context.query))
+				return local.joinRelPath(this.context.urld, context.query);
 			return context.query;
 		}
 	}
@@ -4511,13 +4686,13 @@ Navigator.prototype.notify = makeDispWBodySugar('NOTIFY');
 
 // Builder
 // =======
-local.web.navigator = function(queryOrNav) {
+local.navigator = function(queryOrNav) {
 	if (queryOrNav instanceof Navigator)
 		return queryOrNav;
 
-	// convert rel: uri to a query array
-	if (typeof queryOrNav == 'string' && local.web.isRelSchemeUri(queryOrNav))
-		queryOrNav = local.web.parseRelUri(queryOrNav);
+	// convert nav: uri to a query array
+	if (typeof queryOrNav == 'string' && local.isNavSchemeUri(queryOrNav))
+		queryOrNav = local.parseNavUri(queryOrNav);
 
 	// make sure we always have an array
 	if (!Array.isArray(queryOrNav))
@@ -4531,29 +4706,41 @@ local.web.navigator = function(queryOrNav) {
 
 	return nav;
 };// Local Registry Host
-local.web.registerLocal('hosts', function(req, res) {
-	var localHosts = local.web.getLocalRegistry();
+local.registerLocal('hosts', function(req, res) {
+	var localHosts = local.getLocalRegistry();
 
 	if (!(req.method == 'HEAD' || req.method == 'GET'))
 		return res.writeHead(405, 'bad method').end();
 
-	if (req.method == 'GET' && !local.web.preferredType(req, 'application/json'))
+	if (req.method == 'GET' && !local.preferredType(req, 'application/json'))
 		return res.writeHead(406, 'bad accept - only provides application/json').end();
 
+	var responses_ = [];
 	var domains = [], links = [];
 	links.push({ href: '/', rel: 'self service via', id: 'hosts' });
 	for (var domain in localHosts) {
 		if (domain == 'hosts')
 			continue;
 		domains.push(domain);
-		links.push({ href: 'httpl://'+domain, id: domain, rel: 'service' });
+		responses_.push(local.dispatch({ method: 'HEAD', url: 'httpl://'+domain }));
 	}
-	res.setHeader('link', links);
 
-	if (req.method == 'HEAD')
-		return res.writeHead(204, 'ok, no content').end();
-	res.writeHead(200, 'ok', { 'content-type': 'application/json' });
-	res.end({ host_names: domains });
+	local.promise.bundle(responses_).then(function(ress) {
+		ress.forEach(function(res, i) {
+			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!selfLink) {
+				selfLink = { rel: 'service', id: domains[i], href: 'httpl://'+domains[i] };
+			}
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\s)self(\s|$)/i, '') : 'service';
+			links.push(selfLink);
+		});
+
+		res.setHeader('link', links);
+		if (req.method == 'HEAD')
+			return res.writeHead(204, 'ok, no content').end();
+		res.writeHead(200, 'ok', { 'content-type': 'application/json' });
+		res.end({ host_names: domains });
+	});
 });})();// Local Toplevel
 // ==============
 // pfraze 2013
@@ -4562,54 +4749,65 @@ if (typeof this.local == 'undefined')
 	this.local = {};
 
 (function() {local.workerBootstrapUrl = 'worker.min.js';
-// Aliases to common functions
-local.dispatch  = local.web.dispatch;
-local.subscribe = local.web.subscribe;
-local.navigator = local.web.navigator;
-local.peerRelay = local.web.peerRelay;// Helpers to create servers
+local.logAllExceptions = false;// Helpers to create servers
+// -
 
-// - `ServerConstructor`: required function
-// - `opts`: optional object, additional config to mix into the new server
-local.spawnAppServer = function(ServerConstructor, opts) {
-	var server = new ServerConstructor(opts);
-	var domain = getAvailableLocalDomain(ServerConstructor.name.toLowerCase() + '{n}');
-	local.web.registerLocal(domain, server);
-	return server;
-};
+// EXPORTED
+// Creates a Web Worker and a bridge server to the worker
+// eg `local.spawnWorkerServer('http://foo.com/myworker.js', localServerFn, )
+// - `src`: required string, the URI to load into the worker
+// - `config`: optional object, additional config options to pass to the worker
+// - `config.domain`: optional string, overrides the automatic domain generation
+// - `config.shared`: boolean, should the workerserver be shared?
+// - `config.namespace`: optional string, what should the shared worker be named?
+//   - defaults to `config.src` if undefined
+// - `config.nullify`: optional [string], a list of objects to nullify when the worker loads
+//   - defaults to ['XMLHttpRequest', 'Worker', 'WebSocket', 'EventSource']
+// - `config.bootstrapUrl`: optional string, specifies the URL of the worker bootstrap script
+// - `serverFn`: optional function, a response generator for requests from the worker
+local.spawnWorkerServer = function(src, config, serverFn) {
+	if (typeof config == 'function') { serverFn = config; config = null; }
+	if (!config) { config = {}; }
+	config.src = src;
+	config.serverFn = serverFn;
 
-// - `src`: required string
-// - `opts`: optional object, additional config to mix into the new server
-local.spawnWorkerServer = function(src, opts) {
-	if (!opts) {
-		opts = {};
+	// Create the server
+	var server = new local.WorkerBridgeServer(config);
+
+	// Find an open domain and register
+	var domain = config.domain;
+	if (!domain) {
+		if (src.indexOf('data:') === 0) {
+			domain = getAvailableLocalDomain('worker{n}');
+		} else {
+			domain = getAvailableLocalDomain(src.split('/').pop().toLowerCase() + '{n}');
+		}
 	}
-	opts.src = src;
-	var server = new local.web.WorkerServer(opts);
-	// :TODO: data-uris
-	var domain = getAvailableLocalDomain(src.split('/').pop().toLowerCase() + '{n}');
-	local.web.registerLocal(domain, server);
+	local.registerLocal(domain, server);
+
 	return server;
 };
 
+// EXPORTED
+// Opens a stream to a peer relay
 // - `providerUrl`: required string, the relay provider
-// - `serverFn`: required function, the function for peerservers' handleRemoteWebRequest
 // - `config.app`: optional string, the app to join as (defaults to window.location.host)
-local.joinPeerWeb = function(providerUrl, serverFn, config) {
+// - `serverFn`: optional function, a response generator for requests from connected peers
+local.joinPeerRelay = function(providerUrl, config, serverFn) {
+	if (typeof config == 'function') { serverFn = config; config = null; }
 	if (!config) config = {};
 	config.provider = providerUrl;
 	config.serverFn = serverFn;
-	return new local.web.PeerWebRelay(config);
+	return new local.PeerWebRelay(config);
 };
 
+// helper for name assignment
 function getAvailableLocalDomain(base) {
 	var i = '', str;
 	do {
 		str = base.replace('{n}', i);
-		if (!i)
-			i = 2;
-		else
-			i++;
-	} while (local.web.getLocal(str));
+		i = (!i) ? 2 : i + 1;
+	} while (local.getLocal(str));
 	return str;
 }// Standard DOM Events
 // ===================

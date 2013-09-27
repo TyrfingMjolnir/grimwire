@@ -10,7 +10,7 @@ var _users = [];
 // ===============
 
 // APIs
-var p2pwServiceAPI = local.navigator('rel://'+host+'||self+grimwire.com/-p2pw/service');
+var p2pwServiceAPI = local.navigator('nav:||//'+host+'|self+grimwire.com/-p2pw/service');
 var p2pwUsersAPI   = p2pwServiceAPI.follow({ rel: 'grimwire.com/-user collection' });
 var p2pwSessionAPI = p2pwServiceAPI.follow({ rel: 'grimwire.com/-session' });
 
@@ -31,7 +31,7 @@ function refreshPage() {
 
 // Load active users
 function loadActiveUsers() {
-	p2pwUsersAPI.get({Accept: 'application/json'})
+	p2pwUsersAPI.get({ accept: 'application/json' })
 		.then(function(res) {
 			if (!res.body || !res.body.rows) {
 				return;
