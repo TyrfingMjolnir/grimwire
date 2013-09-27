@@ -49,6 +49,15 @@
           <p id="login-status" class="text-info"></p>
           <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
         </form>
+        <form class="form-newuser">
+          <h2 class="form-newuser-heading">New users</h2>
+          <input type="text" class="form-control" placeholder="Username" name="id">
+          <input type="text" class="form-control" placeholder="Email (optional)" name="email">
+          <input name="password" type="password" class="form-control" placeholder="Password" name="password">
+          <p id="newuser-error" class="text-danger"></p>
+          <p id="newuser-status" class="text-info"></p>
+          <button class="btn btn-lg btn-success btn-block" type="submit">Start</button>
+        </form>
       </div> <!-- /row -->
 
     </div> <!-- /container -->
@@ -78,6 +87,36 @@
             $('#login-error').html('Invalid username or password.');
           } else {
             $('#login-error').html('Unknown error ('+res.status+') sorry for the inconvenience.');
+          }
+        });
+      return false;
+    });
+    $('.form-newuser').on('submit', function(e) {
+      var creds = $('.form-newuser').serializeArray();
+      $('#newuser-status').html('Processing...');
+      $('#newuser-error').html('');
+      usersAPI.post({ id: creds[0].value, email: creds[1].value, password: creds[2].value })
+        .then(function(res) {
+          // Success, sign in
+          sessionAPI.post({ id: creds[0].value, password: creds[2].value })
+            .then(function(res) {
+              $('#newuser-status').html('Processing... Account created.');
+              // Success, reload
+              window.location.href = window.location.href;
+              window.location.reload();
+            })
+            .fail(function(res) {
+              $('#newuser-error').html('Your account has been created, but we received an unexpected error while signing you in. Please try to sign in manually.');
+            })
+        })
+        .fail(function(res) {
+          $('#newuser-status').html('');
+          if (res.status == 409) {
+            $('#newuser-error').html('That username has been taken.');
+          } else if (res.status == 422) {
+            $('#newuser-error').html('Username and password are required.');
+          } else {
+            $('#newuser-error').html('Unknown error ('+res.status+') sorry for the inconvenience.');
           }
         });
       return false;

@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+var fs = require('fs');
+var pid;
+try {
+	pid = fs.readFileSync('./pid');
+} catch (e) {
+	pid = null;
+}
+
+switch (process.argv[2]) {
+	case 'start':
+		if (pid) {
+			console.log('Grimwire is already running (pid '+pid+')');
+			return;
+		}
+		require('./manager_server.js');
+		break;
+
+	case 'stop':
+		if (pid) {
+			console.log('Stopping...');
+			process.kill(pid, 'SIGINT');
+		}
+		break;
+
+	case 'reload':
+		if (pid) {
+			process.kill(pid, 'SIGHUP');
+		}
+		break;
+
+	default:
+		console.log('Unknown command, "'+process.argv[2]+'"');
+		console.log('  Usage: grimwire [start|stop|reload]');
+		break;
+}

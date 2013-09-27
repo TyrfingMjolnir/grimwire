@@ -1,9 +1,12 @@
 var http = require('http');
 var https = require('https');
 var express = require('express');
-var middleware = require('./lib/middleware.js');
 var winston = require('winston');
+var fs = require('fs');
 
+var middleware = require('./lib/middleware.js');
+var html = require('./lib/html.js');
+html.load();
 
 // Config
 // ======
@@ -13,9 +16,25 @@ var config = {
 	port: process.env.PORT || (process.env.SSL ? 443 : 80),
 	ssl: process.env.SSL || false,
 	livemode: process.env.LIVE || false,
-	is_upstream: process.env.IS_UPSTREAM || false
+	is_upstream: process.env.IS_UPSTREAM || false,
+	settings: {
+		allow_signup: true
+	}
 };
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
+function readSettingsFile() {
+	try {
+		var settings = JSON.parse(fs.readFileSync('./config.json'));
+		for (var k in settings) {
+			config.settings[k] = settings[k];
+		}
+	} catch (e) {
+		winston.error('Failed to read/parse config.json', { error: e.toString() });
+		return false;
+	}
+	return true;
+}
+readSettingsFile();
 
 
 // Server State
@@ -56,16 +75,14 @@ server.all('/', function(req, res, next) {
 });
 server.head('/', function(req, res) { res.send(204); });
 server.get('/',
-	middleware.authenticate(db),
+	middleware.authenticate(config, db),
 	function(req, res, next) {
 		return res.format({
-			'text/html': function() { res.send(getHomepageHtml()); },
+			'text/html': function() { res.send(require('./html.js').dashboard); },
 			'application/json': function() { res.json({ msg: 'hello' }); }
 		});
 	}
 );
-var homepageHtml = require('fs').readFileSync('./static/dashboard.html').toString();
-function getHomepageHtml() { return homepageHtml; }
 // Servers
 server.use('/', express.static(__dirname + '/static'));
 var usersServer = require('./lib/servers/users.js')(config, db);
@@ -92,6 +109,10 @@ server.get('/status', function(request, response) {
 });
 process.on('SIGHUP', function() {
 	winston.info('Received SIGHUP signal, reloading configuration.');
+	if (readSettingsFile()) {
+		winston.info('Updated config', config);
+	}
+	html.load();
 	db.loadUsers();
 });
 
@@ -109,3 +130,12 @@ if (config.ssl) {
 }
 server.startTime = new Date();
 winston.info('Management HTTP server listening on port '+config.port, config);
+
+
+// PID management
+// ==============
+fs.writeFileSync('./pid', process.pid);
+process.on('SIGINT', function() {
+	fs.unlinkSync('./pid');
+	process.exit(0);
+});
