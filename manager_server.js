@@ -4,6 +4,7 @@ var express = require('express');
 var middleware = require('./lib/middleware.js');
 var winston = require('winston');
 
+
 // Config
 // ======
 var os = require("os");
@@ -16,11 +17,13 @@ var config = {
 };
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
 
+
 // Server State
 // ============
 var server = express();
 var db = require('./lib/db')();
 winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.livemode ? true  : false });
+
 
 // Common Handlers
 // ===============
@@ -86,6 +89,10 @@ server.get('/status', function(request, response) {
 		uptime_days: uptime/(24*60*60*1000),
 		relay: usersServer.getStatus()
 	});
+});
+process.on('SIGHUP', function() {
+	winston.info('Received SIGHUP signal, reloading configuration.');
+	db.loadUsers();
 });
 
 
