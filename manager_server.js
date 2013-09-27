@@ -10,13 +10,14 @@ html.load();
 
 // Config
 // ======
+var argv = require('optimist').argv;
 var os = require("os");
 var config = {
-	hostname: process.env.HOSTNAME || os.hostname(),
-	port: process.env.PORT || (process.env.SSL ? 443 : 80),
-	ssl: process.env.SSL || false,
-	livemode: process.env.LIVE || false,
-	is_upstream: process.env.IS_UPSTREAM || false,
+	hostname: argv.h || argv.hostname || os.hostname(),
+	port: argv.p || argv.port || (argv.ssl ? 443 : 80),
+	ssl: argv.ssl || false,
+	debugmode: argv.debug || false,
+	is_upstream: argv.is_upstream || false,
 	settings: {
 		allow_signup: true
 	}
@@ -41,7 +42,7 @@ readSettingsFile();
 // ============
 var server = express();
 var db = require('./lib/db')();
-winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.livemode ? true  : false });
+winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.debugmode ? false : true });
 
 
 // Common Handlers
