@@ -41,23 +41,28 @@
 
       <br/>
       <div class="row">
-        <form class="form-login">
-          <h2 class="form-login-heading">Existing users</h2>
-          <input name="id" type="text" class="form-control" placeholder="Username" autofocus="" name="id">
-          <input name="password" type="password" class="form-control" placeholder="Password" name="password">
-          <p id="login-error" class="text-danger"></p>
-          <p id="login-status" class="text-info"></p>
-          <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
-        </form>
-        <form class="form-newuser">
-          <h2 class="form-newuser-heading">New users</h2>
-          <input type="text" class="form-control" placeholder="Username" name="id">
-          <input type="text" class="form-control" placeholder="Email (optional)" name="email">
-          <input name="password" type="password" class="form-control" placeholder="Password" name="password">
-          <p id="newuser-error" class="text-danger"></p>
-          <p id="newuser-status" class="text-info"></p>
-          <button class="btn btn-lg btn-success btn-block" type="submit">Start</button>
-        </form>
+        <div class="col-md-4 well forms">
+          <form class="form-login">
+            <h3 class="form-login-heading">Existing users</h3>
+            <input name="id" type="text" class="form-control" placeholder="Username" autofocus="" name="id">
+            <input name="password" type="password" class="form-control" placeholder="Password" name="password">
+            <p id="login-error" class="text-danger"></p>
+            <p id="login-status" class="text-info"></p>
+            <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
+          </form>
+          <form class="form-newuser">
+            <h3 class="form-newuser-heading">New users</h3>
+            <input type="text" class="form-control" placeholder="Username" name="id">
+            <input type="text" class="form-control" placeholder="Email (optional)" name="email">
+            <input name="password" type="password" class="form-control" placeholder="Password" name="password">
+            <p id="newuser-error" class="text-danger"></p>
+            <p id="newuser-status" class="text-info"></p>
+            <button class="btn btn-lg btn-success btn-block" type="submit">Start</button>
+          </form>
+        </div>
+        <div class="col-md-8 welcome">
+          {WELCOME_HTML}
+        </div>
       </div> <!-- /row -->
 
     </div> <!-- /container -->

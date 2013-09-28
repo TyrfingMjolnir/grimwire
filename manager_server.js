@@ -79,7 +79,7 @@ server.get('/',
 	middleware.authenticate(config, db),
 	function(req, res, next) {
 		return res.format({
-			'text/html': function() { res.send(require('./html.js').dashboard); },
+			'text/html': function() { res.send(require('./lib/html.js').dashboard); },
 			'application/json': function() { res.json({ msg: 'hello' }); }
 		});
 	}
