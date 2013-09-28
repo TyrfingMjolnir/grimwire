@@ -136,7 +136,6 @@ winston.info('Management HTTP server listening on port '+config.port, config);
 // PID management
 // ==============
 fs.writeFileSync('./pid', process.pid);
-process.on('SIGINT', function() {
-	fs.unlinkSync('./pid');
-	process.exit(0);
-});
+process.on('SIGINT', process.exit.bind(process, 0));
+process.on('uncaughtException', process.exit.bind(process, 0));
+process.on('exit', function() { fs.unlinkSync('./pid'); });

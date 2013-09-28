@@ -38,6 +38,11 @@
             <li class="dropdown">
               <a id="userid" href="#" class="dropdown-toggle" data-toggle="dropdown"><b class="caret"></b></a>
               <ul class="dropdown-menu">
+                <li class="dropdown-submenu">
+                  <a tabindex="-1" href="#">Change Avatar</a>
+                  <ul class="dropdown-menu avatars"></ul>
+                </li>
+                <li class="divider"></li>
                 <li><a id="logout" href="#">Log Out</a></li>
               </ul>
             </li>
@@ -50,21 +55,30 @@
     <div class="container">
 
       <div class="row">
-        <div class="col-md-8">
-          <h3>Online <small><a href="#" id="refresh">refresh</a></small></h3>
+        <div class="col-md-8" id="user-and-friends"></div>
+        <div class="col-md-4">
+          <div>{MOTD_HTML}</div>
+          <h4>Online <small><a href="#" id="refresh">refresh</a></small></h4>
           <div id="active-users"></div>
-        </div>
-        <div class="col-md-4 well">
-          {MOTD_HTML}
+          <hr/>
+          <p>
+            <small>CSS by <a href="http://getbootstrap.com/" target="_blank">Bootstrap</a>. Icons by <a href="http://www.fatcow.com/free-icons" target="_blank">FatCow</a> and <a href="http://glyphicons.com/" target="_blank">Glyphicons</a>. Libraries by <a href="http://stevenlevithan.com/" target="_blank">Stephen Levithan, <a href="https://github.com/fxa" target="_blank">Franz Antesberger</a>, and <a href="https://github.com/federomero" target="_blank">Federico Romero</a>. Grimwire by <a href="https://github.com/pfraze" target="_blank">Paul Frazee</a>. Licensed MIT.</small>
+          </p>
         </div>
       </div> <!-- /row -->
 
     </div> <!-- /container -->
 
+    <script>
+      var _avatars = {AVATARS};
+    </script>
+
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/local.js"></script>
     <script src="/js/bootstrap.min.js"></script>
 
-    <script src="/js/dashboard.js"></script>
+    <script src="/js/dashboard/page.js"></script>
+    <script src="/js/dashboard/ui.js"></script>
+    <script src="/js/dashboard/p2p.js"></script>
   </body>
 </html>

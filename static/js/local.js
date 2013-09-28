@@ -2421,7 +2421,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// Helper class for managing a peer web relay provider
 	// - `config.provider`: required string, the relay provider
 	// - `config.serverFn`: required function, the function for peerservers' handleRemoteWebRequest
-	// - `config.app`: optional string, the app to join as (defaults to window.location.host)
+	// - `config.app`: optional string, the app to join as (defaults to window.location.hostname)
 	// - `config.stream`: optional number, the stream id (defaults to pseudo-random)
 	// - `config.ping`: optional number, sends a ping to self via the relay at the given interval (in ms) to keep the stream alive
 	//   - set to false to disable keepalive pings
@@ -2429,7 +2429,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	function PeerWebRelay(config) {
 		if (!config) throw new Error("PeerWebRelay requires the `config` parameter");
 		if (!config.provider) throw new Error("PeerWebRelay requires `config.provider`");
-		if (!config.app) config.app = window.location.host;
+		if (!config.app) config.app = window.location.hostname;
 		if (typeof config.stream == 'undefined') config.stream = randomStreamId();
 		if (typeof config.ping == 'undefined') { config.ping = 45000; }
 		this.config = config;
