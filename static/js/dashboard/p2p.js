@@ -41,50 +41,52 @@ function peerServerFn(req, res, peer) {
 function serveRoot(req, res, peer) {
 	// Set link header
 	res.setHeader('link', [
-		'</>; rel="self service via grimwire.com/-dashboard"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Grimwire Relay"',
-		'</friends>; rel="collection grimwire.com/-friends"; id="friends"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Friends"',
-		'</links/{id}>; rel="collection grimwire.com/-links"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Application Links"',
-		'</index{?user}>; rel="index grimwire.com/-index"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Active Resources"'
-	].join(','));
+		{ href: '/', rel: 'self service via grimwire.com/-dashboard', user: _session.user_id, app: window.location.hostname, title: 'Grimwire Relay' },
+		{ href: '/friends', rel: 'collection grimwire.com/-friends', user: _session.user_id, app: window.location.hostname, title: 'Friends' },
+		{ href: '/links/{id}', rel: 'collection grimwire.com/-links', user: _session.user_id, app: window.location.hostname, title: 'Application Links' },
+		{ href: '/index', rel: 'collection grimwire.com/-index', user: _session.user_id, app: window.location.hostname, title: 'Active Resources' }
+	]);
 
-	// Handle HEAD
-	if (req.method == 'HEAD')
-		return res.writeHead(204, 'ok, no content').end();
+	// Handle method
+	switch (req.method) {
+		case 'HEAD':
+			return res.writeHead(204, 'ok, no content').end();
 
-	// Handle GET
-	if (req.method == 'GET') {
-		res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end({
-			user_id: _session.user_id,
-			avatar: _session.avatar
-		});
+		case 'GET':
+			return res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end({
+				user_id: _session.user_id,
+				avatar: _session.avatar
+			});
+
+		default:
+			return res.writeHead(405, 'bad method').end();
 	}
-
-	res.writeHead(405, 'bad method').end();
 }
 
 // /friends
 function serveFriends(req, res, peer) {
 	// Set link header
 	res.setHeader('link', [
-		'</>; rel="up service via grimwire.com/-dashboard"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Grimwire Relay"',
-		'</friends>; rel="self collection grimwire.com/-friends"; id="friends"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Friends"'
-	].join(','));
+		{ href: '/', rel: 'up service via grimwire.com/-dashboard', user: _session.user_id, app: window.location.hostname, title: 'Grimwire Relay' },
+		{ href: '/friends', rel: 'self collection grimwire.com/-friends', user: _session.user_id, app: window.location.hostname, title: 'Friends' }
+	]);
 
-	// Handle HEAD
-	if (req.method == 'HEAD')
-		return res.writeHead(204, 'ok, no content').end();
+	// Handle method
+	switch (req.method) {
+		case 'HEAD':
+			return res.writeHead(204, 'ok, no content').end();
 
-	// Handle GET
-	if (req.method == 'GET') {
-		// Perms
-		if (peer.getPeerInfo().user != _session.user_id) {
-			return res.writeHead(403, 'forbidden - cant read other users\'s friends').end();
-		}
+		case 'GET':
+			// Perms
+			if (peer.getPeerInfo().user != _session.user_id) {
+				return res.writeHead(403, 'forbidden - cant read other users\'s friends').end();
+			}
 
-		return res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end(_session.friends);
+			return res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end(_session.friends);
+
+		default:
+			return res.writeHead(405, 'bad method').end();
 	}
-
-	res.writeHead(405, 'bad method').end();
 }
 
 // /links/{id}
@@ -98,95 +100,102 @@ function serveLinks(req, res, peer) {
 
 	// Set link header
 	res.setHeader('link', [
-		'</>; rel="up service via grimwire.com/-dashboard"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Grimwire Relay"',
-		'</links/'+id+'>; rel="self collection grimwire.com/-links"; id="'+id+'"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Application Links"'
-	].join(','));
+		{ href: '/', rel: 'up service via grimwire.com/-dashboard', user: _session.user_id, app: window.location.hostname, title: 'Grimwire Relay' },
+		{ href: '/links/{id}', rel: 'self collection grimwire.com/-links', user: _session.user_id, app: window.location.hostname, title: 'Application Links' }
+	]);
 
-	// Handle HEAD
-	if (req.method == 'HEAD')
-		return res.writeHead(204, 'ok, no content').end();
+	// Handle method
+	switch (req.method) {
+		case 'HEAD':
+			return res.writeHead(204, 'ok, no content').end();
 
-	// Handle GET
-	if (req.method == 'GET') {
-		var appLinks = _user_links[id];
-		return res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end(appLinks);
-	}
+		case 'GET':
+			var appLinks = _user_links[id];
+			return res.writeHead(200, 'ok', { 'content-type': 'application/json' }).end(appLinks);
 
-	// Handle PUT
-	if (req.method == 'PUT') {
-		// Perms
-		if (peer.getPeerInfo().user != _session.user_id) {
-			return res.writeHead(403, 'forbidden - apps can only set links for their users').end();
-		}
-		if (id != peer.config.domain) {
-			return res.writeHead(403, 'forbidden - apps can only set their own links').end();
-		}
-
-		return req.finishStream().then(function(body) {
-			// Validate
-			body = local.httpHeaders.deserialize('link', body);
-			if (!Array.isArray(body)) {
-				return res.writeHead(422, 'bad entity - body must be a list of links').end();
+		case 'PUT':
+			// Perms
+			if (peer.getPeerInfo().user != _session.user_id) {
+				return res.writeHead(403, 'forbidden - apps can only set links for their users').end();
 			}
-			body.forEach(function(link) {
-				link.user = peer.getPeerInfo().user;
-				link.app = peer.getPeerInfo().app;
-				if (!local.isAbsUri(link.href)) {
-					link.href = 'httpl://'+id+link.href;
+			if (id != peer.config.domain) {
+				return res.writeHead(403, 'forbidden - apps can only set their own links').end();
+			}
+
+			req.finishStream().then(function(body) {
+				// Validate
+				body = local.httpHeaders.deserialize('link', body);
+				if (!Array.isArray(body)) {
+					return res.writeHead(422, 'bad entity - body must be a list of links').end();
 				}
+				body.forEach(function(link) {
+					link.user = peer.getPeerInfo().user;
+					link.app = peer.getPeerInfo().app;
+					if (!local.isAbsUri(link.href)) {
+						link.href = 'httpl://'+id+link.href;
+					}
+				});
+
+				// Update
+				_user_links[id] = body;
+
+				// Update UI
+				renderAll();
+
+				// Respond
+				res.writeHead(204, 'ok, no content').end();
 			});
+			return;
+
+		case 'DELETE':
+			// Perms
+			if (id != peer.config.domain) {
+				return res.writeHead(403, 'forbidden - apps can only remove their own links').end();
+			}
 
 			// Update
-			_user_links[id] = body;
+			delete _user_links[id];
 
 			// Update UI
 			renderAll();
 
 			// Respond
-			res.writeHead(204, 'ok, no content').end();
-		});
+			return res.writeHead(204, 'ok, no content').end();
+
+		default:
+			return res.writeHead(405, 'bad method').end();
 	}
-
-	// Handle DELETE
-	if (req.method == 'DELETE') {
-		// Perms
-		if (id != peer.config.domain) {
-			return res.writeHead(403, 'forbidden - apps can only remove their own links').end();
-		}
-
-		// Update
-		delete _user_links[id];
-
-		// Update UI
-		renderAll();
-
-		// Respond
-		return res.writeHead(204, 'ok, no content').end();
-	}
-
-	res.writeHead(405, 'bad method').end();
 }
 
 // /index
 function serveIndex(req, res, peer) {
-	// Set link header
+	// Build link header
 	var links = [
-		'</>; rel="up service via grimwire.com/-dashboard"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Grimwire Relay"',
-		'</index{?user}>; rel="self index grimwire.com/-index"; user="'+_session.user_id+'"; app="'+window.location.hostname+'"; title="Active Resources"'
+		{ href: '/', rel: 'up service via grimwire.com/-dashboard', user: _session.user_id, app: window.location.hostname, title: 'Grimwire Relay' },
+		{ href: '/index', rel: 'self collection grimwire.com/-index', user: _session.user_id, app: window.location.hostname, title: 'Active Resources' }
 	];
+
+	// Add session links
 	for (var domain in _user_links) {
-		links.push(local.httpHeaders.serialize('link', _user_links[domain]));
+		links = links.concat(_user_links[domain]);
 	}
-	if (req.query.user != _session.user_id) {
+
+	// Add friend links if this request is from the session owner
+	if (peer.getPeerInfo().user == _session.user_id) {
 		for (var userId in _friend_links) {
-			links.push(local.httpHeaders.serialize('link', _friend_links[userId]));
+			links = links.concat(_friend_links[userId]);
 		}
 	}
-	res.setHeader('link', links.join(', '));
 
-	// Handle HEAD
-	if (req.method == 'HEAD')
-		return res.writeHead(204, 'ok, no content').end();
+	// Set link header
+	res.setHeader('link', links);
 
-	res.writeHead(405, 'bad method').end();
+	// Handle method
+	switch (req.method) {
+		case 'HEAD':
+			return res.writeHead(204, 'ok, no content').end();
+
+		default:
+			return res.writeHead(405, 'bad method').end();
+	}
 }

@@ -8,8 +8,8 @@ var $active_users = $('#active-users');
 
 // Logout link
 $('#logout').on('click', function(e) {
-	p2pwSessionAPI.delete()
-		.then(refreshPage, function() {
+	sessionAPI.delete()
+		.then(window.location.refresh.bind(window.location), function() {
 			console.warn('Failed to delete session');
 		});
 	return false;
@@ -37,7 +37,6 @@ $('#refresh').on('click', loadActiveUsers);
 	);
 })();
 $('.avatars a').on('click', function() {
-	if (!_session) { return false; }
 	var avatar = $(this).data('avatar');
 
 	// Update UI
@@ -46,7 +45,7 @@ $('.avatars a').on('click', function() {
 	$('.user-avatar').attr('src', '/img/avatars/'+avatar);
 
 	// Update the user
-	p2pwUsersAPI.follow({ rel: 'item', id: _session.user_id })
+	usersAPI.follow({ rel: 'item', id: _session.user_id })
 		.patch({ avatar: avatar });
 	session.avatar = avatar;
 
@@ -54,21 +53,18 @@ $('.avatars a').on('click', function() {
 });
 
 // Rendering helpers
+function renderLinkRow(link) {
+	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+link.app+'" target="_blank">'+link.app+'</a></td></tr>';
+}
 function renderUserLinks() {
 	var html = '';
 	for (var domain in _user_links) {
-		html += _user_links[domain].map(function(link) {
-			return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+link.app+'" target="_blank">'+link.app+'</a></td></tr>';
-		}).join('');
+		html += _user_links[domain].map(renderLinkRow).join('');
 	}
 	return html;
 }
 function renderFriendLinks(userId) {
-	var friendLinks = _friend_links[userId];
-	if (!friendLinks) { return ''; }
-	return friendLinks.map(function(link) {
-		return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+link.app+'" target="_blank">'+link.app+'</a></td></tr>';
-	}).join('');
+	return (_friend_links[userId]) ? _friend_links[userId].map(renderLinkRow).join('') : '';
 }
 
 // Update UI state
@@ -133,7 +129,7 @@ function renderAll() {
 		if (friend && _session.friends.indexOf(friend) === -1) {
 			// Update the user
 			_session.friends.push(friend);
-			p2pwUsersAPI.follow({ rel: 'item', id: _session.user_id })
+			usersAPI.follow({ rel: 'item', id: _session.user_id })
 				.patch({ friends: _session.friends });
 
 			// Update UI
@@ -147,7 +143,7 @@ function renderAll() {
 		if (userId && _session.friends.indexOf(userId) !== -1) {
 			// Update the user
 			_session.friends.splice(_session.friends.indexOf(userId), 1);
-			p2pwUsersAPI.follow({ rel: 'item', id: _session.user_id })
+			usersAPI.follow({ rel: 'item', id: _session.user_id })
 				.patch({ friends: _session.friends });
 
 			// Update UI
