@@ -13,6 +13,7 @@
 }
 
 /* ui controls */
+#toolbar { position: absolute; right: 0; }
 .help-icon { color: #bbb; }
 
 /* dropdown submenus */
@@ -86,26 +87,27 @@
 
 /* loading animation */
 .loading {
-	outline: 2px solid #fff;
-	-webkit-animation-duration: 1s;
-	   -moz-animation-duration: 1s;
-	        animation-duration: 1s;
+	color: #333333; background: #fff;
+	-webkit-animation-duration: 0.5s;
+	   -moz-animation-duration: 0.5s;
+	        animation-duration: 0.5s;
 	-webkit-animation-name: loading;
 	   -moz-animation-name: loading;
 	        animation-name: loading;
 	-webkit-animation-iteration-count: infinite;
 	   -moz-animation-iteration-count: infinite;
 	        animation-iteration-count: infinite;
+	-webkit-animation-direction: alternate;
 }
 @-webkit-keyframes loading {
-	from { outline-color: #fff; }
-	to { outline-color: rgb(245, 220, 174); }
+	from { color: #333333; background: #fff; }
+	to { color: #999; background: #fafafa; }
 }
 @-moz-keyframes loading {
-	from { outline-color: #fff; }
-	to { outline-color: rgb(245, 220, 174); }
+	from { color: #333333; background: #fff; }
+	to { color: #999; background: #fafafa; }
 }
 @keyframes loading {
-	from { outline-color: #fff; }
-	to { outline-color: rgb(245, 220, 174); }
+	from { color: #333333; background: #fff; }
+	to { color: #999; background: #fafafa; }
 }

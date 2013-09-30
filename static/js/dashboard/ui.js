@@ -2,7 +2,6 @@
 // ==
 
 // Cache selectors
-var $toolbar = $('#toolbar');
 var $user_and_friends = $('#user-and-friends');
 var $active_users = $('#active-users');
 
@@ -15,8 +14,22 @@ $('#logout').on('click', function(e) {
 	return false;
 });
 
-// Refresh link
-$('#refresh').on('click', loadActiveUsers);
+// Refresh button
+$('.refresh').on('click', loadActiveUsers);
+
+// Add friend button
+$('.add-friend').on('click', function(e) {
+	var friend = prompt('User to add to your friends:');
+	if (friend && _session.friends.indexOf(friend) === -1) {
+		// Update the user
+		_session.friends.push(friend);
+		usersAPI.follow({ rel: 'item', id: _session.user_id })
+			.patch({ friends: _session.friends });
+
+		// Update UI
+		renderAll();
+	}
+});
 
 // Avatars
 (function() {
@@ -82,7 +95,6 @@ function renderAll() {
 
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<p><a class="add-friend btn btn-xs btn-default" href="javascript:void(0)" title="Add friend">+ Add friend</a></p>';
 		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderUserLinks()+'</table>';
 
 		// Friends
@@ -126,20 +138,6 @@ function renderAll() {
 	$('.active-peer').popover({
 		html: true,
 		placement: 'bottom'
-	});
-
-	// Add friend button
-	$('.add-friend').on('click', function(e) {
-		var friend = prompt('User to add to your friends:');
-		if (friend && _session.friends.indexOf(friend) === -1) {
-			// Update the user
-			_session.friends.push(friend);
-			usersAPI.follow({ rel: 'item', id: _session.user_id })
-				.patch({ friends: _session.friends });
-
-			// Update UI
-			renderAll();
-		}
 	});
 
 	// Remove friend button

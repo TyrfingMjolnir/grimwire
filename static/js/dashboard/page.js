@@ -117,6 +117,7 @@ function fetchFriendLinks() {
 		if (user && user.online && (window.location.hostname in user.streams)) {
 			// Loading indicator
 			$('#'+userId+'-links').addClass('loading');
+			$('#'+userId+'-links').html('<tr><td>Loading...</td></tr>');
 
 			// Build domain of their instance of the grimwire dashboard app
 			var relayDomain = local.makePeerDomain(userId, hostname, hostname, 0);
