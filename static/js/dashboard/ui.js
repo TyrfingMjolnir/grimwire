@@ -54,7 +54,12 @@ $('.avatars a').on('click', function() {
 
 // Rendering helpers
 function renderLinkRow(link) {
-	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+link.app+'" target="_blank">'+link.app+'</a></td></tr>';
+	var app = link.app;
+	if (!app) {
+		var peerd = local.parsePeerDomain(local.parseUri(link.href).authority);
+		app = peerd.app;
+	}
+	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+app+'" target="_blank">'+app+'</a></td></tr>';
 }
 function renderUserLinks() {
 	var html = '';
@@ -78,7 +83,7 @@ function renderAll() {
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
 		html += '<p><a class="add-friend btn btn-xs btn-default" href="javascript:void(0)" title="Add friend">+ Add friend</a></p>';
-		html += '<table class="table table-hover table-condensed">'+renderUserLinks()+'</table>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderUserLinks()+'</table>';
 
 		// Friends
 		_session.friends.forEach(function(friendId) {

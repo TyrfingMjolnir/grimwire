@@ -19,8 +19,10 @@ var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
 _session_ = sessionAPI.get({ accept: 'application/json' });
 _session_.then(setSession);
 function setSession(res) {
-	// Store state
+	// Update state
 	_session = res.body;
+	fetchUserLinks();
+	fetchFriendLinks();
 
 	// Update UI
 	$('#userid').html(_session.user_id+' <b class="caret"></b>');
@@ -33,6 +35,7 @@ function loadActiveUsers() {
 		.then(function(res) {
 			// Update state
 			_users = res.body.rows;
+			fetchUserLinks();
 			fetchFriendLinks();
 
 			// Udpate UI
@@ -59,6 +62,30 @@ function handleFailedRequest(res) {
 		// session lost
 		alert('Your session has expired, redirecting you to the login page.');
 		window.location.reload();
+	}
+}
+
+// Updates link cache of session user's apps
+function fetchUserLinks() {
+	if (!_session || !_users[_session.user_id]) { return; }
+
+	var user = _users[_session.user_id];
+	var hostname = window.location.hostname;
+	_user_links = {}; // reset the map
+	for (var appDomain in user.streams) {
+		user.streams[appDomain].forEach(function(streamId) {
+			// Build domain
+			var domain = _peerRelay.makeDomain(_session.user_id, appDomain, streamId);
+
+			// Fetch app links
+			local.dispatch({ method: 'HEAD', url: 'httpl://'+domain }).then(function(res) {
+				// Update linkmap
+				_user_links[domain] = res.parsedHeaders.link;
+
+				// Update UI
+				$('#'+_session.user_id+'-links').html(renderUserLinks());
+			}, console.error.bind(console, 'Failed to read links for '+domain));
+		});
 	}
 }
 
