@@ -21,8 +21,6 @@ _session_.then(setSession);
 function setSession(res) {
 	// Update state
 	_session = res.body;
-	fetchUserLinks();
-	fetchFriendLinks();
 
 	// Update UI
 	$('#userid').html(_session.user_id+' <b class="caret"></b>');
@@ -35,11 +33,13 @@ function loadActiveUsers() {
 		.then(function(res) {
 			// Update state
 			_users = res.body.rows;
-			fetchUserLinks();
-			fetchFriendLinks();
 
 			// Udpate UI
 			renderAll();
+
+			// Fetch links
+			fetchUserLinks();
+			fetchFriendLinks();
 		}, handleFailedRequest);
 	return false; // loadActiveUsers() is sometimes used as a DOM event handler
 }
@@ -69,24 +69,42 @@ function handleFailedRequest(res) {
 function fetchUserLinks() {
 	if (!_session || !_users[_session.user_id]) { return; }
 
+	// Put UI in loading state
+	var $userlinks = $('#'+_session.user_id+'-links');
+	$userlinks.addClass('loading');
+
+	var responses_ = [];
 	var user = _users[_session.user_id];
 	var hostname = window.location.hostname;
+	var hasApps = false;
 	_user_links = {}; // reset the map
 	for (var appDomain in user.streams) {
+		if (appDomain == hostname) { continue; }
 		user.streams[appDomain].forEach(function(streamId) {
+			hasApps = true;
 			// Build domain
 			var domain = _peerRelay.makeDomain(_session.user_id, appDomain, streamId);
 
 			// Fetch app links
-			local.dispatch({ method: 'HEAD', url: 'httpl://'+domain }).then(function(res) {
+			var response_ = local.dispatch({ method: 'HEAD', url: 'httpl://'+domain });
+			responses_.push(response_);
+			response_.then(function(res) {
 				// Update linkmap
 				_user_links[domain] = res.parsedHeaders.link;
 
 				// Update UI
-				$('#'+_session.user_id+'-links').html(renderUserLinks());
+				$userlinks.html(renderUserLinks());
 			}, console.error.bind(console, 'Failed to read links for '+domain));
 		});
 	}
+
+	// Put up a loading message if data is on its way
+	if (hasApps && !$userlinks.html()) $userlinks.html('<tr><td>Loading...</td></tr>');
+
+	// Update UI when finished
+	local.promise.bundle(responses_).then(function() {
+		$userlinks.removeClass('loading');
+	});
 }
 
 // Updates link cache of peers
@@ -97,6 +115,9 @@ function fetchFriendLinks() {
 		var hostname = window.location.hostname;
 		var user = _users[userId];
 		if (user && user.online && (window.location.hostname in user.streams)) {
+			// Loading indicator
+			$('#'+userId+'-links').addClass('loading');
+
 			// Build domain of their instance of the grimwire dashboard app
 			var relayDomain = local.makePeerDomain(userId, hostname, hostname, 0);
 
@@ -112,6 +133,7 @@ function fetchFriendLinks() {
 
 				// Update UI
 				$('#'+userId+'-links').html(renderFriendLinks(userId));
+				$('#'+userId+'-links').removeClass('loading');
 			}, console.error.bind(console, 'Failed to read links for '+userId));
 		}
 	});

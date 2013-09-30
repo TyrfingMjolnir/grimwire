@@ -2,8 +2,13 @@
 // ==================
 _peerRelay = local.joinPeerRelay('//'+window.location.host, { stream: 0 }, peerServerFn);
 _session_.then(function() {
+	// Connect to relay
 	_peerRelay.setAccessToken(_session.user_id+':_');
 	_peerRelay.startListening();
+
+	// Fetch links
+	fetchUserLinks();
+	fetchFriendLinks();
 });
 
 // Stream-taken handling

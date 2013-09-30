@@ -83,3 +83,29 @@
 .dropdown-menu.avatars .selected {
 	background: #eee;
 }
+
+/* loading animation */
+.loading {
+	outline: 2px solid #fff;
+	-webkit-animation-duration: 1s;
+	   -moz-animation-duration: 1s;
+	        animation-duration: 1s;
+	-webkit-animation-name: loading;
+	   -moz-animation-name: loading;
+	        animation-name: loading;
+	-webkit-animation-iteration-count: infinite;
+	   -moz-animation-iteration-count: infinite;
+	        animation-iteration-count: infinite;
+}
+@-webkit-keyframes loading {
+	from { outline-color: #fff; }
+	to { outline-color: rgb(245, 220, 174); }
+}
+@-moz-keyframes loading {
+	from { outline-color: #fff; }
+	to { outline-color: rgb(245, 220, 174); }
+}
+@keyframes loading {
+	from { outline-color: #fff; }
+	to { outline-color: rgb(245, 220, 174); }
+}
