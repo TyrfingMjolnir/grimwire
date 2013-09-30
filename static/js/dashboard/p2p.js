@@ -19,6 +19,38 @@ _peerRelay.on('streamTaken', function() {
 	}, 15000);
 });
 
+// Connect handling
+_peerRelay.on('connected', function(e) {
+	if (e.peer.user == _session.user_id) {
+		// Insert into the user's cache
+		var user = _users[_session.user_id];
+		if (!user.streams[e.peer.app]) user.streams[e.peer.app] = [];
+		user.streams[e.peer.app].push(e.peer.stream);
+
+		// Fetch links
+		local.dispatch({ method: 'HEAD', url: 'httpl://'+e.domain })
+			.then(function(res) {
+				// Process links
+				res.parsedHeaders.link.forEach(function(link) {
+					link.app = e.peer.app;
+					link.user = _session.user_id;
+				});
+
+				// Update linkmap
+				_user_links[e.domain] = res.parsedHeaders.link;
+
+				// Update UI
+				$('#'+_session.user_id+'-links').html(renderUserLinks());
+			});
+	} else {
+		// Update UI
+		renderAll();
+
+		// Update index
+		fetchFriendLinks();
+	}
+});
+
 // Disconnect handling
 _peerRelay.on('disconnected', function(e) {
 	// Clear out links

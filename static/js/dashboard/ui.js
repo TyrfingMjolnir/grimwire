@@ -8,7 +8,7 @@ var $active_users = $('#active-users');
 // Logout link
 $('#logout').on('click', function(e) {
 	sessionAPI.delete()
-		.then(window.location.refresh.bind(window.location), function() {
+		.then(window.location.reload.bind(window.location), function() {
 			console.warn('Failed to delete session');
 		});
 	return false;
@@ -28,6 +28,9 @@ $('.add-friend').on('click', function(e) {
 
 		// Update UI
 		renderAll();
+
+		// Update index
+		fetchFriendLinks();
 	}
 });
 

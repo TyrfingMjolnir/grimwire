@@ -15,6 +15,14 @@
 /* ui controls */
 #toolbar { position: absolute; right: 0; }
 .help-icon { color: #bbb; }
+#your-web {
+	position: absolute;
+    left: -55px;
+    top: 27px;
+    padding: 2px 7px 5px;
+    font-weight: normal;
+    background-color: #bbb;
+}
 
 /* dropdown submenus */
 /* http://bootply.com/71520 */

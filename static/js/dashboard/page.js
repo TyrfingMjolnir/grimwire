@@ -89,6 +89,12 @@ function fetchUserLinks() {
 			var response_ = local.dispatch({ method: 'HEAD', url: 'httpl://'+domain });
 			responses_.push(response_);
 			response_.then(function(res) {
+				// Process links
+				res.parsedHeaders.link.forEach(function(link) {
+					link.app = appDomain;
+					link.user = _session.user_id;
+				});
+
 				// Update linkmap
 				_user_links[domain] = res.parsedHeaders.link;
 
@@ -102,15 +108,18 @@ function fetchUserLinks() {
 	if (hasApps && !$userlinks.html()) $userlinks.html('<tr><td>Loading...</td></tr>');
 
 	// Update UI when finished
-	local.promise.bundle(responses_).then(function() {
+	var bundle = local.promise.bundle(responses_);
+	bundle.then(function() {
 		$userlinks.removeClass('loading');
 	});
+	return bundle;
 }
 
 // Updates link cache of peers
 function fetchFriendLinks() {
 	if (!_session) { return; }
 
+	var responses_ = [];
 	_session.friends.forEach(function(userId) {
 		var hostname = window.location.hostname;
 		var user = _users[userId];
@@ -123,10 +132,12 @@ function fetchFriendLinks() {
 			var relayDomain = local.makePeerDomain(userId, hostname, hostname, 0);
 
 			// Fetch their links
-			local.dispatch({
+			var response_ = local.dispatch({
 				method: 'HEAD',
 				url: 'nav:||httpl://'+relayDomain+'|grimwire.com/-index'
-			}).then(function(res) {
+			});
+			responses_.push(response_);
+			response_.then(function(res) {
 				// Update linkmap
 				_friend_links[userId] = res.parsedHeaders.link.filter(function(link) {
 					return link.app != hostname; // we only want non-dashboard links
@@ -138,4 +149,5 @@ function fetchFriendLinks() {
 			}, console.error.bind(console, 'Failed to read links for '+userId));
 		}
 	});
+	return local.promise.bundle(responses_);
 }
