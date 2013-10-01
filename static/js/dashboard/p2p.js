@@ -13,43 +13,11 @@ _session_.then(function() {
 
 // Stream-taken handling
 _peerRelay.on('streamTaken', function() {
-	console.log('Dashboard already active, will check again in 15 seconds.');
+	console.log('Your dashboard is already online, maybe in another tab or browser? Will check again in 15 seconds.');
 	setTimeout(function() {
 		_peerRelay.startListening();
 	}, 15000);
 });
-
-// Connect handling
-/*_peerRelay.on('connected', function(e) {
-	if (e.peer.user == _session.user_id) {
-		// Insert into the user's cache
-		var user = _users[_session.user_id];
-		if (!user.streams[e.peer.app]) user.streams[e.peer.app] = [];
-		user.streams[e.peer.app].push(e.peer.stream);
-
-		// Fetch links
-		local.dispatch({ method: 'HEAD', url: 'httpl://'+e.domain })
-			.then(function(res) {
-				// Process links
-				res.parsedHeaders.link.forEach(function(link) {
-					link.app = e.peer.app;
-					link.user = _session.user_id;
-				});
-
-				// Update linkmap
-				_user_links[e.domain] = res.parsedHeaders.link;
-
-				// Update UI
-				$('#'+_session.user_id+'-links').html(renderUserLinks());
-			});
-	} else {
-		// Update UI
-		renderAll();
-
-		// Update index
-		fetchFriendLinks();
-	}
-});*/
 
 // Disconnect handling
 _peerRelay.on('disconnected', function(e) {
@@ -149,6 +117,10 @@ function serveIndex(req, res, peer) {
 					// Validate
 					if (!link || typeof link != 'object' || !link.href) {
 						return res.writeHead(422, 'bad ent: link '+i+' did not parse into a link object').end();
+					}
+					// Prepend the host on relative uris
+					if (!local.isAbsUri(link.href)) {
+						link.href = peer.getUrl() + link.href;
 					}
 					// Ensure certain attributes
 					link.app = peer.getPeerInfo().app;

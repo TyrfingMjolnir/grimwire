@@ -63,7 +63,7 @@ $('.avatars a').on('click', function() {
 	// Update the user
 	usersAPI.follow({ rel: 'item', id: _session.user_id })
 		.patch({ avatar: avatar });
-	session.avatar = avatar;
+	_session.avatar = avatar;
 
 	return false;
 });
