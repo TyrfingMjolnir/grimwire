@@ -80,12 +80,12 @@ function renderLinkRow(link) {
 function renderUserLinks() {
 	var html = '';
 	for (var domain in _user_links) {
-		html += _user_links[domain].map(renderLinkRow).join('');
+		html += local.queryLinks(_user_links[domain], { rel: 'self' }).map(renderLinkRow).join('');
 	}
 	return html;
 }
 function renderFriendLinks(userId) {
-	return (_friend_links[userId]) ? _friend_links[userId].map(renderLinkRow).join('') : '';
+	return (_friend_links[userId]) ? local.queryLinks(_friend_links[userId], { rel: 'self' }).map(renderLinkRow).join('') : '';
 }
 
 // Update UI state

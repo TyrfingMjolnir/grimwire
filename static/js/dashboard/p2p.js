@@ -20,7 +20,7 @@ _peerRelay.on('streamTaken', function() {
 });
 
 // Connect handling
-_peerRelay.on('connected', function(e) {
+/*_peerRelay.on('connected', function(e) {
 	if (e.peer.user == _session.user_id) {
 		// Insert into the user's cache
 		var user = _users[_session.user_id];
@@ -49,7 +49,7 @@ _peerRelay.on('connected', function(e) {
 		// Update index
 		fetchFriendLinks();
 	}
-});
+});*/
 
 // Disconnect handling
 _peerRelay.on('disconnected', function(e) {
@@ -126,6 +126,56 @@ function serveFriends(req, res, peer) {
 
 // /index
 function serveIndex(req, res, peer) {
+	var user = peer.getPeerInfo().user;
+
+	// Handle method
+	switch (req.method) {
+		case 'HEAD':
+			// Respond
+			linkIndex(req, res, peer);
+			return res.writeHead(204, 'ok, no content').end();
+
+		case 'POST':
+			// Validate type
+			if (req.headers['content-type'] != 'application/json' && req.headers['content-type'] != 'text/plain') {
+				return res.writeHead(415, 'bad content-type: must be json or text/plain').end();
+			}
+			req.finishStream().then(function(body) {
+				// Prepare the links
+				body = local.httpHeaders.deserialize('link', body);
+				if (!Array.isArray(body)) { body = [body]; }
+				for (var i=0; i < body.length; i++) {
+					var link = body[i];
+					// Validate
+					if (!link || typeof link != 'object' || !link.href) {
+						return res.writeHead(422, 'bad ent: link '+i+' did not parse into a link object').end();
+					}
+					// Ensure certain attributes
+					link.app = peer.getPeerInfo().app;
+					link.user = peer.getPeerInfo().user;
+				}
+
+				// Update index
+				if (user == _session.user_id) {
+					_user_links[peer.config.domain] = body;
+					$('#'+_session.user_id+'-links').html(renderUserLinks());
+				} else {
+					_friend_links[user] = body;
+					$('#'+user+'-links').html(rendeFriendLinks(user));
+				}
+
+				// Respond
+				linkIndex(req, res, peer);
+				res.writeHead(204, 'ok, no content').end();
+			});
+			break;
+
+		default:
+			return res.writeHead(405, 'bad method').end();
+	}
+}
+
+function linkIndex(req, res, peer) {
 	// Build link header
 	var links = [
 		{ href: '/', rel: 'up service via grimwire.com/-dashboard', user: _session.user_id, app: window.location.hostname, title: 'Grimwire Relay' },
@@ -144,15 +194,6 @@ function serveIndex(req, res, peer) {
 		}
 	}
 
-	// Set link header
+	// Set header
 	res.setHeader('link', links);
-
-	// Handle method
-	switch (req.method) {
-		case 'HEAD':
-			return res.writeHead(204, 'ok, no content').end();
-
-		default:
-			return res.writeHead(405, 'bad method').end();
-	}
 }
