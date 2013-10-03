@@ -1798,6 +1798,7 @@ BridgeServer.prototype.handleRemoteWebRequest = function(request, response) {
 // Sends messages that were buffered while waiting for the channel to setup
 // - should be called by the subclass if there's any period between creation and channel activation
 BridgeServer.prototype.flushBufferedMessages = function() {
+	console.debug('FLUSHING MESSAGES', this, JSON.stringify(this.msgBuffer));
 	this.msgBuffer.forEach(function(msg) {
 		this.channelSendMsg(msg);
 	}, this);
@@ -2145,7 +2146,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		// optional: [{ RtpDataChannels: true }]
 		optional: [{DtlsSrtpKeyAgreement: true}]
 	};
-	var defaultIceServers = null;//{ iceServers: [{ url: 'stun:stun.l.google.com:19302' }] };
+	var defaultIceServers = { iceServers: [{ url: 'stun:stun.l.google.com:19302' }] };
 
 	function randomStreamId() {
 		return Math.round(Math.random()*10000);
@@ -2160,12 +2161,16 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// - `config.relay`: required PeerWebRelay
 	// - `config.initiate`: optional bool, if true will initiate the connection processes
 	// - `config.loopback`: optional bool, is this the local host? If true, will connect to self
+	// - `config.retryTimeout`: optional number, time (in ms) before a connection is aborted and retried (defaults to 15000)
+	// - `config.retries`: optional number, number of times to retry before giving up (defaults to 5)
 	function RTCBridgeServer(config) {
 		// Config
 		var self = this;
 		if (!config) config = {};
 		if (!config.peer) throw new Error("`config.peer` is required");
 		if (!config.relay) throw new Error("`config.relay` is required");
+		if (typeof config.retryTimeout == 'undefined') config.retryTimeout = 15000;
+		if (typeof config.retries == 'undefined') config.retries = 5;
 		local.BridgeServer.call(this, config);
 		local.util.mixinEventEmitter(this);
 
@@ -2177,25 +2182,17 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		this.peerInfo = peerd;
 
 		// Internal state
-		this.isConnecting = true;
+		this.isConnecting     = true;
 		this.isOfferExchanged = false;
-		this.isConnected = false;
-		this.candidateQueue = []; // cant add candidates till we get the offer
+		this.isConnected      = false;
+		this.candidateQueue   = []; // cant add candidates till we get the offer
+		this.offerNonce       = 0; // a random number used to decide who takes the lead if both nodes send an offer
+		this.retriesLeft      = config.retries;
+		this.rtcPeerConn      = null;
+		this.rtcDataChannel   = null;
 
 		// Create the peer connection
-		var servers = config.iceServers || defaultIceServers;
-		this.rtcPeerConn = new webkitRTCPeerConnection(servers, peerConstraints);
-		this.rtcPeerConn.onicecandidate             = onIceCandidate.bind(this);
-		this.rtcPeerConn.onicechange                = onIceConnectionStateChange.bind(this);
-		this.rtcPeerConn.oniceconnectionstatechange = onIceConnectionStateChange.bind(this);
-		this.rtcPeerConn.onsignalingstatechange     = onSignalingStateChange.bind(this);
-
-		// Create the HTTPL data channel
-		this.rtcDataChannel = this.rtcPeerConn.createDataChannel('httpl', { reliable: true });
-		this.rtcDataChannel.onopen     = onHttplChannelOpen.bind(this);
-		this.rtcDataChannel.onclose    = onHttplChannelClose.bind(this);
-		this.rtcDataChannel.onerror    = onHttplChannelError.bind(this);
-		this.rtcDataChannel.onmessage  = onHttplChannelMessage.bind(this);
+		this.createPeerConn();
 
 		if (this.config.loopback) {
 			// Setup to serve self
@@ -2210,9 +2207,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	RTCBridgeServer.prototype = Object.create(local.BridgeServer.prototype);
 	local.RTCBridgeServer = RTCBridgeServer;
 
-	RTCBridgeServer.prototype.getPeerInfo = function() {
-		return this.peerInfo;
-	};
+	// Accessors
+	RTCBridgeServer.prototype.getPeerInfo = function() { return this.peerInfo; };
 
 	// :DEBUG:
 	RTCBridgeServer.prototype.debugLog = function() {
@@ -2228,12 +2224,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			}
 			this.isConnecting = false;
 			this.isConnected = false;
+			this.destroyPeerConn();
 			this.emit('disconnected', { peer: this.peerInfo, domain: this.config.domain, server: this });
-
-			if (this.rtcPeerConn) {
-				this.rtcPeerConn.close();
-				this.rtcPeerConn = null;
-			}
 		}
 	};
 
@@ -2276,13 +2268,23 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	function onHttplChannelOpen(e) {
 		this.debugLog('HTTPL CHANNEL OPEN', e);
 
-		// Update state
-		this.isConnecting = false;
-		this.isConnected = true;
-		this.flushBufferedMessages();
+		// :HACK: for some reason, this CB is getting called before this.rtcDataChannel.negotiated == true
+		//        there doesnt seem to be any other event emitted, so we gotta poll for now
 
-		// Emit event
-		this.emit('connected', { peer: this.peerInfo, domain: this.config.domain, server: this });
+		var self = this;
+		setTimeout(function() {
+			console.warn('using rtcDataChannel delay hack');
+
+			// Update state
+			self.isConnecting = false;
+			self.isConnected = true;
+
+			// Get out any queued messages
+			self.flushBufferedMessages();
+
+			// Emit event
+			self.emit('connected', { peer: self.peerInfo, domain: self.config.domain, server: self });
+		}, 1000);
 	}
 
 	function onHttplChannelClose(e) {
@@ -2322,15 +2324,50 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 				break;
 
 			case 'offer':
-				this.debugLog('GOT OFFER', msg);
 				// Received a session offer from the peer
+				this.debugLog('GOT OFFER', msg);
+				if (this.isConnected) {
+					this.debugLog('RECEIVED AN OFFER WHEN BELIEVED TO BE CONNECTED, DROPPING');
+					return;
+				}
+
 				// Emit event
-				this.emit('connecting', { peer: this.peerInfo, domain: this.config.domain, server: this });
+				if (!this.isOfferExchanged) {
+					this.emit('connecting', { peer: this.peerInfo, domain: this.config.domain, server: this });
+				}
+
+				// Guard against an offer race conditions
+				if (this.config.initiate) {
+					// Leader conflict - compare nonces
+					this.debugLog('LEADER CONFLICT DETECTED, COMPARING NONCES', 'MINE=', this.offerNonce, 'THEIRS=', msg.nonce);
+					if (this.offerNonce < msg.nonce) {
+						// Reset into follower role
+						this.debugLog('RESETTING INTO FOLLOWER ROLE');
+						this.config.initiate = false;
+						this.resetPeerConn();
+					}
+				}
+
+				// Watch for reset offers from the leader
+				if (!this.config.initiate && this.isOfferExchanged) {
+					if (this.retriesLeft > 0) {
+						this.retriesLeft--;
+						this.debugLog('RECEIVED A NEW OFFER, RESETTING AND RETRYING. RETRIES LEFT:', this.retriesLeft);
+						this.resetPeerConn();
+					} else {
+						this.debugLog('RECEIVED A NEW OFFER, NO RETRIES LEFT. GIVING UP.');
+						this.terminate();
+						return;
+					}
+				}
+
 				// Update the peer connection
 				var desc = new RTCSessionDescription({ type: 'offer', sdp: msg.sdp });
 				this.rtcPeerConn.setRemoteDescription(desc);
+
 				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
+
 				// Send an answer
 				this.rtcPeerConn.createAnswer(
 					function(desc) {
@@ -2347,10 +2384,12 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 				break;
 
 			case 'answer':
-				this.debugLog('GOT ANSWER', msg);
 				// Received session confirmation from the peer
+				this.debugLog('GOT ANSWER', msg);
+
 				// Update the peer connection
 				this.rtcPeerConn.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+
 				// Burn the ICE candidate queue
 				handleOfferExchanged.call(self);
 				break;
@@ -2383,20 +2422,101 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			});
 	};
 
+	// Helper sets up the peer connection
+	RTCBridgeServer.prototype.createPeerConn = function() {
+		if (!this.rtcPeerConn) {
+			var servers = this.config.iceServers || defaultIceServers;
+			this.rtcPeerConn = new webkitRTCPeerConnection(servers, peerConstraints);
+			this.rtcPeerConn.onicecandidate             = onIceCandidate.bind(this);
+			this.rtcPeerConn.onicechange                = onIceConnectionStateChange.bind(this);
+			this.rtcPeerConn.oniceconnectionstatechange = onIceConnectionStateChange.bind(this);
+			this.rtcPeerConn.onsignalingstatechange     = onSignalingStateChange.bind(this);
+			this.rtcPeerConn.ondatachannel              = onDataChannel.bind(this);
+		}
+	};
+
+	// Helper tears down the peer conn
+	RTCBridgeServer.prototype.destroyPeerConn = function(suppressEvents) {
+		if (this.rtcDataChannel) {
+			this.rtcDataChannel.close();
+			if (suppressEvents) {
+				this.rtcDataChannel.onopen    = null;
+				this.rtcDataChannel.onclose   = null;
+				this.rtcDataChannel.onerror   = null;
+				this.rtcDataChannel.onmessage = null;
+			}
+			this.rtcDataChannel = null;
+		}
+		if (this.rtcPeerConn) {
+			this.rtcPeerConn.close();
+			if (suppressEvents) {
+				this.rtcPeerConn.onicecandidate             = null;
+				this.rtcPeerConn.onicechange                = null;
+				this.rtcPeerConn.oniceconnectionstatechange = null;
+				this.rtcPeerConn.onsignalingstatechange     = null;
+				this.rtcPeerConn.ondatachannel              = null;
+			}
+			this.rtcPeerConn = null;
+		}
+	};
+
+	// Helper restarts the connection process
+	RTCBridgeServer.prototype.resetPeerConn = function(suppressEvents) {
+		this.destroyPeerConn(true);
+		this.createPeerConn();
+		this.candidateQueue.length = 0;
+		this.isOfferExchanged = false;
+	};
+
+	// Helper initiates a timeout clock for the connection process
+	function initConnectTimeout() {
+		var self = this;
+		setTimeout(function() {
+			// Leader role only
+			if (self.config.initiate && self.isConnected === false) {
+				if (self.retriesLeft > 0) {
+					self.retriesLeft--;
+					console.debug('CONNECTION TIMED OUT, RESTARTING. TRIES LEFT:', self.retriesLeft);
+					// Reset
+					self.resetPeerConn();
+					self.sendOffer();
+				} else {
+					// Give up
+					console.debug('CONNECTION TIMED OUT, GIVING UP');
+					self.terminate();
+				}
+			}
+		}, this.config.retryTimeout);
+	}
+
 	// Helper initiates a session with peers on the relay
 	RTCBridgeServer.prototype.sendOffer = function() {
 		var self = this;
+
+		// Start the clock
+		initConnectTimeout.call(this);
+
+		// Create the HTTPL data channel
+		this.rtcDataChannel = this.rtcPeerConn.createDataChannel('httpl', { reliable: true });
+		this.rtcDataChannel.onopen     = onHttplChannelOpen.bind(this);
+		this.rtcDataChannel.onclose    = onHttplChannelClose.bind(this);
+		this.rtcDataChannel.onerror    = onHttplChannelError.bind(this);
+		this.rtcDataChannel.onmessage  = onHttplChannelMessage.bind(this);
+
 		// Generate offer
 		this.rtcPeerConn.createOffer(
 			function(desc) {
 				self.debugLog('CREATED OFFER', desc);
 
-				// store the SDP
+				// Store the SDP
 				desc.sdp = increaseSDP_MTU(desc.sdp);
 				self.rtcPeerConn.setLocalDescription(desc);
 
+				// Generate an offer nonce
+				self.offerNonce = Math.round(Math.random() * 10000000);
+
 				// Send offer msg
-				self.signal({ type: 'offer', sdp: desc.sdp });
+				self.signal({ type: 'offer', sdp: desc.sdp, nonce: self.offerNonce });
 			}
 		);
 		// Emit 'connecting' on next tick
@@ -2442,6 +2562,16 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		}
 	}
 
+	// Called by the RTCPeerConnection when a datachannel is created (receiving party only)
+	function onDataChannel(e) {
+		this.debugLog('DATA CHANNEL PROVIDED', e);
+		this.rtcDataChannel = e.channel;
+		this.rtcDataChannel.onopen     = onHttplChannelOpen.bind(this);
+		this.rtcDataChannel.onclose    = onHttplChannelClose.bind(this);
+		this.rtcDataChannel.onerror    = onHttplChannelError.bind(this);
+		this.rtcDataChannel.onmessage  = onHttplChannelMessage.bind(this);
+	}
+
 	// Increases the bandwidth allocated to our connection
 	// Thanks to michellebu (https://github.com/michellebu/reliable)
 	var higherBandwidthSDPRE = /b\=AS\:([\d]+)/i;
@@ -2457,14 +2587,16 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// Helper class for managing a peer web relay provider
 	// - `config.provider`: optional string, the relay provider
 	// - `config.serverFn`: optional function, the function for peerservers' handleRemoteWebRequest
-	// - `config.app`: optional string, the app to join as (defaults to window.location.hostname)
+	// - `config.app`: optional string, the app to join as (defaults to window.location.host)
 	// - `config.stream`: optional number, the stream id (defaults to pseudo-random)
 	// - `config.ping`: optional number, sends a ping to self via the relay at the given interval (in ms) to keep the stream alive
 	//   - set to false to disable keepalive pings
 	//   - defaults to 45000
+	// - `config.retryTimeout`: optional number, time (in ms) before a peer connection is aborted and retried (defaults to 15000)
+	// - `config.retries`: optional number, number of times to retry a peer connection before giving up (defaults to 5)
 	function PeerWebRelay(config) {
 		if (!config) config = {};
-		if (!config.app) config.app = window.location.hostname;
+		if (!config.app) config.app = window.location.host;
 		if (typeof config.stream == 'undefined') config.stream = randomStreamId();
 		if (typeof config.ping == 'undefined') { config.ping = 45000; }
 		this.config = config;
@@ -2601,6 +2733,9 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		window.addEventListener('message', this.messageFromAuthPopupHandler);
 
 		// Open interface in a popup
+		// :HACK: because popup blocking can only be avoided by a syncronous popup call, we have to manually construct the url (it burns us)
+		window.open(this.getProvider() + '/session/' + this.config.app);
+		/* the old half-solution:
 		if (this.accessTokenAPI.context.url) {
 			// Try to open immediately, to avoid popup blocking
 			window.open(this.accessTokenAPI.context.url);
@@ -2609,7 +2744,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			this.accessTokenAPI.resolve({ nohead: true }).always(function(url) {
 				window.open(url);
 			});
-		}
+		}*/
 
 		return token_;
 	};
@@ -2686,6 +2821,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// - `config.initiate`: optional Boolean, should the server initiate the connection?
 	//   - defaults to true
 	//   - should only be false if the connection was already initiated by the opposite end
+	// - `config.retryTimeout`: optional number, time (in ms) before a connection is aborted and retried (defaults to 15000)
+	// - `config.retries`: optional number, number of times to retry before giving up (defaults to 5)
 	PeerWebRelay.prototype.connect = function(peerUrl, config) {
 		if (!config) config = {};
 		if (typeof config.initiate == 'undefined') config.initiate = true;
@@ -2705,11 +2842,13 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 		// Spawn new server
 		var server = new local.RTCBridgeServer({
-			peer: peerUrl,
-			initiate: config.initiate,
-			relay: this,
-			serverFn: this.config.serverFn,
-			loopback: (peerUrld.authority == this.myPeerDomain)
+			peer:         peerUrl,
+			initiate:     config.initiate,
+			relay:        this,
+			serverFn:     this.config.serverFn,
+			loopback:     (peerUrld.authority == this.myPeerDomain),
+			retryTimeout: config.retryTimeout || this.config.retryTimeout,
+			retries:      config.retries || this.config.retries
 		});
 
 		// Bind events

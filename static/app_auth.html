@@ -55,7 +55,9 @@
       window.location = '/';
     }
     function sendMsgToParent(msg) {
+      // Shotgun it - gotta hit with one of them
       window.opener.postMessage(msg, 'http://{APP_DOMAIN}');
+      window.opener.postMessage(msg, 'https://{APP_DOMAIN}');
     }
     </script>
 
