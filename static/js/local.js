@@ -2784,16 +2784,17 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 					self.relayStream = stream;
 					self.connectedToRelay = true;
 					stream.response_.then(function(response) {
+						// Setup links
+						self.p2pwLinksAPI = self.p2pwRelayAPI.follow({ rel: 'grimwire.com/-links', app: self.config.app, stream: self.getStreamId() });
+						if (self.registeredLinks) {
+							// We had links stored from before, send them now
+							self.registerLinks(self.registeredLinks);
+						}
+
+						// Emit event
 						self.emit('listening');
 						return response;
 					});
-
-					// Setup links
-					self.p2pwLinksAPI = self.p2pwRelayAPI.follow({ rel: 'grimwire.com/-links', app: self.config.app, stream: self.getStreamId() });
-					if (self.registeredLinks) {
-						// We had links stored from before, send them now
-						self.registerLinks(self.registeredLinks);
-					}
 
 					// Setup handlers
 					stream.on('signal', self.onSignal.bind(self));
@@ -3082,7 +3083,7 @@ local.schemes.register(['http', 'https'], function(request, response) {
 					xhrRequest.getAllResponseHeaders().split("\n").forEach(function(h) {
 						if (!h) { return; }
 						var kv = h.replace('\r','').split(': ');
-						headers[kv[0].toLowerCase()] = kv[1];
+						headers[kv[0].toLowerCase()] = kv.slice(1).join(': ');
 					});
 				} else {
 					// a bug in firefox causes getAllResponseHeaders to return an empty string on CORS
