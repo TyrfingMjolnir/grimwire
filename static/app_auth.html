@@ -73,10 +73,12 @@
     accessAPI.resolve({ nohead: true });
 
     // Create the app session and send it back
+    var allowed = false;
     function onAllow() {
       accessAPI.post()
         .then(function(res) {
           if (res.body.token) {
+            allowed = true;
             sendMsgToParent(res.body.token);
             window.close();
           }
@@ -92,6 +94,12 @@
       sendMsgToParent(null);
       window.close()
     }
+
+    // Window closed
+    window.onunload = function() {
+      if (!allowed)
+        sendMsgToParent(null);
+    };
 
     // Logout link
     $('#logout').on('click', function(e) {
