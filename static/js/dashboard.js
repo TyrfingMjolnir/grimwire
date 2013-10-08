@@ -1,3 +1,64 @@
+// Page state
+// ==========
+var _session = null, _session_;
+var _users = {};
+
+
+// Backend Interop
+// ===============
+
+// APIs
+var serviceAPI = local.navigator('nav:||'+window.location.origin+'|self+grimwire.com/-p2pw/service');
+var usersAPI   = serviceAPI.follow({ rel: 'grimwire.com/-user collection' });
+var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
+
+// Load session
+_session_ = sessionAPI.get({ accept: 'application/json' });
+_session_.then(setSession);
+function setSession(res) {
+	// Update state
+	_session = res.body;
+
+	// Update UI
+	$('#userid').html(_session.user_id+' <b class="caret"></b>');
+	renderAll();
+}
+
+// Load active users
+function loadActiveUsers() {
+	usersAPI.get({ accept: 'application/json' })
+		.then(
+			function(res) {
+				_users = res.body.rows;
+				renderAll();
+			},
+			handleFailedRequest
+		);
+	return false;
+	// ^ loadActiveUsers() is sometimes used as a DOM event handler
+}
+loadActiveUsers();
+
+// Users refresh on tab focus
+(function() {
+	var lastRefresh = Date.now();
+	window.onfocus = function() {
+		if (Date.now() - lastRefresh > 60000) {
+			loadActiveUsers();
+			lastRefresh = Date.now();
+		}
+	};
+})();
+
+// Request error handling
+function handleFailedRequest(res) {
+	if (res.status == 401) {
+		// session lost
+		alert('Your session has expired, redirecting you to the login page.');
+		window.location.reload();
+	}
+}
+
 // UI
 // ==
 
@@ -28,9 +89,6 @@ $('.add-friend').on('click', function(e) {
 
 		// Update UI
 		renderAll();
-
-		// Update index
-		fetchFriendLinks();
 	}
 });
 
@@ -71,21 +129,10 @@ $('.avatars a').on('click', function() {
 // Rendering helpers
 function renderLinkRow(link) {
 	var app = link.app;
-	if (!app) {
-		var peerd = local.parsePeerDomain(local.parseUri(link.href).authority);
-		app = peerd.app;
-	}
 	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+app+'" target="_blank">'+app+'</a></td></tr>';
 }
-function renderUserLinks() {
-	var html = '';
-	for (var domain in _user_links) {
-		html += local.queryLinks(_user_links[domain], { rel: 'self' }).map(renderLinkRow).join('');
-	}
-	return html;
-}
-function renderFriendLinks(userId) {
-	return (_friend_links[userId]) ? local.queryLinks(_friend_links[userId], { rel: 'self' }).map(renderLinkRow).join('') : '';
+function renderLinks(userId) {
+	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'grimwire.com/-app' }).map(renderLinkRow).join('') : '';
 }
 
 // Update UI state
@@ -98,7 +145,7 @@ function renderAll() {
 
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderUserLinks()+'</table>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+'</table>';
 
 		// Friends
 		_session.friends.forEach(function(friendId) {
@@ -110,7 +157,7 @@ function renderAll() {
 				html += ' offline</small></h4>';
 			} else {
 				html += '</small></h4>';
-				html += '<table id="'+friendId+'-links" class="table table-hover table-condensed">' + renderFriendLinks(friendId) + '</table>';
+				html += '<table id="'+friendId+'-links" class="table table-hover table-condensed">' + renderLinks(friendId) + '</table>';
 			}
 		});
 
@@ -125,10 +172,12 @@ function renderAll() {
 	for (var id in _users) {
 		var user = _users[id];
 		if (user.online) {
-			var apps = '';
-			for (var app in user.streams) {
-				apps += '<a href=//'+app+' target=_blank>'+app+'</a><br/>';
+			var apps = [];
+			for (var i=0; i < user.links.length; i++) {
+				if (apps.indexOf(user.links[i].app) == -1)
+					apps.push(user.links[i].app);
 			}
+			apps = apps.map(function(app) { return '<a href=//'+app+' target=_blank>'+app+'</a><br/>'; }).join('');
 			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
 		} else {
 			html += '<span class="text-muted">'+user.id+'</span> ';
