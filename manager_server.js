@@ -23,7 +23,9 @@ var config = {
 	}
 };
 var urlPort = config.downstream_port || config.port;
-config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((urlPort != '80') ? (':' + urlPort) : '');
+if (config.ssl && urlPort == '443') urlPort = false;
+if (!config.ssl && urlPort == '80') urlPort = false;
+config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + (urlPort ? (':' + urlPort) : '');
 function readSettingsFile() {
 	try {
 		var settings = JSON.parse(fs.readFileSync('./config.json'));
