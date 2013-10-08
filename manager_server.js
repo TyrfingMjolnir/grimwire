@@ -16,12 +16,14 @@ var config = {
 	port: argv.p || argv.port || (argv.ssl ? 443 : 80),
 	ssl: argv.ssl || false,
 	debugmode: argv.debug || false,
-	is_upstream: argv.is_upstream || false,
+	is_upstream: !!(argv.u || argv.is_upstream) || false,
+	downstream_port: argv.u || argv.is_upstream,
 	settings: {
 		allow_signup: true
 	}
 };
-config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((config.port != '80') ? (':' + config.port) : '');
+var urlPort = config.downstream_port || config.port;
+config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + ((urlPort != '80') ? (':' + urlPort) : '');
 function readSettingsFile() {
 	try {
 		var settings = JSON.parse(fs.readFileSync('./config.json'));

@@ -35,8 +35,8 @@ switch (process.argv[2]) {
 		console.log('  Flags:');
 		console.log('   -p/--port [port] (default 80)');
 		console.log('   -h/--hostname [hostname] (defaults to system value)');
+		console.log('   -u/--is_upstream [port] (default off, should specify the downstream port in use)');
 		console.log('   --ssl (default off)');
 		console.log('   --debug (default off)');
-		console.log('   --is_upstream (default off)');
 		break;
 }
