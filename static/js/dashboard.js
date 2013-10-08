@@ -129,7 +129,7 @@ $('.avatars a').on('click', function() {
 // Rendering helpers
 function renderLinkRow(link) {
 	var app = link.app;
-	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="//'+app+'" target="_blank">'+app+'</a></td></tr>';
+	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+app+'" target="_blank">'+app+'</a></td></tr>';
 }
 function renderLinks(userId) {
 	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'grimwire.com/-app' }).map(renderLinkRow).join('') : '';
@@ -177,7 +177,7 @@ function renderAll() {
 				if (apps.indexOf(user.links[i].app) == -1)
 					apps.push(user.links[i].app);
 			}
-			apps = apps.map(function(app) { return '<a href=//'+app+' target=_blank>'+app+'</a><br/>'; }).join('');
+			apps = apps.map(function(app) { return '<a href=http://'+app+' target=_blank>'+app+'</a><br/>'; }).join(''); // no quotes on link attrs -- messes with data-content
 			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
 		} else {
 			html += '<span class="text-muted">'+user.id+'</span> ';

@@ -68,6 +68,8 @@
           <h4>Online</h4>
           <div id="active-users"></div>
           <hr/>
+          <p>Bookmarklet: <a href="javascript:if(typeof grimwire=='undefined'){alert('Sorry, this site doesn\'t appear to be a grimwire.js app.');}else{var r=grimwire.getRelay();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="Connect to {HOSTLABEL}">Connect to {HOSTLABEL}</a>. <small class="text-muted">Bookmark this link, then use it on sites with Grimwire.js to connect to this relay.</small></p>
+          <hr/>
           <p>
             <small>CSS by <a href="http://getbootstrap.com/" target="_blank">Bootstrap</a>. Icons by <a href="http://www.fatcow.com/free-icons" target="_blank">FatCow</a> and <a href="http://glyphicons.com/" target="_blank">Glyphicons</a>. Libraries by <a href="http://stevenlevithan.com/" target="_blank">Stephen Levithan, <a href="https://github.com/fxa" target="_blank">Franz Antesberger</a>, and <a href="https://github.com/federomero" target="_blank">Federico Romero</a>. Grimwire by <a href="https://github.com/pfraze" target="_blank">Paul Frazee</a>. Licensed MIT.</small>
           </p>

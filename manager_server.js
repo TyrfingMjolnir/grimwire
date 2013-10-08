@@ -6,7 +6,6 @@ var fs = require('fs');
 
 var middleware = require('./lib/middleware.js');
 var html = require('./lib/html.js');
-html.load();
 
 // Config
 // ======
@@ -36,6 +35,7 @@ function readSettingsFile() {
 	return true;
 }
 readSettingsFile();
+html.load(config);
 
 
 // Server State
@@ -50,7 +50,7 @@ winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExcepti
 server.use(express.bodyParser());
 server.use(express.cookieParser());
 if (config.is_upstream) {
-	server.use(express.cookieSession({ proxy: true, secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: true } }));
+	server.use(express.cookieSession({ proxy: true, secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
 } else {
 	server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
 }
@@ -113,14 +113,14 @@ process.on('SIGHUP', function() {
 	if (readSettingsFile()) {
 		winston.info('Updated config', config);
 	}
-	html.load();
+	html.load(config);
 	db.loadUsers();
 });
 
 
 // Setup
 // =====
-if (config.ssl) {
+if (config.ssl && !config.is_upstream) {
 	var sslOpts = {
 		key: require('fs').readFileSync('ssl-key.pem'),
 		cert: require('fs').readFileSync('ssl-cert.pem')
