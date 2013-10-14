@@ -1,6 +1,7 @@
-*~
 npm-debug.log
 node_modules
 logs/*
 users
-pid
+config.json
+motd.html
+welcome.html
