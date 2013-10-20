@@ -393,6 +393,14 @@ if (typeof CustomEvent === 'undefined') {
 	};
 }
 
+// Track window close event
+local.util.isAppClosing = false;
+if (typeof window != 'undefined') {
+	window.addEventListener('beforeunload', function() {
+		local.util.isAppClosing = true;
+	});
+}
+
 // EXPORTED
 // searches up the node tree for an element
 function findParentNode(node, test) {
@@ -2374,6 +2382,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 					return;
 				}
 
+				// Abandon ye' hope if no rtc support
+				if (typeof RTCSessionDescription == 'undefined') {
+					return;
+				}
+
 				// Emit event
 				if (!this.isOfferExchanged) {
 					this.emit('connecting', Object.create(this.peerInfo), this);
@@ -2470,7 +2483,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 	// Helper sets up the peer connection
 	RTCBridgeServer.prototype.createPeerConn = function() {
-		if (!this.rtcPeerConn) {
+		if (!this.rtcPeerConn && typeof RTCPeerConnection != 'undefined') {
 			var servers = this.config.iceServers || defaultIceServers;
 			this.rtcPeerConn = new RTCPeerConnection(servers, peerConstraints);
 			this.rtcPeerConn.onicecandidate             = onIceCandidate.bind(this);
@@ -2539,6 +2552,9 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// Helper initiates a session with peers on the relay
 	RTCBridgeServer.prototype.sendOffer = function() {
 		var self = this;
+		if (typeof RTCPeerConnection == 'undefined') {
+			return;
+		}
 
 		// Start the clock
 		initConnectTimeout.call(this);
@@ -3603,6 +3619,11 @@ EventStream.prototype.reconnect = function() {
 	if (this.isConnOpen) {
 		this.isConnOpen = false;
 		this.request.close();
+	}
+
+	// Hold off if the app is tearing down (Firefox will succeed in the request and then hold onto the stream)
+	if (local.util.isAppClosing) {
+		return;
 	}
 
 	// Re-establish the connection
