@@ -8,7 +8,7 @@ var _users = {};
 // ===============
 
 // APIs
-var serviceAPI = local.navigator('nav:||'+window.location.origin+'|self+grimwire.com/-p2pw/service');
+var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+grimwire.com/-p2pw/service');
 var usersAPI   = serviceAPI.follow({ rel: 'grimwire.com/-user collection' });
 var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
 
