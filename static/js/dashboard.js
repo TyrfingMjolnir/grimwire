@@ -63,7 +63,7 @@ function handleFailedRequest(res) {
 // ==
 
 // Cache selectors
-var $user_and_friends = $('#user-and-friends');
+var $active_links = $('#active-links');
 var $active_users = $('#active-users');
 
 // Logout link
@@ -78,19 +78,6 @@ $('#logout').on('click', function(e) {
 // Refresh button
 $('.refresh').on('click', loadActiveUsers);
 
-// Add friend button
-$('.add-friend').on('click', function(e) {
-	var friend = prompt('User to add to your friends:');
-	if (friend && _session.friends.indexOf(friend) === -1) {
-		// Update the user
-		_session.friends.push(friend);
-		usersAPI.follow({ rel: 'item', id: _session.user_id })
-			.patch({ friends: _session.friends });
-
-		// Update UI
-		renderAll();
-	}
-});
 
 // Avatars
 (function() {
@@ -147,24 +134,23 @@ function renderAll() {
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
 		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+'</table>';
 
-		// Friends
-		_session.friends.forEach(function(friendId) {
-			var friend = _users[friendId];
-			if (!friend) { return; }
-			html += '<h4><img src="/img/avatars/'+friend.avatar+'" /> '+friendId;
-			html += ' <small><a class="remove-friend" data-user="'+friendId+'" href="javascript:void(0)" title="Remove friend">&times;</a>';
-			if (!friend.online) {
+		// Other users
+		for (var id in _users) {
+			var user = _users[id];
+			if (user.id == _session.user_id) { continue; }
+			html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id;
+			if (!user.online) {
 				html += ' offline</small></h4>';
 			} else {
 				html += '</small></h4>';
-				html += '<table id="'+friendId+'-links" class="table table-hover table-condensed">' + renderLinks(friendId) + '</table>';
+				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
 			}
-		});
+		}
 
 		// Render
-		$user_and_friends.html(html);
+		$active_links.html(html);
 	} else {
-		$user_and_friends.html('');
+		$active_links.html('');
 	}
 
 	// Populate active users
@@ -190,20 +176,6 @@ function renderAll() {
 	$('.active-peer').popover({
 		html: true,
 		placement: 'bottom'
-	});
-
-	// Remove friend button
-	$('.remove-friend').on('click', function(e) {
-		var userId = $(this).data('user');
-		if (userId && _session.friends.indexOf(userId) !== -1) {
-			// Update the user
-			_session.friends.splice(_session.friends.indexOf(userId), 1);
-			usersAPI.follow({ rel: 'item', id: _session.user_id })
-				.patch({ friends: _session.friends });
-
-			// Update UI
-			renderAll();
-		}
 	});
 }
 renderAll();
