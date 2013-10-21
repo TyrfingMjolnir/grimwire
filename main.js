@@ -9,38 +9,51 @@ var html = require('./lib/html.js');
 
 // Config
 // ======
+// Construct config from a combination of CLI, config.json, and defaults
 var argv = require('optimist').argv;
-var os = require("os");
-var config = {
-	hostname: argv.h || argv.hostname || os.hostname(),
-	port: argv.p || argv.port || (argv.ssl ? 443 : 80),
-	ssl: argv.ssl || false,
-	debugmode: argv.debug || false,
-	is_upstream: !!(argv.u || argv.is_upstream) || false,
-	downstream_port: argv.u || argv.is_upstream,
-	settings: {
-		allow_signup: true
-	}
+var configDefaults = {
+	hostname: require("os").hostname(),
+	port: undefined,
+	ssl: false,
+	debugmode: false,
+	is_upstream: false,
+	downstream_port: false,
+	allow_signup: true
 };
+var configCLI = {
+	hostname: argv.h || argv.hostname,
+	port: argv.p || argv.port,
+	ssl: argv.ssl,
+	debugmode: argv.debug,
+	is_upstream: (typeof (argv.u || argv.is_upstream) != 'undefined') ? !!(argv.u || argv.is_upstream) : undefined,
+	downstream_port: argv.u || argv.is_upstream,
+	allow_signup: argv.allow_signup
+};
+var config = {};
+function refreshConfig() {
+	// Read config.json
+	var configFile = {};
+	try { configFile = JSON.parse(fs.readFileSync('./config.json')); } catch (e) {}
+
+	// Merge config
+	function merge(a, b) { return (typeof a != 'undefined') ? a : b; }
+	for (var k in configDefaults) {
+		config[k] = merge(configCLI[k], merge(configFile[k], configDefaults[k]));
+	}
+	if (typeof config.port == 'undefined') {
+		config.port = (config.ssl) ? 443 : 80;
+	}
+}
+refreshConfig();
+
+// Construct service URL (note: only done at init, not on the reload signal, since reload doesn't update service info)
 var urlPort = config.downstream_port || config.port;
 if (config.ssl && urlPort == '443') urlPort = false;
 if (!config.ssl && urlPort == '80') urlPort = false;
 config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + (urlPort ? (':' + urlPort) : '');
-function readSettingsFile() {
-	try {
-		var settings = JSON.parse(fs.readFileSync('./config.json'));
-		for (var k in settings) {
-			config.settings[k] = settings[k];
-		}
-	} catch (e) {
-		winston.error('Failed to read/parse config.json', { error: e.toString() });
-		return false;
-	}
-	return true;
-}
-readSettingsFile();
-html.load(config);
 
+// Read HTML with config mixed in
+html.load(config);
 
 // Server State
 // ============
@@ -114,9 +127,7 @@ server.get('/status', function(request, response) {
 });
 process.on('SIGHUP', function() {
 	winston.info('Received SIGHUP signal, reloading configuration.');
-	if (readSettingsFile()) {
-		winston.info('Updated config', config);
-	}
+	refreshConfig();
 	html.load(config);
 	db.loadUsers();
 });

@@ -13,7 +13,7 @@ switch (process.argv[2]) {
 			console.log('Grimwire is already running (pid '+pid+')');
 			return;
 		}
-		require('./manager_server.js');
+		require('./main.js');
 		break;
 
 	case 'stop':
