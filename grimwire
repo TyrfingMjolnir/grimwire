@@ -44,7 +44,7 @@ switch (process.argv[2]) {
 		console.log('   -h/--hostname [hostname] (defaults to system value)');
 		console.log('   -u/--is_upstream [port] (default off, should specify the downstream port in use)');
 		console.log('   --ssl (default off)');
-		console.log('   --debug (default off)');
+		console.log('   --allow_signup [0|1] (default 1)');
 		break;
 }
 
