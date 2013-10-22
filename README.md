@@ -6,36 +6,34 @@ A peer-to-peer, user-hosted social network using WebRTC and the [Local.js Ajax L
 
 ### Overview
 
-Grimwire connects applications directly to each other. Its persistent "relay" servers locate users and establish connections, and its apps use Local.js to host Web services from the browser. Together, they create a user-hosted Web where each opened page can get a URL and act like a .com.
+Grimwire is a downloadable node.js "relay" for users to create accounts, find who's online, and establish connections between their Web applications. Every connected page is assigned a URL, and, using Local.js, handles Web requests like a .com.
 
 ### Why?
 
-To extend the Web so user-controlled software can easily run services without having to register a domain or rent a server. Grimwire's apps are frictionless hosts that can run off the browsers of desktops, notebooks, or even tablets and phones. By using links, metadata, and a relay-hosted index, applications can provide vital services (data storage, friend lists, music streaming, etc) to each other, giving the user control over where data goes.
+So user-controlled software can easily run services without having to register a domain or rent a server. Grimwire's apps are frictionless hosts that can run off the browsers of desktops, notebooks, or even tablets and phones. By using links, metadata, and a relay-hosted index, applications can provide vital services (data storage, contact lists, messaging, etc) to each other, giving the user control over where data goes.
 
 ### How?
 
-Users register with relays - Grimwire instances - which run as traditional Web services on registered hostnames. Then, users authorize 3rd-party apps to subscribe to streams on the relay and exchange connection information with the other applications. When apps join, they are assigned URLs (which look like httpl://bob@bobs-relay.com!bobs-app.com). Users can find links to the apps, then make requests to the URL to connect and exchange data.
+Users register with relays - Grimwire instances - which run as traditional Web services on registered hostnames. Then, users authorize 3rd-party apps to subscribe to streams on the relay and exchange connection information with the other applications. When apps join, they are assigned URLs (which look like `httpl://bob@bobs-relay.com!bobs-app.com`). Users can then find links to the apps and make requests, which automatically establishes the connection and exchanges the data.
 
-Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is managed by the [Local.js library](https://github.com/grimwire/local), which provides a promises-based Ajax interface. The apps register server functions to handle the requests, and receive peer info with the request to make permission decisions. Developers who have used node.js should feel fairly at-home with the API.
-
----
-
-*Grimwire is in public beta. If you run into bugs or find an improvement, email me at pfrazee@gmail.com. If you're familiar with GitHub, you can file issue reports at [github.com/grimwire/grimwire/issues](//github.com/grimwire/grimwire/issues).*
+Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is managed by the [Local.js library](https://github.com/grimwire/local), which provides a promises-based Ajax interface and a server API not unlike node.js. The apps then register server functions to handle the requests and (using attached peer info) make permission decisions. 
 
 ---
 
-*WebRTC is not fully implemented in all browsers! If your browser does not support it, Grimwire will "bounce" traffic through the relays to make sure you can still connect.*
+*Grimwire is in public beta. If you run into bugs or have any suggestions, feel free to email me at pfrazee@gmail.com. If you're familiar with GitHub, you can file issue reports at [github.com/grimwire/grimwire/issues](//github.com/grimwire/grimwire/issues).*
 
---
+---
+
+*WebRTC is not fully implemented in all browsers! If your browser does not support it, Grimwire will "bounce" traffic through the relays to make sure you can still connect. Currently, you must use Chrome Canary or the latest Firefox to make a direct connection.*
+
+---
 
 
 ## Basic Usage
 
 ### Finding a Relay
 
-At the time of this writing, there aren't any public relays - you have to host your own or use a friend's.
-
-If you don't have a relay you can use, and lack the technical expertise to start your own, contact your friendly neighborhood nerd and ask them for assistance. Be sure to thank them for their hacking, and, even if they are clean-shaven, complement their neckbeard.
+At the time of this writing, there aren't any public relays - you have to host your own or use a friend's. If you want a relay, but lack the technical expertise to start your own, contact me at pfrazee@gmail.com and I'll help you get started.
 
 ### Installing a Relay
 
@@ -50,9 +48,9 @@ This gets the relay started on port 80. You can choose another port with the '-p
 
 ### Trying it out with chat.grimwire.com
 
-Open [chat.grimwire.com](http://chat.grimwire.com). Notice that G at the top right? That's the GrimWidget, and it should say *offline*. Click on that, then enter the address of your relay in the box. A popup will ask if you want to grant chat.grimwire.com access. Click *Allow*.
+Open [chat.grimwire.com](http://chat.grimwire.com). Notice that G at the top right? It should say *offline*. Click on that, then enter the address of your relay in the box. A popup will ask if you want to grant chat.grimwire.com access. Click *Allow*.
 
-Once you're logged in, the chat app will query the relay for any rooms hosted by the other users. If nothing shows up, you can start your own with the green *Start a room* button. Go ahead and try chatting - the messages should appear on the page. Other users are free to join the room, or you can join theirs, and you'll have a private, encrypted chat.
+Once you're logged in, the chat app will query the relay for any rooms hosted by the other users. If nothing shows up, you can start your own with the green *Start a room* button. Other users are free to join the room - or you can join your own from another tab - and you'll have a private, encrypted chat.
 
 ### Also, FYI
 
@@ -63,7 +61,7 @@ Once you're logged in, the chat app will query the relay for any rooms hosted by
 
 ## Developing Applications for Grimwire
 
-See the [Local.js Manual]((https://github.com/grimwire/local) for writing software using Grimwire.
+See the [Local.js Manual](http://grimwire.com/local) for writing software using Grimwire.
 
 
 ## Features to come:
@@ -79,64 +77,61 @@ See the [Local.js Manual]((https://github.com/grimwire/local) for writing softwa
 
 The `grimwire` command requires one of the following parameters:
 
- - `grimwire setup`: creates the config.json, welcome.html, and motd.html files if they do not exist.
+ - `grimwire setup`: downloads javascript dependencies, then creates the `config.json`, `welcome.html`, and `motd.html` files if they do not exist.
  - `grimwire start`: starts the server.
  - `grimwire reload`: sends a "reload configuration" signal to the server process. Use this when you change config.json, welcome.html, or motd.html, and you don't want to close the server. (Note that closing the server destroys everybody's sessions, forcing them to log back in.)
  - `grimwire stop`: sends a "shutdown" signal to the server process.
 
-Grimwire's configuration can be controlled with either command-line flags on the start command, or with the config.json file. The CLI flags always take precedence over config.json's values. The flags are:
+Grimwire's configuration can be controlled with either command-line flags on the `start` command, or with the `config.json` file. The CLI flags always take precedence over config.json's values. The flags are:
 
  - `-p/--port`: the port to bind the server to (default 80).
  - `-h/--hostname`: the hostname the relay uses when linking to itself (defaults to system value).
- - `-u/--is_upstream`: if grimwire is upstream of Apache or Nginx, specify this flag with the port Apache/Nginx is using. This is also used for constructing links (default off).
+ - `-u/--is_upstream`: if grimwire is upstream of eg Nginx, specify this flag with the port Nginx is using. It basically says, "grimwire is_upstream of [publicly exposed port]." This is mainly used for constructing links (default off).
  - `--ssl`: enables TLS, and will look for `ssl-key.pem` and `ssl-cert.pem` in grimwire's directory to set the key & cert (default off).
  - `--allow_signup`: if set to 0, will remove the new-user signup interface from the login page (default 1).
 
-The config.json file can include any of the long versions of those flags. Note that reloading the config does not change the port or SSL status - you must restart the server process to do that.
+The `config.json` file can include any of the long versions of those flags. Note that `grimwire reload` will not update the port or SSL status - you must restart the server process to do that.
 
-#### Standard Config with No SSL
-
-In this case, your config.json might look this this:
+#### A config.json for using SSL
 
 ```
 {
-	"port": 80,
-	"is_upstream": false,
-	"ssl": false
-}
-```
-
-#### Standard Config with SSL
-
-In this case, your config.json might look this this:
-
-```
-{
-	"port": 443,
-	"is_upstream": false,
 	"ssl": true
 }
 ```
 
-#### Standard Config with a Front Proxy like Nginx or Apache
+The port will default to 443. The `ssl-key.pem` and `ssl-cert.pem` files (under grimwire's installed directory) will be used for encryption.
 
-In this case, your config.json might look this this:
+#### A config.json for using a Front Proxy (like Nginx) without SSL
+
+```
+{
+	"port": 8000,
+	"is_upstream": 80
+}
+```
+
+This is saying, "nginx runs for the public at port 80, and it contacts grimwire at port 8000".
+
+#### A config.json for using a Front Proxy (like Nginx) with SSL
 
 ```
 {
 	"port": 8000,
 	"is_upstream": 443,
-	"ssl": false
+	"ssl": true
 }
 ```
 
+This is saying, "nginx runs for the public at port 443 using SSL, and it contacts grimwire at port 8000". Note, in this case, grimwire will *not* load `ssl-key.pem` and `ssl-cert.pem` or use the nodejs SSL utilities. Since it's in upstream mode, it assumes that the frontend proxy handles the SSL.
+
 ### Setting the Welcome Message and Dashboard MOTD
 
-You can change the HTML on the right of the login interface by editing welcome.html. You can change the HTML on the right of the dashboard by editing motd.html. Grimwire's relay uses bootstrap 3 styles.
+You can change the HTML on the right of the login interface by editing welcome.html. You can change the HTML on the right of the dashboard by editing motd.html. Grimwire's relay uses Bootstrap 3's CSS.
 
 ### Adding, Editing, and Removing Users
 
-Users are stored as extensionless JSON files in the './users' directory under grimwire. For instance, the userfile for 'bob' would be found at 'grimwires_install_directory/users/bob'. His file should look something like this:
+Users are stored as extensionless JSON files in the `users` directory under grimwire. For instance, the userfile for 'bob' would be found at `grimwire_install_dir/users/bob`. His file should look something like this:
 
 ```
 {
@@ -148,7 +143,7 @@ Users are stored as extensionless JSON files in the './users' directory under gr
 }
 ```
 
-You can add new users by creating files which follow this format, or edit a user's details by editing the file. Likewise, you can remove a user by deleting their userfile. Any changes you make, however, won't make their way into the relay process until you reload (`grimwire reload`) or restart it.
+You can add new users by creating files which follow this format, or edit a user's details by changing their file. Likewise, you can remove a user by deleting their userfile. Any changes you make, however, won't make their way into the relay process until you reload (`grimwire reload`) or restart it.
 
 If you want to change a user's password, you can set it as plaintext in the JSON. When the userfile is loaded, Grimwire will encrypt the password and rewrite the file.
 
