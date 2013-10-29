@@ -289,7 +289,7 @@ EventEmitter.prototype.playbackHistory = function() {
 	// always check if we're suspended - a handler might resuspend us
 	while (!this.isSuspended() && (e = this._history.shift()))
 		this.emit.apply(this, e);
-}
+};
 
 EventEmitter.prototype.emit = function(type) {
 	var args = Array.prototype.slice.call(arguments);
@@ -340,6 +340,8 @@ EventEmitter.prototype.once = function(type, listener) {
 		self.removeListener(type, g);
 		listener.apply(this, arguments);
 	});
+
+	return this;
 };
 
 EventEmitter.prototype.removeListener = function(type, listener) {
@@ -765,6 +767,7 @@ local.LINK_NOT_FOUND = 1;// Helpers
 // EXPORTED
 // takes parsed a link header and a query object, produces an array of matching links
 // - `links`: [object]/object, either the parsed array of links or the request/response object
+// - `query`: object
 local.queryLinks = function queryLinks(links, query) {
 	if (!links) return [];
 	if (links.parsedHeaders) links = links.parsedHeaders.link; // actually a request or response object
@@ -897,7 +900,7 @@ local.joinUrl = function joinUrl() {
 // EXPORTED
 // tests to see if a URL is absolute
 // - "absolute" means that the URL can reach something without additional context
-// - eg http://foo.com, //foo.com, httpl://bar.app, rel:http://foo.com, rel:foo.com
+// - eg http://foo.com, //foo.com, httpl://bar.app
 var isAbsUriRE = /^((http(s|l)?:)?\/\/)|((nav:)?\|\|)/;
 local.isAbsUri = function(url) {
 	if (isAbsUriRE.test(url))
@@ -1500,7 +1503,6 @@ Request.prototype = Object.create(local.util.EventEmitter.prototype);
 Request.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
 Request.prototype.getHeader    = function(k) { return this.headers[k]; };
 Request.prototype.removeHeader = function(k) { delete this.headers[k]; };
-Request.prototype.finishStream = function() { return this.body_; };
 
 // causes the request/response to abort after the given milliseconds
 Request.prototype.setTimeout = function(ms) {
@@ -1535,10 +1537,11 @@ Request.prototype.deserializeHeaders = function() {
 // - emits the 'data' event
 Request.prototype.write = function(data) {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	if (typeof data != 'string')
 		data = local.contentTypes.serialize(this.headers['content-type'], data);
 	this.emit('data', data);
+	return this;
 };
 
 // ends the request stream
@@ -1546,19 +1549,20 @@ Request.prototype.write = function(data) {
 // - emits 'end' and 'close' events
 Request.prototype.end = function(data) {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	if (typeof data != 'undefined')
 		this.write(data);
 	this.emit('end');
 	// this.close();
 	// ^ do not close - the response should close
+	return this;
 };
 
 // closes the stream, aborting if not yet finished
 // - emits 'close' event
 Request.prototype.close = function() {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	this.isConnOpen = false;
 	this.emit('close');
 
@@ -1567,6 +1571,7 @@ Request.prototype.close = function() {
 	// this.removeAllListeners('data');
 	// this.removeAllListeners('end');
 	// this.removeAllListeners('close');
+	return this;
 };// Response
 // ========
 // EXPORTED
@@ -1653,7 +1658,7 @@ Response.prototype.deserializeHeaders = function() {
 // - emits the 'headers' event
 Response.prototype.writeHead = function(status, reason, headers) {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	this.status = status;
 	this.reason = reason;
 	if (headers) {
@@ -1672,11 +1677,12 @@ Response.prototype.writeHead = function(status, reason, headers) {
 // - emits the 'data' event
 Response.prototype.write = function(data) {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	if (typeof data != 'string') {
 		data = local.contentTypes.serialize(this.headers['content-type'], data);
 	}
 	this.emit('data', data);
+	return this;
 };
 
 // ends the response stream
@@ -1684,18 +1690,19 @@ Response.prototype.write = function(data) {
 // - emits 'end' and 'close' events
 Response.prototype.end = function(data) {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	if (typeof data != 'undefined')
 		this.write(data);
 	this.emit('end');
 	this.close();
+	return this;
 };
 
 // closes the stream, aborting if not yet finished
 // - emits 'close' event
 Response.prototype.close = function() {
 	if (!this.isConnOpen)
-		return;
+		return this;
 	this.isConnOpen = false;
 	this.emit('close');
 
@@ -1705,6 +1712,7 @@ Response.prototype.close = function() {
 	// this.removeAllListeners('data');
 	// this.removeAllListeners('end');
 	// this.removeAllListeners('close');
+	return this;
 };// Server
 // ======
 // EXPORTED
@@ -1996,22 +2004,18 @@ function validateHttplMessage(parsedmsg) {
 // - `config.shared`: boolean, should the workerserver be shared?
 // - `config.namespace`: optional string, what should the shared worker be named?
 //   - defaults to `config.src` if undefined
-// - `config.nullify`: optional [string], a list of objects to nullify when the worker loads
-// - `config.bootstrapUrl`: optional string, specifies the URL of the worker bootstrap script
 // - `config.log`: optional bool, enables logging of all message traffic
-// - `loadCb`: optional function(message)
-function WorkerBridgeServer(config, loadCb) {
+function WorkerBridgeServer(config) {
 	if (!config || !config.src)
 		throw new Error("WorkerBridgeServer requires config with `src` attribute.");
 	local.BridgeServer.call(this, config);
-	this.isUserScriptActive = false; // when true, ready for activity
+	this.isActive = false; // when true, ready for activity
 	this.hasHostPrivileges = true; // do we have full control over the worker?
 	// ^ set to false by the ready message of a shared worker (if we're not the first page to connect)
 	if (config.serverFn) {
 		this.configServerFn = config.serverFn;
 		delete this.config.serverFn; // clear out the function from config, so we dont get an error when we send config to the worker
 	}
-	this.loadCb = loadCb;
 
 	// Prep config
 	if (!this.config.domain) { // assign a temporary label for logging if no domain is given yet
@@ -2021,10 +2025,10 @@ function WorkerBridgeServer(config, loadCb) {
 
 	// Initialize the worker
 	if (this.config.shared) {
-		this.worker = new SharedWorker(config.bootstrapUrl || local.workerBootstrapUrl, config.namespace);
+		this.worker = new SharedWorker(config.src, config.namespace);
 		this.worker.port.start();
 	} else {
-		this.worker = new Worker(config.bootstrapUrl || local.workerBootstrapUrl);
+		this.worker = new Worker(config.src);
 	}
 
 	// Setup the incoming message handler
@@ -2037,12 +2041,8 @@ function WorkerBridgeServer(config, loadCb) {
 		// Handle messages with an `op` field as worker-control packets rather than HTTPL messages
 		switch (message.op) {
 			case 'ready':
-				// Bootstrap script can now accept commands
+				// Worker can now accept commands
 				this.onWorkerReady(message.body);
-				break;
-			case 'loaded':
-				// User script has loaded
-				this.onWorkerUserScriptLoaded(message.body);
 				break;
 			case 'log':
 				this.onWorkerLog(message.body);
@@ -2070,26 +2070,13 @@ WorkerBridgeServer.prototype.terminate = function() {
 	BridgeServer.prototype.terminate.call(this);
 	this.worker.terminate();
 	this.worker = null;
-	this.isUserScriptActive = false;
-};
-
-// Instructs the worker to set the given name to null
-// - eg worker.nullify('XMLHttpRequest'); // no ajax
-WorkerBridgeServer.prototype.nullify = function(name) {
-	this.channelSendMsg({ op: 'nullify', body: name });
-};
-
-// Instructs the WorkerBridgeServer to import the JS given by the URL
-// - eg worker.importScripts('/my/script.js');
-// - `urls`: required string|[string]
-WorkerBridgeServer.prototype.importScripts = function(urls) {
-	this.channelSendMsg({ op: 'importScripts', body: urls });
+	this.isActive = false;
 };
 
 // Returns true if the channel is ready for activity
 // - returns boolean
 WorkerBridgeServer.prototype.isChannelActive = function() {
-	return this.isUserScriptActive;
+	return this.isActive;
 };
 
 // Sends a single message across the channel
@@ -2110,43 +2097,16 @@ BridgeServer.prototype.handleRemoteRequest = function(request, response) {
 	}
 };
 
-// Sends initialization commands
-// - called when the bootstrap signals that it has finished loading
+// Starts normal functioning
+// - called when the local.js signals that it has finished loading
 WorkerBridgeServer.prototype.onWorkerReady = function(message) {
 	this.hasHostPrivileges = message.hostPrivileges;
 	if (this.hasHostPrivileges) {
-		// Disable undesirable APIs
-		if (this.config.nullify) {
-			this.config.nullify.forEach(function(api) {
-				this.nullify(api);
-			}, this);
-		}
-
-		// Load user script
-		var src = this.config.src;
-		if (src.indexOf('data:application/javascript,') === 0)
-			src = 'data:application/javacsript;base64,'+btoa(src.slice(28));
+		// Send config
 		this.channelSendMsg({ op: 'configure', body: this.config });
-		this.importScripts(src);
-	} else {
-		this.onWorkerUserScriptLoaded();
 	}
-};
-
-// Starts normal operation
-// - called when the user script has finished loading
-WorkerBridgeServer.prototype.onWorkerUserScriptLoaded = function(message) {
-	if (this.loadCb && typeof this.loadCb == 'function') {
-		this.loadCb(message);
-	}
-	if (message && message.error) {
-		console.error('Failed to load user script in worker, terminating', message, this);
-		this.terminate();
-	}
-	else {
-		this.isUserScriptActive = true;
-		this.flushBufferedMessages();
-	}
+	this.isActive = true;
+	this.flushBufferedMessages();
 };
 
 // Logs message data from the worker
@@ -2195,7 +2155,6 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// ===============
 	// EXPORTED
 	// server wrapper for WebRTC connections
-	// - currently only supports Chrome
 	// - `config.peer`: required string, who we are connecting to (a valid peer domain)
 	// - `config.relay`: required local.Relay
 	// - `config.initiate`: optional bool, if true will initiate the connection processes
@@ -2739,6 +2698,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	Relay.prototype.getDomain       = function() { return this.myPeerDomain; };
 	Relay.prototype.getUserId       = function() { return this.userId; };
 	Relay.prototype.getApp          = function() { return this.config.app; };
+	Relay.prototype.setApp          = function(v) { this.config.app = v; };
 	Relay.prototype.getStreamId     = function() { return this.config.stream; };
 	Relay.prototype.setStreamId     = function(stream) { this.config.stream = stream; };
 	Relay.prototype.getAccessToken  = function() { return this.accessToken; };
@@ -3273,10 +3233,8 @@ local.schemes.register('httpl', function(request, response) {
 				// Not a default stream miss
 				if (peerd.relay in __peer_relay_registry) {
 					// Try connecting to the peer
-					// console.log(peerd,'not found, connecting');
 					__peer_relay_registry[peerd.relay].connect(request.urld.authority);
 					server = local.getServer(request.urld.authority);
-					// console.log(server);
 				} else {
 					// We're not connected to the relay
 					server = localRelayNotOnlineServer;
@@ -4976,22 +4934,22 @@ Agent.prototype.notify = makeDispWBodySugar('NOTIFY');
 
 // Builder
 // =======
-local.agent = function(queryOrNav) {
-	if (queryOrNav instanceof Agent)
-		return queryOrNav;
+local.agent = function(query) {
+	if (query instanceof Agent)
+		return query;
 
 	// convert nav: uri to a query array
-	if (typeof queryOrNav == 'string' && local.isNavSchemeUri(queryOrNav))
-		queryOrNav = local.parseNavUri(queryOrNav);
+	if (typeof query == 'string' && local.isNavSchemeUri(query))
+		query = local.parseNavUri(query);
 
 	// make sure we always have an array
-	if (!Array.isArray(queryOrNav))
-		queryOrNav = [queryOrNav];
+	if (!Array.isArray(query))
+		query = [query];
 
 	// build a full follow() chain
-	var nav = new Agent(new AgentContext(queryOrNav.shift()));
-	while (queryOrNav[0]) {
-		nav = new Agent(new AgentContext(queryOrNav.shift()), nav);
+	var nav = new Agent(new AgentContext(query.shift()));
+	while (query[0]) {
+		nav = new Agent(new AgentContext(query.shift()), nav);
 	}
 
 	return nav;
@@ -5031,15 +4989,227 @@ local.addServer('hosts', function(req, res) {
 		res.writeHead(200, 'ok', { 'content-type': 'application/json' });
 		res.end({ host_names: domains });
 	});
-});})();// Local Toplevel
+});})();// Local Worker Tools
+// ==================
+// pfraze 2013
+
+if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+
+	if (typeof this.local.worker == 'undefined')
+		this.local.worker = {};
+
+	(function() {(function() {
+
+	// PageServer
+	// ==========
+	// EXPORTED
+	// wraps the comm interface to a page for messaging
+	// - `id`: required number, should be the index of the connection in the list
+	// - `port`: required object, either `self` (for non-shared workers) or a port from `onconnect`
+	// - `isHost`: boolean, should connection get host privileges?
+	function PageServer(id, port, isHost) {
+		local.BridgeServer.call(this);
+		this.id = id;
+		this.port = port;
+		this.isHostPage = isHost;
+
+		// Setup the incoming message handler
+		this.port.addEventListener('message', (function(event) {
+			var message = event.data;
+			if (!message)
+				return console.error('Invalid message from page: Payload missing', event);
+
+			// Handle messages with an `op` field as worker-control packets rather than HTTPL messages
+			switch (message.op) {
+				case 'configure':
+					this.onPageConfigure(message.body);
+					break;
+				case 'terminate':
+					this.terminate();
+					break;
+				default:
+					// If no recognized 'op' field is given, treat it as an HTTPL request and pass onto our BridgeServer parent method
+					this.onChannelMessage(message);
+					break;
+			}
+		}).bind(this));
+	}
+	PageServer.prototype = Object.create(local.BridgeServer.prototype);
+	local.worker.PageServer = PageServer;
+
+	// Returns true if the channel is ready for activity
+	// - returns boolean
+	PageServer.prototype.isChannelActive = function() {
+		return true;
+	};
+
+	// Sends a single message across the channel
+	// - `msg`: required string
+	PageServer.prototype.channelSendMsg = function(msg) {
+		this.port.postMessage(msg);
+	};
+
+	// Remote request handler
+	PageServer.prototype.handleRemoteRequest = function(request, response) {
+		var server = local.worker.serverFn;
+		if (server && typeof server == 'function') {
+			server.call(this, request, response, this);
+		} else if (server && server.handleRemoteRequest) {
+			server.handleRemoteRequest(request, response, this);
+		} else {
+			response.writeHead(500, 'not implemented');
+			response.end();
+		}
+	};
+
+	// Stores configuration sent by the page
+	PageServer.prototype.onPageConfigure = function(message) {
+		if (!this.isHostPage) {
+			console.log('rejected "configure" from non-host connection');
+			return;
+		}
+		local.worker.config = message;
+	};
+
+})();// Setup
+// =====
+local.util.mixinEventEmitter(local.worker);
+
+// EXPORTED
+// console.* replacements
+self.console = {
+	log: function() {
+		var args = Array.prototype.slice.call(arguments);
+		doLog('log', args);
+	},
+	dir: function() {
+		var args = Array.prototype.slice.call(arguments);
+		doLog('dir', args);
+	},
+	debug: function() {
+		var args = Array.prototype.slice.call(arguments);
+		doLog('debug', args);
+	},
+	warn: function() {
+		var args = Array.prototype.slice.call(arguments);
+		doLog('warn', args);
+	},
+	error: function() {
+		var args = Array.prototype.slice.call(arguments);
+		doLog('error', args);
+	}
+};
+function doLog(type, args) {
+	var hostPage = local.worker.hostPage;
+	try { hostPage.channelSendMsg({ op: 'log', body: [type].concat(args) }); }
+	catch (e) {
+		// this is usually caused by trying to log information that cant be serialized
+		hostPage.channelSendMsg({ op: 'log', body: [type].concat(args.map(JSONifyMessage)) });
+	}
+}
+
+// INTERNAL
+// helper to try to get a failed log message through
+function JSONifyMessage(data) {
+	if (Array.isArray(data))
+		return data.map(JSONifyMessage);
+	if (data && typeof data == 'object')
+		return JSON.stringify(data);
+	return data;
+}
+
+// EXPORTED
+// btoa shim
+// - from https://github.com/lydonchandra/base64encoder
+//   (thanks to Lydon Chandra)
+if (!self.btoa) {
+	var PADCHAR = '=';
+	var ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	function getbyte(s,i) {
+		var x = s.charCodeAt(i) & 0xFF;
+		return x;
+	}
+	self.btoa = function(s) {
+		var padchar = PADCHAR;
+		var alpha   = ALPHA;
+
+		var i, b10;
+		var x = [];
+
+		// convert to string
+		s = '' + s;
+
+		var imax = s.length - s.length % 3;
+
+		if (s.length === 0) {
+			return s;
+		}
+		for (i = 0; i < imax; i += 3) {
+			b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8) | getbyte(s,i+2);
+			x.push(alpha.charAt(b10 >> 18));
+			x.push(alpha.charAt((b10 >> 12) & 0x3F));
+			x.push(alpha.charAt((b10 >> 6) & 0x3f));
+			x.push(alpha.charAt(b10 & 0x3f));
+		}
+		switch (s.length - imax) {
+		case 1:
+			b10 = getbyte(s,i) << 16;
+			x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) + padchar + padchar);
+			break;
+		case 2:
+			b10 = (getbyte(s,i) << 16) | (getbyte(s,i+1) << 8);
+			x.push(alpha.charAt(b10 >> 18) + alpha.charAt((b10 >> 12) & 0x3F) +
+				   alpha.charAt((b10 >> 6) & 0x3f) + padchar);
+			break;
+		}
+		return x.join('');
+	};
+}
+
+local.worker.setServer = function(fn) {
+	local.worker.serverFn = fn;
+};
+
+local.worker.pages = [];
+function addConnection(port) {
+	// Create new page server
+	var isHost = (!local.worker.hostPage); // First to add = host page
+	var page = new local.worker.PageServer(local.worker.pages.length, port, isHost);
+
+	// Track new connection
+	if (isHost) {
+		local.worker.hostPage = page;
+	}
+	local.worker.pages.push(page);
+	local.addServer(page.id+'.page', page);
+
+	// Let the document know we're active
+	if (port.start) {
+		port.start();
+	}
+	page.channelSendMsg({ op: 'ready', body: { hostPrivileges: isHost } });
+
+	// Fire event
+	local.worker.emit('connect', page);
+}
+
+// Setup for future connections (shared worker)
+addEventListener('connect', function(e) {
+	addConnection(e.ports[0]);
+});
+// Create connection to host page (regular worker)
+if (self.postMessage) {
+	addConnection(self);
+}})();
+
+} // if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope)// Local Toplevel
 // ==============
 // pfraze 2013
 
 if (typeof this.local == 'undefined')
 	this.local = {};
 
-(function() {local.workerBootstrapUrl = 'worker.min.js';
-local.logAllExceptions = false;// Helpers to create servers
+(function() {local.logAllExceptions = false;// Helpers to create servers
 // -
 
 // EXPORTED
@@ -5051,9 +5221,6 @@ local.logAllExceptions = false;// Helpers to create servers
 // - `config.shared`: boolean, should the workerserver be shared?
 // - `config.namespace`: optional string, what should the shared worker be named?
 //   - defaults to `config.src` if undefined
-// - `config.nullify`: optional [string], a list of objects to nullify when the worker loads
-//   - defaults to ['XMLHttpRequest', 'Worker', 'WebSocket', 'EventSource']
-// - `config.bootstrapUrl`: optional string, specifies the URL of the worker bootstrap script
 // - `serverFn`: optional function, a response generator for requests from the worker
 local.spawnWorkerServer = function(src, config, serverFn) {
 	if (typeof config == 'function') { serverFn = config; config = null; }
@@ -5184,9 +5351,4 @@ function Local__submitHandler(e) {
 }
 
 local.bindRequestEvents = bindRequestEvents;
-local.unbindRequestEvents = unbindRequestEvents;
-
-// Turn on by default
-if (typeof document != 'undefined') {
-	local.bindRequestEvents(document.body);
-}})();
+local.unbindRequestEvents = unbindRequestEvents;})();
