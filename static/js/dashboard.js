@@ -8,9 +8,9 @@ var _users = {};
 // ===============
 
 // APIs
-var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+grimwire.com/-p2pw/service');
-var usersAPI   = serviceAPI.follow({ rel: 'grimwire.com/-user collection' });
-var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
+var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+service+gwr.io/relay');
+var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user collection' });
+var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session' });
 
 // Load session
 _session_ = sessionAPI.get({ accept: 'application/json' });
@@ -119,7 +119,7 @@ function renderLinkRow(link) {
 	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+app+'" target="_blank">'+app+'</a></td></tr>';
 }
 function renderLinks(userId) {
-	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'grimwire.com/-app' }).map(renderLinkRow).join('') : '';
+	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'gwr.io/app' }).map(renderLinkRow).join('') : '';
 }
 
 // Update UI state

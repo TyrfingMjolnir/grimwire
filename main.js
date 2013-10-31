@@ -80,11 +80,12 @@ server.options('*', function(request, response) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="self service via grimwire.com/-p2pw/service"; title="Grimwire.net P2PW"',
-		'</u{?online}>; rel="collection grimwire.com/-p2pw/relay grimwire.com/-user"; id="users"',
-		'</u/{id}{?stream,nc}>; rel="item grimwire.com/-p2pw/relay grimwire.com/-user"',
-		'</session>; rel="service grimwire.com/-session"; id="session"',
-		'</session/{app}>; rel="service grimwire.com/-access-token"',
+		'</>; rel="self via service gwr.io/relay"; title="Grimwire Relay"',
+		'</u{?online,links}>; rel="collection gwr.io/relay gwr.io/user"; id="users"',
+		'</u/{id}>; rel="item gwr.io/user"',
+		'</u/{user}/s/{app}/{stream}{?nc}>; rel="item gwr.io/relay"',
+		'</session>; rel="service gwr.io/session"; id="user"',
+		'</session/{app}>; rel="service gwr.io/session"; id="app"',
 		'</status>; rel="service"; id="status"'
 	].join(', '));
 	next();
@@ -110,7 +111,7 @@ server.use('/session', require('./lib/servers/session.js')(config, db));
 // =====
 server.get('/status', function(request, response) {
 	response.setHeader('Link', [
-		'</>; rel="up service via grimwire.com/-service"; title="Grimwire.net P2PW"',
+		'</>; rel="up via service gwr.io/relay"; title="Grimwire Relay"',
 		'</status>; rel="self service"; id="status"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
@@ -143,7 +144,7 @@ if (config.ssl && !config.is_upstream) {
 	server.listen(config.port);
 }
 server.startTime = new Date();
-winston.info('Management HTTP server listening on port '+config.port, config);
+winston.info('Relay HTTP server listening on port '+config.port, config);
 
 
 // PID management

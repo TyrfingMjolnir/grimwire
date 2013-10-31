@@ -62,8 +62,8 @@
     <script src="/js/local.js"></script>
     <script>
     var serviceAPI = local.agent('//'+window.location.host);
-    var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
-    var usersAPI = serviceAPI.follow({ rel: 'grimwire.com/-user collection' });
+    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', id: 'user' });
+    var usersAPI = serviceAPI.follow({ rel: 'gwr.io/user collection' });
     sessionAPI.resolve();
 
     $('.form-login').on('submit', function(e) {

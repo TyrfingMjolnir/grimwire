@@ -209,7 +209,7 @@ var grimwidget = {};
 
 		// Fetch links
 		var self = this;
-		relay.p2pwRelayAPI.head()
+		relay.agent().head()
 			.then(function(res) {
 				var fn = self.config.render || defaultLinkRenderer;
 				fn(listEl, res.parsedHeaders.link);

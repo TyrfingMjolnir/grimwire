@@ -68,8 +68,8 @@
     <script>
     // Get API
     var serviceAPI = local.agent('//'+window.location.host);
-    var accessAPI = serviceAPI.follow({ rel: 'grimwire.com/-access-token', app: '{APP_DOMAIN}' });
-    var sessionAPI = serviceAPI.follow({ rel: 'grimwire.com/-session' });
+    var accessAPI = serviceAPI.follow({ rel: 'gwr.io/session', id: 'app', app: '{APP_DOMAIN}' });
+    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', id: 'user' });
     accessAPI.resolve({ nohead: true });
 
     // Create the app session and send it back
