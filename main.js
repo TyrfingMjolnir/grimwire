@@ -15,7 +15,6 @@ var configDefaults = {
 	hostname: require("os").hostname(),
 	port: undefined,
 	ssl: false,
-	debugmode: false,
 	is_upstream: false,
 	downstream_port: false,
 	allow_signup: true
@@ -24,7 +23,6 @@ var configCLI = {
 	hostname: argv.h || argv.hostname,
 	port: argv.p || argv.port,
 	ssl: argv.ssl,
-	debugmode: argv.debug,
 	is_upstream: (typeof (argv.u || argv.is_upstream) != 'undefined') ? !!(argv.u || argv.is_upstream) : undefined,
 	downstream_port: argv.u || argv.is_upstream,
 	allow_signup: argv.allow_signup
