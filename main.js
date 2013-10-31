@@ -59,7 +59,7 @@ html.load(config);
 // ============
 var server = express();
 var db = require('./lib/db')();
-winston.add(winston.transports.File, { filename: 'logs/relay.log', handleExceptions: config.debugmode ? false : true });
+winston.add(winston.transports.File, { filename: 'relay.log', handleExceptions: false });
 
 
 // Common Handlers

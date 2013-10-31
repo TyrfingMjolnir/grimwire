@@ -1,7 +1,7 @@
 npm-debug.log
 node_modules
-logs/*
 users
+relay.log
 config.json
 motd.html
 welcome.html
