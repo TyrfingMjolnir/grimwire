@@ -1,26 +1,21 @@
-The Grimwire User's Manual
-==========================
-**version 0.4**
+Grimwire 0.4 (beta)
+===================
 
-A peer-to-peer, user-hosted social network using WebRTC and the [Local.js Ajax Library](https://github.com/grimwire/local).
+A P2P platform for connecting applications in a user-controlled network using WebRTC and the [Local.js Ajax Library](https://github.com/grimwire/local).
 
 ### Overview
 
-Grimwire is a downloadable node.js "relay" for users to create accounts, find who's online, and establish connections between their Web applications. Every connected page is assigned a URL, and, using Local.js, handles Web requests like a .com.
-
-### Why?
-
-So user-controlled software can easily run services without having to register a domain or rent a server. Grimwire's apps are frictionless hosts that can run off the browsers of desktops, notebooks, or even tablets and phones. By using links, metadata, and a relay-hosted index, applications can provide vital services (data storage, contact lists, messaging, etc) to each other, giving the user control over where data goes.
+Grimwire is a downloadable node.js "relay" for users to establish WebRTC connections between their Web applications. Every connected page is assigned a URL and setup to handle Web requests using HTTPL. A service-discovery system then configures the applications into a personal Web.
 
 ### How?
 
-Users register with relays - Grimwire instances - which run as traditional Web services on registered hostnames. Then, users authorize 3rd-party apps to subscribe to streams on the relay and exchange connection information with the other applications. When apps join, they are assigned URLs (which look like `httpl://bob@bobs-relay.com!bobs-app.com`). Users can then find links to the apps and make requests, which automatically establishes the connection and exchanges the data.
+Users register with relays - Grimwire instances - which run as traditional Web services on registered hostnames. Then, users authorize 3rd-party apps to subscribe to streams on the relay and exchange connection information with the other applications. When apps join, they are assigned URLs (which look like `httpl://bob@bobs-relay.com!bobs-app.com`). Apps can then register and fetch links from the relay and use ["relation types"](http://tools.ietf.org/html/rfc5988#section-5.3) to determine compatibility.
 
-Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is managed by the [Local.js library](https://github.com/grimwire/local), which provides a promises-based Ajax interface and a server API not unlike node.js. The apps then register server functions to handle the requests and (using attached peer info) make permission decisions. 
+Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is handled by the [Local.js library](https://github.com/grimwire/local), which provides a promises-based Ajax interface and a server API similar to node.js. The apps then register server functions to handle the requests and (using attached peer info) make permission decisions.
 
 ---
 
-*Grimwire is in public beta. If you run into bugs or have any suggestions, feel free to email me at pfrazee@gmail.com. If you're familiar with GitHub, you can file issue reports at [github.com/grimwire/grimwire/issues](//github.com/grimwire/grimwire/issues).*
+*Grimwire is in public beta. For bugs and suggestions, submit reports to [github.com/grimwire/grimwire/issues](//github.com/grimwire/grimwire/issues).*
 
 ---
 
@@ -30,10 +25,6 @@ Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make 
 
 
 ## Basic Usage
-
-### Finding a Relay
-
-At the time of this writing, there aren't any public relays - you have to host your own or use a friend's. If you want a relay, but lack the technical expertise to start your own, contact me at pfrazee@gmail.com and I'll help you get started.
 
 ### Installing a Relay
 
@@ -48,9 +39,9 @@ This gets the relay started on port 80. You can choose another port with the '-p
 
 ### Trying it out with chat.grimwire.com
 
-Open [chat.grimwire.com](http://chat.grimwire.com). Notice that G at the top right? It should say *offline*. Click on that, then enter the address of your relay in the box. A popup will ask if you want to grant chat.grimwire.com access. Click *Allow*.
+Open [chat.grimwire.com](http://chat.grimwire.com). Click the G on the top right, enter the address of your relay, then press enter. Grant access.
 
-Once you're logged in, the chat app will query the relay for any rooms hosted by the other users. If nothing shows up, you can start your own with the green *Start a room* button. Other users are free to join the room - or you can join your own from another tab - and you'll have a private, encrypted chat.
+Now that you're logged in, the chat app will query the relay for any rooms hosted by the other users. If nothing shows up, you can start your own with the green *Start a room* button. Other users are free to join the room and you'll have a private, encrypted chat.
 
 ### Also, FYI
 
@@ -75,24 +66,24 @@ See the [Local.js Manual](http://grimwire.com/local) for writing software using 
 
 ### Configuring the Relay Service
 
-The `grimwire` command requires one of the following parameters:
+The `grimwire` program supports the following commands:
 
- - `grimwire setup`: downloads javascript dependencies, then creates the `config.json`, `welcome.html`, and `motd.html` files if they do not exist.
  - `grimwire start`: starts the server.
- - `grimwire reload`: sends a "reload configuration" signal to the server process. Use this when you change config.json, welcome.html, or motd.html, and you don't want to close the server. (Note that closing the server destroys everybody's sessions, forcing them to log back in.)
- - `grimwire stop`: sends a "shutdown" signal to the server process.
+ - `grimwire setup`: downloads javascript dependencies and creates the config files if they don't exist.
+ - `grimwire reload`: reloads config and user files into the existing process without downtime.
+ - `grimwire stop`: sends a "shutdown" signal to the existing process.
 
-Grimwire's configuration can be controlled with either command-line flags on the `start` command, or with the `config.json` file. The CLI flags always take precedence over config.json's values. The flags are:
+Grimwire's configuration can be controlled with command-line flags or the config.json file. CLI flags always take precedence over config.json's values. The flags are:
 
  - `-p/--port`: the port to bind the server to (default 80).
  - `-h/--hostname`: the hostname the relay uses when linking to itself (defaults to system value).
- - `-u/--is_upstream`: if grimwire is upstream of eg Nginx, specify this flag with the port Nginx is using. It basically says, "grimwire is_upstream of [publicly exposed port]." This is mainly used for constructing links (default off).
+ - `-u/--is_upstream`: if grimwire is upstream of a server like Nginx, specify this flag with the port the server is using.
  - `--ssl`: enables TLS, and will look for `ssl-key.pem` and `ssl-cert.pem` in grimwire's directory to set the key & cert (default off).
  - `--allow_signup`: if set to 0, will remove the new-user signup interface from the login page (default 1).
 
 The `config.json` file can include any of the long versions of those flags. Note that `grimwire reload` will not update the port or SSL status - you must restart the server process to do that.
 
-#### A config.json for using SSL
+**A config.json for using SSL**
 
 ```
 {
@@ -102,7 +93,7 @@ The `config.json` file can include any of the long versions of those flags. Note
 
 The port will default to 443. The `ssl-key.pem` and `ssl-cert.pem` files (under grimwire's installed directory) will be used for encryption.
 
-#### A config.json for using a Front Proxy (like Nginx) without SSL
+**A config.json for using a Front Proxy (like Nginx) without SSL**
 
 ```
 {
@@ -113,7 +104,7 @@ The port will default to 443. The `ssl-key.pem` and `ssl-cert.pem` files (under 
 
 This is saying, "nginx runs for the public at port 80, and it contacts grimwire at port 8000".
 
-#### A config.json for using a Front Proxy (like Nginx) with SSL
+**A config.json for using a Front Proxy (like Nginx) with SSL**
 
 ```
 {
@@ -150,16 +141,6 @@ If you want to change a user's password, you can set it as plaintext in the JSON
 
 ## Discussion Topics
 
-### How is this different from, say, Facebook?
-
-Facebook uses its own systems to connect people, run applications, and store data. Most of the applications (messages, photos, groups, etc) are made and run by Facebook, but other sites can use the service to do logins, get network/user info, spam the friend feed, and so on. This tends to mean that all of Facebook's interactions occur through Facebook's computers.
-
-Like Facebook, Grimwire's interactions occur through the Grimwire relays. However, Grimwire has only one kind of interaction: connections. After the connection, the applications interact directly from one browser to the other*. The other crucial difference is that Grimwire's relays are open-source and free for anybody to install, so users can run their own networks.
-
-Joining a relay with an app is equivalent to setting up an ephemeral .com. Your page is assigned an address (they look like httpl://bob@bobs-relay.com!bobs-app.com) and, until you close the page, you'll be able to respond to Web requests from there. The relay keeps links to those addresses, along with information about what services those addresses provide, so apps have an easy way to find each other.
-
-* As mentioned through-out this manual, if WebRTC - the p2p technology - fails, Grimwire's relays will "bounce" the traffic to make sure you can still connect. This trade-off was made to ensure a smooth experience, but can come at a privacy cost. If this concerns you, disable bouncing on your account (not yet implemented in beta) or use a private relay.
-
 ### What exactly is WebRTC?
 
 WebRTC (Real Time Communication) is a new set of technologies for browsers, predominantly developed by Google and Mozilla. It adds a lot of strong features to the Web, including:
@@ -178,11 +159,11 @@ This depends on the situation. Let's look at the individual pieces and what info
 
 Relays are in the best position to track users - because they're designed to! In order for WebRTC to break through firewalls, there has to be a public service that can carry session information between the users. This means a relay knows what apps you have online and who you've exchanged session details with. Grimwire doesn't currently log that information, but it would be trivial for a host to add the logging themselves.
 
-Should this worry you? It's tempting to compare this information to, say, being seen at a coffee shop by the shop manager. However, the problem with that analogy is that it's imprecise; in fact, the manager also sees you at the other shops, notices every conversation you start, and never forgets anything. That's pretty spooky.
+Should this worry you? It's tempting to compare this information to, say, being seen at a coffee shop by the shop manager. However, that manager also sees you at the other shops, notices every conversation you start, and (with logging added) never forgets anything. That's pretty spooky.
 
-This is why Grimwire's relay doesn't run as one big service - that information is better left unaggregated. Further, under the developing US law, it looks like Web providers can be compelled to install taps or provide backdoors. In large public spaces (like the Web) you might argue for discretionary surveillance along those lines (just as you might in a mall or a park) but if you have a public virtual space then you certainly need discrete private spaces as well. Like any private property, enforcement can be expected to knock on the door with a warrant. The smaller the space, the fewer people are exposed behind that door.
+This is why Grimwire's relay doesn't run as one big service - that information is better left unaggregated. Further, governments may compel Web providers to install taps or provide backdoors. It's best to decentralize the system across lots of machines to decrease the impact of leaks.
 
-I recommend that families, friends, university groups, businesses, etc - communities with personal, real-world contact - run their own relays, so that users don't have to put their trust in strangers. In the future, Grimwire's relays will be able to inter-communicate, and that will allow you to expand your network without exposing yourself to additional tracking.
+I recommend that families, friends, university groups, businesses, etc (communities with real-world contact) run their own relays so that users don't have to put their trust in strangers. In the future, Grimwire's relays will be able to inter-communicate, and that will allow you to expand your network without exposing yourself to additional tracking.
 
 #### Tracking by the Applications
 
@@ -190,12 +171,12 @@ By granting access to an application, you give it the ability to see who/what is
 
 In a future release, Grimwire will support different levels of authorization that determines what the apps can see and connect to.
 
-#### Tracking by the Network (ISPs and snoops)
+#### Tracking by the Network
 
-Grimwire uses Transport Layer Security, which means it encrypts the data that passes over the wire. However, a determined snoop could log all of the encrypted data and attempt to crack the encryption in the future. This situation is generally uncommon, but still fairly feasible. As a result, you should be aware of which "wires" your programs use:
+Grimwire uses Transport Layer Security, which means it encrypts the data that passes over the wire. However, a determined snoop could log all of the encrypted data and attempt to crack the encryption in the future. This situation is generally uncommon, but still feasible. As a result, you should be aware of which networks your programs use:
 
- - If you're connecting over the Internet, you should assume any number of snoops are logging it.
- - If you're connecting over a LAN, you're probably only logged by the LAN owner (the business, the uni, your home, etc). This is fairly ideal; I doubt your LAN-owner can crack TLS.
+ - If you're connecting over the Internet, its likely your messages are logged.
+ - If you're connecting over a LAN, your messages may be logged, but probably not by people who can crack the encryption.
  - If you're connecting between tabs on your machine - and WebRTC is working, so bouncing is not in use - the data never leaves your machine. Flawless victory!
 
 
