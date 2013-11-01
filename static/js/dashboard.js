@@ -10,7 +10,7 @@ var _users = {};
 // APIs
 var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+service+gwr.io/relay');
 var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user collection' });
-var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session' });
+var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
 
 // Load session
 _session_ = sessionAPI.get({ accept: 'application/json' });

@@ -68,8 +68,8 @@
     <script>
     // Get API
     var serviceAPI = local.agent('//'+window.location.host);
-    var accessAPI = serviceAPI.follow({ rel: 'gwr.io/session', id: 'app', app: '{APP_DOMAIN}' });
-    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', id: 'user' });
+    var accessAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'app', app: '{APP_DOMAIN}' });
+    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
     accessAPI.resolve({ nohead: true });
 
     // Create the app session and send it back
