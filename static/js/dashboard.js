@@ -9,7 +9,7 @@ var _users = {};
 
 // APIs
 var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+service+gwr.io/relay');
-var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user collection' });
+var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user collection', links: 1 });
 var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
 
 // Load session
@@ -30,6 +30,10 @@ function loadActiveUsers() {
 		.then(
 			function(res) {
 				_users = res.body.rows;
+				// Extract links for each user
+				for (var id in _users) {
+					_users[id].links = local.queryLinks(res, { user: id });
+				}
 				renderAll();
 			},
 			handleFailedRequest
