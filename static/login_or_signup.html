@@ -118,8 +118,12 @@
           $('#newuser-status').html('');
           if (res.status == 409) {
             $('#newuser-error').html('That username has been taken.');
+          } else if (res.status == 413) {
+            $('#newuser-error').html(res.body.error);
           } else if (res.status == 422) {
             $('#newuser-error').html('Username and password are required.');
+          } else if (res.status == 507) {
+            $('#newuser-error').html('User limit reached - unable to create a new account. Sorry!');
           } else {
             $('#newuser-error').html('Unknown error ('+res.status+') sorry for the inconvenience.');
           }
