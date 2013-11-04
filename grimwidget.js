@@ -205,7 +205,7 @@ var grimwidget = {};
 		// Pull provider from UI
 		var urlEl = this.popupEl.querySelector('.grimwidget-providerinput');
 		var urld = local.parseUri(urlEl.value);
-		var url = (urld.protocol || 'https') + '://' + urld.authority;
+		var url = ((urld.protocol) ? (urld.protocol+'://') : '//') + urld.authority;
 		relay.setProvider(url);
 
 		// Initiate auth flow (will create a popup)
