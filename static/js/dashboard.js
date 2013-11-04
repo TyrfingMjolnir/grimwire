@@ -32,7 +32,7 @@ function loadActiveUsers() {
 				_users = res.body.rows;
 				// Extract links for each user
 				for (var id in _users) {
-					_users[id].links = local.queryLinks(res, { user: id });
+					_users[id].links = local.queryLinks(res, { host_user: id });
 				}
 				renderAll();
 			},
@@ -119,7 +119,7 @@ $('.avatars a').on('click', function() {
 
 // Rendering helpers
 function renderLinkRow(link) {
-	var app = link.app;
+	var app = link.host_app;
 	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+app+'" target="_blank">'+app+'</a></td></tr>';
 }
 function renderLinks(userId) {
@@ -164,8 +164,8 @@ function renderAll() {
 		if (user.online) {
 			var apps = [];
 			for (var i=0; i < user.links.length; i++) {
-				if (apps.indexOf(user.links[i].app) == -1)
-					apps.push(user.links[i].app);
+				if (apps.indexOf(user.links[i].host_app) == -1)
+					apps.push(user.links[i].host_app);
 			}
 			apps = apps.map(function(app) { return '<a href=http://'+app+' target=_blank>'+app+'</a><br/>'; }).join(''); // no quotes on link attrs -- messes with data-content
 			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';

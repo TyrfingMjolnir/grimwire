@@ -884,8 +884,8 @@ local.preferredType = function preferredType(accept, provided) {
 
 // EXPORTED
 // correctly joins together all url segments given in the arguments
-// eg joinUrl('/foo/', '/bar', '/baz/') -> '/foo/bar/baz/'
-local.joinUrl = function joinUrl() {
+// eg joinUri('/foo/', '/bar', '/baz/') -> '/foo/bar/baz/'
+local.joinUri = function joinUri() {
 	var parts = Array.prototype.map.call(arguments, function(arg, i) {
 		arg = ''+arg;
 		var lo = 0, hi = arg.length;
@@ -951,7 +951,7 @@ local.joinRelPath = function(urld, relpath) {
 		else
 			hostpathParts.push(relpathParts[i]);
 	}
-	return local.joinUrl(protocol + urld.authority, hostpathParts.join('/'));
+	return local.joinUri(protocol + urld.authority, hostpathParts.join('/'));
 };
 
 // EXPORTED
@@ -959,7 +959,7 @@ local.joinRelPath = function(urld, relpath) {
 local.parseUri = function parseUri(str) {
 	if (typeof str === 'object') {
 		if (str.url) { str = str.url; }
-		else if (str.host || str.path) { str = local.joinUrl(req.host, req.path); }
+		else if (str.host || str.path) { str = local.joinUri(req.host, req.path); }
 	}
 
 	// handle data-uris specially - performance characteristics are much different
@@ -1348,7 +1348,10 @@ local.httpHeaders.register('link',
 				if (attr == 'href') {
 					continue;
 				}
-				if (typeof link[attr] == 'boolean') {
+				if (link[attr] === null) {
+					continue;
+				}
+				if (typeof link[attr] == 'boolean' && link[attr]) {
 					linkParts.push(attr);
 				} else {
 					linkParts.push(attr+'="'+link[attr]+'"');
@@ -2805,7 +2808,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			stream: this.getStreamId(),
 			nc:     Date.now() // nocache
 		});
-		this.relayItem.subscribe({ method: 'subscribe' })
+		this.relayItem.subscribe()
 			.then(
 				function(stream) {
 					// Update state
@@ -3487,13 +3490,26 @@ local.setDispatchWrapper(function(request, response, dispatch) {
 });
 
 // INTERNAL
-// Makes sure response header links are absolute
+// Makes sure response header links are absolute and extracts additional attributes
 var isUrlAbsoluteRE = /(:\/\/)|(^[-A-z0-9]*\.[-A-z0-9]*)/; // has :// or starts with ___.___
 function processResponseHeaders(request, response) {
 	if (response.parsedHeaders.link) {
 		response.parsedHeaders.link.forEach(function(link) {
 			if (isUrlAbsoluteRE.test(link.href) === false)
 				link.href = local.joinRelPath(request.urld, link.href);
+			link.host_domain = local.parseUri(link.href).authority;
+			var peerd = local.parsePeerDomain(link.host_domain);
+			if (peerd) {
+				link.host_user   = peerd.user;
+				link.host_relay  = peerd.relay;
+				link.host_app    = peerd.app;
+				link.host_stream = peerd.stream;
+			} else {
+				delete link.host_user;
+				delete link.host_relay;
+				delete link.host_app;
+				delete link.host_stream;
+			}
 		});
 	}
 }
@@ -3525,7 +3541,7 @@ local.subscribe = function subscribe(request) {
 	if (typeof request == 'string')
 		request = { url: request };
 	request.stream = true; // stream the response
-	if (!request.method) request.method = 'GET';
+	if (!request.method) request.method = 'SUBSCRIBE';
 	if (!request.headers) request.headers = { accept : 'text/event-stream' };
 	if (!request.headers.accept) request.headers.accept = 'text/event-stream';
 
@@ -4903,7 +4919,7 @@ Agent.prototype.lookupLink = function(context) {
 		}
 		else if (typeof context.query == 'string') {
 			// A URL
-			if (!local.isAbsUrl(context.query))
+			if (!local.isAbsUri(context.query))
 				return local.joinRelPath(this.context.urld, context.query);
 			return context.query;
 		}
@@ -5000,7 +5016,7 @@ local.addServer('hosts', function(req, res) {
 // ==================
 // pfraze 2013
 
-if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+if (typeof self.window == 'undefined') {
 
 	if (typeof this.local.worker == 'undefined')
 		this.local.worker = {};
