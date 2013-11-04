@@ -251,7 +251,7 @@ var grimwidget = {};
 		listEl.innerHTML = links
 			.filter(function(link) {
 				// Skip the dashboard's links
-				return !!link.app;
+				return !!link.host_app;
 			})
 			.map(function(link) {
 				// Render
@@ -259,8 +259,8 @@ var grimwidget = {};
 				return [
 					'<div class="grimwidget-link">',
 						title+'<br/>',
-						'<small>Host: '+link.user+', App: <a href="//'+link.app+'" title="'+link.app+'" target="_blank">'+link.app+'</a></small><br/>',
-						(local.parseUri(link.href).authority == relay.getDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
+						'<small>Host: '+link.host_user+', App: <a href="//'+link.host_app+'" title="'+link.host_app+'" target="_blank">'+link.host_app+'</a></small><br/>',
+						(link.host_domain == relay.getDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
 					'</div>'
 				].join('');
 			})
