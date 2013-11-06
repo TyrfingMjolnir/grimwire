@@ -39,7 +39,7 @@ function refreshConfig() {
 		config[k] = merge(configCLI[k], merge(configFile[k], configDefaults[k]));
 	}
 	if (typeof config.port == 'undefined') {
-		config.port = (config.ssl) ? 443 : 80;
+		config.port = (config.ssl) ? 443 : 8000;
 	}
 }
 refreshConfig();
