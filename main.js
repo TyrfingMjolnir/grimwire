@@ -151,5 +151,8 @@ winston.info('Relay HTTP server listening on port '+config.port, config);
 // ==============
 fs.writeFileSync('./pid', process.pid);
 process.on('SIGINT', process.exit.bind(process, 0));
-process.on('uncaughtException', process.exit.bind(process, 0));
+process.on('uncaughtException', function(e) { 
+    console.error(e);
+    process.exit(0)
+});
 process.on('exit', function() { fs.unlinkSync('./pid'); });
