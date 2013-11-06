@@ -32,10 +32,10 @@ Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make 
 git clone https://github.com/grimwire/grimwire.git grimwire
 cd grimwire
 ./grimwire setup
-sudo ./grimwire start
+./grimwire start
 ```
 
-This gets the relay started on port 80. You can choose another port with the '-p' flag, eg `./grimwire start -p8000`. More config options are explained in the "Administration" portion of this doc.
+This gets the relay started on port 8000. You can choose another port with the '-p' flag, eg `./grimwire start -p 80`. More config options are explained in the "Administration" portion of this doc.
 
 ### Trying it out with chat.grimwire.com
 
@@ -75,7 +75,7 @@ The `grimwire` program supports the following commands:
 
 Grimwire's configuration can be controlled with command-line flags or the config.json file. CLI flags always take precedence over config.json's values. The flags are:
 
- - `-p/--port`: the port to bind the server to (default 80).
+ - `-p/--port`: the port to bind the server to (default 8000).
  - `-h/--hostname`: the hostname the relay uses when linking to itself (defaults to system value).
  - `-u/--is_upstream`: if grimwire is upstream of a server like Nginx, specify this flag with the port the server is using.
  - `--ssl`: enables TLS, and will look for `ssl-key.pem` and `ssl-cert.pem` in grimwire's directory to set the key & cert (default off).
