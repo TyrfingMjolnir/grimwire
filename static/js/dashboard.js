@@ -8,7 +8,7 @@ var _users = {};
 // ===============
 
 // APIs
-var serviceAPI = local.agent('nav:||'+window.location.origin+'|self+service+gwr.io/relay');
+var serviceAPI = local.agent('nav:||//'+window.location.host+'|self+service+gwr.io/relay');
 var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user collection', links: 1 });
 var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
 
