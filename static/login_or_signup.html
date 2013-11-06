@@ -70,7 +70,7 @@
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/local.js"></script>
     <script>
-    var serviceAPI = local.agent('//'+window.location.host);
+    var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
     var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
     var usersAPI = serviceAPI.follow({ rel: 'gwr.io/user collection' });
     sessionAPI.resolve();

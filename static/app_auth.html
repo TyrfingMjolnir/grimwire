@@ -67,7 +67,7 @@
 
     <script>
     // Get API
-    var serviceAPI = local.agent('//'+window.location.host);
+    var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
     var accessAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'app', app: '{APP_DOMAIN}' });
     var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
     accessAPI.resolve({ nohead: true });
