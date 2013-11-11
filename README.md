@@ -1,7 +1,7 @@
 Grimwire 0.4 (beta)
 ===================
 
-A P2P platform for connecting applications in a user-controlled network using WebRTC and the [Local.js Ajax Library](https://github.com/grimwire/local).
+A node.js server for connecting client-side applications using [WebRTC](//webrtc.org) and the [Local.js Ajax Library](//github.com/grimwire/local).
 
 ### Overview
 
@@ -11,7 +11,7 @@ Grimwire is a downloadable node.js "relay" for users to establish WebRTC connect
 
 Users register with relays - Grimwire instances - which run as traditional Web services on registered hostnames. Then, users authorize 3rd-party apps to subscribe to streams on the relay and exchange connection information with the other applications. When apps join, they are assigned URLs (which look like `httpl://bob@bobs-relay.com!bobs-app.com`). Apps can then register and fetch links from the relay and use ["relation types"](http://tools.ietf.org/html/rfc5988#section-5.3) to determine compatibility.
 
-Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is handled by the [Local.js library](https://github.com/grimwire/local), which provides a promises-based Ajax interface and a server API similar to node.js. The apps then register server functions to handle the requests and (using attached peer info) make permission decisions.
+Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make Ajax requests to each other. This is handled by the [Local.js library](//github.com/grimwire/local), which provides a promises-based Ajax interface and a server API similar to node.js. The apps then register server functions to handle the requests and (using attached peer info) make permission decisions.
 
 ---
 
