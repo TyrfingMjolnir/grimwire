@@ -1,3 +1,4 @@
 {
-	"allow_signup": true
+	"allow_signup": true,
+	"max_user_streams": 10
 }

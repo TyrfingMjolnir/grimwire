@@ -3113,6 +3113,13 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 				this.setStreamId(randomStreamId());
 				this.startListening();
 			}
+		} else if (e.data && e.data.status == 420) { // out of streams
+			// Update state
+			this.relayEventStream = null;
+			this.connectedToRelay = false;
+
+			// Fire event
+			this.emit('outOfStreams');
 		} else if (e.data && (e.data.status == 401 || e.data.status == 403)) { // unauthorized
 			// Remove bad access token to stop reconnect attempts
 			this.setAccessToken(null);

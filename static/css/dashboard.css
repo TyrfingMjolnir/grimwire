@@ -1,3 +1,11 @@
+/* general styles */
+.btn-xxs, .btn-group-xxs > .btn {
+	padding: 0px 5px;
+	line-height: 1.25;
+	font-size: 12px;
+	border-radius: 3px;
+}
+
 /* header */
 .navbar-static-top .navbar-brand {
 	height: 50px;
@@ -14,6 +22,7 @@
 
 /* ui controls */
 #toolbar { position: absolute; right: 0; }
+#connections-bar { margin-bottom: 10px; }
 .help-icon { color: #bbb; }
 #your-web {
 	position: absolute;

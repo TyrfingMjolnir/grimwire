@@ -66,9 +66,10 @@ function handleFailedRequest(res) {
 // UI
 // ==
 
-// Cache selectors
+// Cache selectors and templates
 var $active_links = $('#active-links');
-var $active_users = $('#active-users');
+var $your_connections = $('#your-connections');
+var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
 
 // Logout link
 $('#logout').on('click', function(e) {
@@ -157,24 +158,22 @@ function renderAll() {
 		$active_links.html('');
 	}
 
-	// Populate active users
-	html = '';
-	for (var id in _users) {
-		var user = _users[id];
-		if (user.online) {
-			var apps = [];
-			for (var i=0; i < user.links.length; i++) {
-				if (apps.indexOf(user.links[i].host_app) == -1)
-					apps.push(user.links[i].host_app);
-			}
-			apps = apps.map(function(app) { return '<a href=http://'+app+' target=_blank>'+app+'</a><br/>'; }).join(''); // no quotes on link attrs -- messes with data-content
-			html += '<a class="active-peer" href="#" data-content="'+apps+'">'+user.id+'</a> ';
-		} else {
-			html += '<span class="text-muted">'+user.id+'</span> ';
-		}
+	if (_session && _users[_session.user_id]) {
+		var user = _users[_session.user_id];
+		html = renderYourConnections({
+			num_user_streams: user.num_user_streams,
+			max_user_streams: user.max_user_streams,
+			num_guest_streams: user.num_guest_streams,
+			max_guest_streams: user.max_guest_streams,
+			pct_user_streams: Math.round((user.num_user_streams / user.max_user_streams) * 100),
+			pct_guest_streams: Math.round((user.num_guest_streams / user.max_user_streams) * 100),
+			pct_guest_remaining: Math.round(((user.max_guest_streams - user.num_guest_streams) / user.max_user_streams) * 100)
+		});
+
+		$your_connections.html(html);
+	} else {
+		$your_connections.html('');
 	}
-	if (!html) { html = '<span class="text-muted">No users online.</span>'; }
-	$active_users.html(html);
 
 	// Create popovers
 	$('.active-peer').popover({

@@ -67,10 +67,9 @@
         </div>
         <div class="col-md-4">
           <div>{MOTD_HTML}</div>
-          <h4>Online</h4>
-          <div id="active-users"></div>
+          <div id="your-connections"></div>
           <hr/>
-          <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with Grimwire.js to connect to this relay.</small></p>
+          <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with GrimWidget.js to connect to this relay.</small></p>
           <hr/>
           <p>
             <small>CSS by <a href="http://getbootstrap.com/" target="_blank">Bootstrap</a>. Icons by <a href="http://www.fatcow.com/free-icons" target="_blank">FatCow</a> and <a href="http://glyphicons.com/" target="_blank">Glyphicons</a>. Libraries by <a href="http://stevenlevithan.com/" target="_blank">Stephen Levithan, <a href="https://github.com/fxa" target="_blank">Franz Antesberger</a>, and <a href="https://github.com/federomero" target="_blank">Federico Romero</a>. Grimwire by <a href="https://github.com/pfraze" target="_blank">Paul Frazee</a>. Licensed MIT.</small>
@@ -84,9 +83,24 @@
       var _avatars = {AVATARS};
     </script>
 
+    <script id="your-connections-tmpl" type="text/x-handlebars-template">
+      <h4>Your Connections <small>{{num_user_streams}} / {{max_user_streams}}{{!-- <span class="text-warning">&ndash; {{max_guest_streams}}</span>--}}</small></h4>
+      <div id="connections-bar" class="progress">
+        <div class="progress-bar" role="progressbar" aria-valuenow="{{pct_user_streams}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_user_streams}}%"><span class="sr-only">{{pct_user_streams}}% Allocated</span></div>
+        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="{{pct_guest_streams}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_streams}}%"><span class="sr-only">{{pct_guest_streams}}% Allocated</span></div>
+        <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="{{pct_guest_remaining}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_remaining}}%"><span class="sr-only">{{pct_guest_remaining}}% Allocated</span></div>
+      </div>
+      {{!--<div class="btn-group btn-group-xxs">
+        <button class="btn btn-success" title="Remove guest slot">&ndash;</button>
+        <button class="btn btn-success" title="Add guest slot">+</button>
+      </div>
+      <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
+    </script>
+
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/local.js"></script>
     <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/handlebars.js"></script>
     <script src="/js/dashboard.js"></script>
   </body>
 </html>
