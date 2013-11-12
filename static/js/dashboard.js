@@ -2,6 +2,7 @@
 // ==========
 var _session = null, _session_;
 var _users = {};
+var _session_user = null;
 
 
 // Backend Interop
@@ -18,6 +19,9 @@ _session_.then(setSession);
 function setSession(res) {
 	// Update state
 	_session = res.body;
+	if (_users[_session.user_id]) {
+		_session_user = _users[_session.user_id];
+	}
 
 	// Update UI
 	$('#userid').html(_session.user_id+' <b class="caret"></b>');
@@ -30,6 +34,9 @@ function loadActiveUsers() {
 		.then(
 			function(res) {
 				_users = res.body.rows;
+				if (_session && _users[_session.user_id]) {
+					_session_user = _users[_session.user_id];
+				}
 				// Extract links for each user
 				for (var id in _users) {
 					_users[id].links = local.queryLinks(res, { host_user: id });
@@ -83,6 +90,38 @@ $('#logout').on('click', function(e) {
 // Refresh button
 $('.refresh').on('click', loadActiveUsers);
 
+// Guest slot +/- buttons
+var _updateGuestStreamsReq = null;
+function updateGuestSlotsCB(d_streams) {
+	return function() {
+		if (_session_user) {
+			// Find the target
+			var target = _session_user.max_guest_streams + d_streams;
+			if (target < _session_user.num_guest_streams) return false;
+			if (target > (_session_user.max_user_streams - _session_user.num_user_streams)) return false;
+			_session_user.max_guest_streams = target;
+
+			// Cancel any requests in progress
+			if (_updateGuestStreamsReq) {
+				_updateGuestStreamsReq.close();
+			}
+
+			// Create the request
+			usersAPI.follow({ rel: 'item', id: _session.user_id }).resolve({ nohead: true }).then(function(url) {
+				// ^ resolve is required for now -  https://github.com/grimwire/local/issues/81
+				_updateGuestStreamsReq = new local.Request({
+					method: 'PATCH',
+					url: url,
+					headers: { 'content-type': 'application/json' }
+				});
+				local.dispatch(_updateGuestStreamsReq).then(renderAll);
+				_updateGuestStreamsReq.end({ max_guest_streams: target });
+			});
+		}
+		return false;
+	};
+}
+
 
 // Avatars
 (function() {
@@ -111,8 +150,7 @@ $('.avatars a').on('click', function() {
 	$('.user-avatar').attr('src', '/img/avatars/'+avatar);
 
 	// Update the user
-	usersAPI.follow({ rel: 'item', id: _session.user_id })
-		.patch({ avatar: avatar });
+	usersAPI.follow({ rel: 'item', id: _session.user_id }).patch({ avatar: avatar });
 	_session.avatar = avatar;
 
 	return false;
@@ -158,27 +196,25 @@ function renderAll() {
 		$active_links.html('');
 	}
 
-	if (_session && _users[_session.user_id]) {
-		var user = _users[_session.user_id];
+	if (_session_user) {
+		// Render active connections
+		var max_guest_streams = Math.min(_session_user.max_user_streams - _session_user.num_user_streams, _session_user.max_guest_streams);
 		html = renderYourConnections({
-			num_user_streams: user.num_user_streams,
-			max_user_streams: user.max_user_streams,
-			num_guest_streams: user.num_guest_streams,
-			max_guest_streams: user.max_guest_streams,
-			pct_user_streams: Math.round((user.num_user_streams / user.max_user_streams) * 100),
-			pct_guest_streams: Math.round((user.num_guest_streams / user.max_user_streams) * 100),
-			pct_guest_remaining: Math.round(((user.max_guest_streams - user.num_guest_streams) / user.max_user_streams) * 100)
+			num_user_streams: _session_user.num_user_streams,
+			max_user_streams: _session_user.max_user_streams,
+			num_guest_streams: _session_user.num_guest_streams,
+			max_guest_streams: _session_user.max_guest_streams,
+			pct_user_streams: Math.round((_session_user.num_user_streams / _session_user.max_user_streams) * 100),
+			pct_guest_streams: Math.round((_session_user.num_guest_streams / _session_user.max_user_streams) * 100),
+			pct_guest_remaining: Math.round(((max_guest_streams - _session_user.num_guest_streams) / _session_user.max_user_streams) * 100)
 		});
-
 		$your_connections.html(html);
+
+		// Bind guest slot add/remove btns
+		$('#remove-guest-slot').on('click', updateGuestSlotsCB(-1));
+		$('#add-guest-slot').on('click', updateGuestSlotsCB(+1));
 	} else {
 		$your_connections.html('');
 	}
-
-	// Create popovers
-	$('.active-peer').popover({
-		html: true,
-		placement: 'bottom'
-	});
 }
 renderAll();

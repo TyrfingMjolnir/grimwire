@@ -84,17 +84,17 @@
     </script>
 
     <script id="your-connections-tmpl" type="text/x-handlebars-template">
-      <h4>Your Connections <small>{{num_user_streams}} / {{max_user_streams}}{{!-- <span class="text-warning">&ndash; {{max_guest_streams}}</span>--}}</small></h4>
+      <h4>Your Connections <small>{{num_user_streams}} / {{max_user_streams}} <span class="text-success">&ndash; {{num_guest_streams}}</span></small></h4>
       <div id="connections-bar" class="progress">
         <div class="progress-bar" role="progressbar" aria-valuenow="{{pct_user_streams}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_user_streams}}%"><span class="sr-only">{{pct_user_streams}}% Allocated</span></div>
         <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="{{pct_guest_streams}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_streams}}%"><span class="sr-only">{{pct_guest_streams}}% Allocated</span></div>
         <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="{{pct_guest_remaining}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_remaining}}%"><span class="sr-only">{{pct_guest_remaining}}% Allocated</span></div>
       </div>
-      {{!--<div class="btn-group btn-group-xxs">
-        <button class="btn btn-success" title="Remove guest slot">&ndash;</button>
-        <button class="btn btn-success" title="Add guest slot">+</button>
+      <div class="btn-group btn-group-xxs">
+        <button id="remove-guest-slot" class="btn btn-success" title="Remove guest slot">&ndash;</button>
+        <button id="add-guest-slot" class="btn btn-success" title="Add guest slot">+</button>
       </div>
-      <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
+      <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span> {{!--<a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
     </script>
 
     <script src="/js/jquery-2.0.3.min.js"></script>
