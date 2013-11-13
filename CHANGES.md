@@ -2,6 +2,11 @@ Changes
 =======
 0.4.1
 
+2013/11/12 pfraze
+
+ - Added guest accounts
+
+
 2013/11/11 pfraze
 
  - Added per-user stream limits (default 10)

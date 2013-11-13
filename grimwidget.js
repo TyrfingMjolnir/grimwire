@@ -45,13 +45,17 @@ var grimwidget = {};
 		'.grimwidget-popup .grimwidget-body { padding: 0.5em 1em; }',
 		'.grimwidget-popup .grimwidget-body hr { margin-top: 10px; margin-bottom: 10px; border: 0; border-top: 1px solid #eeeeee; }',
 		'.grimwidget-popup .grimwidget-body p { margin: 0 0 6px; }',
-		'.grimwidget-providerinput { width: 270px; padding: 2px 4px 4px; }',
+		'.grimwidget-providerinput { width: 270px; padding: 2px 4px 4px; border: 1px solid #aaa }',
+		'.grimwidget-hostuserinput { width: 170px; padding: 2px 4px 4px; border: 1px solid #aaa }',
 		'.grimwidget-btn { display: inline-block; width: 270px; padding: 4px; margin-bottom: 0; font-size: 14px; font-weight: normal; white-space: nowrap; vertical-align: middle; }',
 		'.grimwidget-btn { cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: #333; }',
 		'.grimwidget-btn { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; -o-user-select: none; user-select: none; }',
 		'.grimwidget-btn:hover { background-color: #ebebeb; border-color: #adadad; }',
+		'.grimwidget-btn.grimwidget-guestofbtn { width: 90px; margin-right: 8px }',
+		'.grimwidget-btn.grimwidget-guestofbtn:disabled { background-color: #ebebeb; border-color: #ebebeb; }',
 		'.grimwidget-label { background: #eee; border-radius: 5px; padding: 1px 5px 3px; font-size: 10px; }',
-		'.grimwidget-link { overflow: auto; }'
+		'.grimwidget-link { overflow: auto; }',
+		'.grimwidget-error { border-color: rgb(219, 3, 3) }'
 	].join('\r\n');
 	document.head.appendChild(styleEl);
 
@@ -95,6 +99,7 @@ var grimwidget = {};
 	// - `config.render`: optional function, called with (el, links) to render the widget when opened (once connected to the relay index)
 	//   - can return a falsey value to not render the link
 	// - `config.halign`: optional string, 'right' or 'left', defaults to 'left'
+	// - `config.hostuser`: optional string, the default host user
 	function GrimWidget(config) {
 		// Validate
 		if (!config.triggerEl) {
@@ -164,6 +169,23 @@ var grimwidget = {};
 		this.popupEl = null;
 	};
 
+	// Handle login process
+	GrimWidget.prototype.doLogin = function(hostuser) {
+		// Pull provider from UI
+		var urlEl = this.popupEl.querySelector('.grimwidget-providerinput');
+		urlEl.classList.remove('grimwidget-error');
+		if (!urlEl.value) {
+			urlEl.classList.add('grimwidget-error');
+			return;
+		}
+		var urld = local.parseUri(urlEl.value);
+		var url = ((urld.protocol) ? (urld.protocol+'://') : '//') + urld.authority;
+		relay.setProvider(url);
+
+		// Initiate auth flow (will create a popup)
+		relay.requestAccessToken({ guestof: hostuser });
+	};
+
 
 	// Relay Event Handlers
 	// ====================
@@ -202,14 +224,7 @@ var grimwidget = {};
 
 	// Login click
 	GrimWidget.prototype.onLoginBtnClick = function() {
-		// Pull provider from UI
-		var urlEl = this.popupEl.querySelector('.grimwidget-providerinput');
-		var urld = local.parseUri(urlEl.value);
-		var url = ((urld.protocol) ? (urld.protocol+'://') : '//') + urld.authority;
-		relay.setProvider(url);
-
-		// Initiate auth flow (will create a popup)
-		relay.requestAccessToken();
+		this.doLogin();
 	};
 
 	// Logout click
@@ -219,11 +234,33 @@ var grimwidget = {};
 		relay.setAccessToken(null);
 	};
 
+	// Guestof click
+	GrimWidget.prototype.onGuestofBtnClick = function() {
+		var hostuserEl = this.popupEl.querySelector('.grimwidget-hostuserinput');
+		this.doLogin(hostuserEl.value);
+	};
+
 	// Provider URI input
 	GrimWidget.prototype.onProviderInputKeypress = function(e) {
 		// If enter is pressed, treat as login click
 		if (e.keyCode == 13) {
 			this.onLoginBtnClick();
+		}
+	};
+
+	// Guest host user input
+	GrimWidget.prototype.onHostuserInputKeypress = function(e) {
+		if (e.keyCode == 13) {
+			this.onGuestofBtnClick();
+		}
+	};
+
+	// Guest host user input
+	GrimWidget.prototype.onHostuserInputInput = function(e) {
+		if (e.target.value.length > 0) {
+			this.popupEl.querySelector('.grimwidget-guestofbtn').removeAttribute("disabled");
+		} else {
+			this.popupEl.querySelector('.grimwidget-guestofbtn').setAttribute("disabled", "disabled");
 		}
 	};
 
@@ -290,6 +327,7 @@ var grimwidget = {};
 	// Gives a DOM element according to the connectivity state
 	GrimWidget.prototype.renderContent = function() {
 		var provider = relay.getProvider() || '';
+		var hostuser = this.config.hostuser || '';
 		if (relay.isListening()) {
 			return [
 				'<div class="grimwidget-header">',
@@ -310,8 +348,14 @@ var grimwidget = {};
 			'</div>',
 			'<div class="grimwidget-body">',
 				'<p>Connect to your peer relay:</p>',
-				'<p><input class="grimwidget-providerinput" type="text" value="'+provider+'" /></p>',
-				'<p><input class="grimwidget-btn grimwidget-loginbtn" type="button" value="Login" /></p>',
+				'<p><input class="grimwidget-providerinput" type="text" value="'+provider+'" placeholder="eg grimwire.net" /></p>',
+				'<p><button class="grimwidget-btn grimwidget-loginbtn">Login</button></p>',
+				'<hr>',
+				'<p><small>No account? Connect as a guest:</small></p>',
+				'<p>',
+					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((!hostuser)?'disabled="disabled"':''),'>Guest of</button>',
+					'<input class="grimwidget-hostuserinput" type="text" value="'+hostuser+'" placeholder="eg bob" />',
+				'</p>',
 			'</div>'
 		].join('');
 	};
@@ -325,6 +369,9 @@ var grimwidget = {};
 		};
 		setEvent('.grimwidget-loginbtn', 'click', this.onLoginBtnClick);
 		setEvent('.grimwidget-logoutbtn', 'click', this.onLogoutBtnClick);
+		setEvent('.grimwidget-guestofbtn', 'click', this.onGuestofBtnClick);
 		setEvent('.grimwidget-providerinput', 'keypress', this.onProviderInputKeypress);
+		setEvent('.grimwidget-hostuserinput', 'keypress', this.onHostuserInputKeypress);
+		setEvent('.grimwidget-hostuserinput', 'input', this.onHostuserInputInput);
 	};
 })();

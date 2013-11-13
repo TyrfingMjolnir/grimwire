@@ -11,6 +11,7 @@ var html = require('./lib/html.js');
 // ======
 // Construct config from a combination of CLI, config.json, and defaults
 var argv = require('optimist').argv;
+var config = require('./lib/config');
 var configDefaults = {
 	hostname: require("os").hostname(),
 	port: undefined,
@@ -29,7 +30,6 @@ var configCLI = {
 	allow_signup: argv.allow_signup,
 	max_user_streams: argv.max_user_streams
 };
-var config = {};
 function refreshConfig() {
 	// Read config.json
 	var configFile = {};
@@ -58,8 +58,9 @@ html.load(config);
 // Server State
 // ============
 var server = express();
-var db = require('./lib/db')(config);
+var db = require('./lib/db');
 winston.add(winston.transports.File, { filename: 'relay.log', handleExceptions: false });
+db.loadUsers();
 
 
 // Common Handlers
@@ -88,13 +89,14 @@ server.all('/', function(req, res, next) {
 		'</u/{user}/s/{app}/{stream}{?nc}>; rel="item gwr.io/relay"',
 		'</session>; rel="service gwr.io/session"; type="user"',
 		'</session/{app}>; rel="service gwr.io/session"; type="app"',
+		'</session/{app}?guestof={hostuser}>; rel="self service gwr.io/session"; type="guest"',
 		'</status>; rel="service"; id="status"'
 	].join(', '));
 	next();
 });
 server.head('/', function(req, res) { res.send(204); });
 server.get('/',
-	middleware.authenticate(config, db),
+	middleware.authenticate,
 	function(req, res, next) {
 		return res.format({
 			'text/html': function() { res.send(require('./lib/html.js').dashboard); },
@@ -104,9 +106,9 @@ server.get('/',
 );
 // Servers
 server.use('/', express.static(__dirname + '/static'));
-var usersServer = require('./lib/servers/users.js')(config, db);
-server.use('/u',       usersServer);
-server.use('/session', require('./lib/servers/session.js')(config, db));
+var usersServer = require('./lib/servers/users.js')();
+server.use('/u', usersServer);
+server.use('/session', require('./lib/servers/session.js')());
 
 
 // Admin
@@ -155,6 +157,6 @@ fs.writeFileSync('./pid', process.pid);
 process.on('SIGINT', process.exit.bind(process, 0));
 process.on('uncaughtException', function(e) {
     console.error(e);
-    process.exit(0)
+    process.exit(0);
 });
 process.on('exit', function() { fs.unlinkSync('./pid'); });

@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" type="image/ico" href="https://grimwire.net/favicon.ico" />
+
+    <title>grimwire p2p web relay</title>
+
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/app-auth.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="../../assets/js/html5shiv.js"></script>
+      <script src="../../assets/js/respond.min.js"></script>
+    <![endif]-->
+  </head>
+
+  <body id="dashboardapp">
+
+    <!-- Static navbar -->
+    <div id="toolbar" class="navbar navbar-default navbar-static-top">
+      <div class="container">
+        <div class="navbar-header"><a class="navbar-brand" href="/" title="Web Peer Relay Network"><img id="logo" src="/img/logo_small.png" /> p2p web relay</a></div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <h1>Connecting {APP_DOMAIN}</h1>
+          <p>Connect {APP_DOMAIN} as a guest of {HOST_USER}?</p>
+          <button class="btn btn-primary" onclick="onAllow()">Allow</button>
+          <button class="btn" onclick="onCancel()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    // Only load as a popup
+    if (!window.opener) {
+      alert('This page can only be used as a popup from 3rd-party apps.');
+      window.location = '/';
+    }
+    function sendMsgToParent(msg) {
+      // Shotgun it - gotta hit with one of them
+      window.opener.postMessage(msg, 'http://{APP_DOMAIN}');
+      window.opener.postMessage(msg, 'https://{APP_DOMAIN}');
+    }
+    </script>
+
+    <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/local.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+
+    <script>
+    // Get API
+    var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
+    var accessAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'guest', app: '{APP_DOMAIN}', hostuser: '{HOST_USER}' });
+    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
+    accessAPI.resolve({ nohead: true });
+
+    // Create the app session and send it back
+    var allowed = false;
+    function onAllow() {
+      accessAPI.post()
+        .then(function(res) {
+          if (res.body.token) {
+            allowed = true;
+            sendMsgToParent(res.body.token);
+            window.close();
+          }
+        })
+        .fail(function(res) {
+          console.error('Failed to create app session', res);
+          alert('Sorry, there was an internal error.');
+        })
+    }
+
+    // User canceled
+    function onCancel() {
+      sendMsgToParent(null);
+      window.close()
+    }
+
+    // Window closed
+    window.onunload = function() {
+      if (!allowed)
+        sendMsgToParent(null);
+    };
+    </script>
+
+  </body>
+</html>
