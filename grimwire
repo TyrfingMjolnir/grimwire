@@ -10,16 +10,26 @@ try {
 switch (process.argv[2]) {
 	case 'start':
 		if (pid) {
-			console.log('Grimwire is already running (pid '+pid+')');
-			return;
+			if (isAlive(pid)) {
+				console.log('Grimwire is already running (pid '+pid+')');
+				return;
+			} else {
+				console.log('Cleaning stale pidfile...');
+				fs.unlinkSync('./pid');
+			}
 		}
 		require('./main.js');
 		break;
 
 	case 'stop':
 		if (pid) {
-			console.log('Stopping...');
-			process.kill(pid, 'SIGINT');
+			if (isAlive(pid)) {
+				console.log('Stopping...');
+				process.kill(pid, 'SIGINT');
+			} else {
+				console.log('Cleaning stale pidfile...');
+				fs.unlinkSync('./pid');
+			}
 		}
 		break;
 
@@ -56,4 +66,9 @@ function mkDefaultFile(name) {
 	catch (e) {
 		fs.createReadStream('./default/'+name).pipe(fs.createWriteStream('./'+name));
 	}
+}
+
+function isAlive(pid) {
+	try { return process.kill(pid, 0); }
+	catch (e) { return e.code == 'EPERM'; }
 }
