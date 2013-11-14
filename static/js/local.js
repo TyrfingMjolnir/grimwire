@@ -2793,6 +2793,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// - `token`: required String?, the access token (null if denied access)
 	// - `token` should follow the form '<userId>:<'
 	Relay.prototype.setAccessToken = function(token) {
+		if (token == "null") token = null; // this happens sometimes when a bad token gets saved in localStorage
 		if (token) {
 			// Extract user-id from the access token
 			var tokenParts = token.split(':');
@@ -3133,10 +3134,12 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			this.setAccessToken(null);
 			// Fire event
 			this.emit('accessInvalid');
-		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost
+		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost, looks like server fault?
 			// Update state
+			if (this.connectedToRelay) {
+				this.onRelayClose();
+			}
 			this.relayEventStream = null;
-			this.connectedToRelay = false;
 
 			// Attempt to reconnect in 2 seconds
 			var self = this;
@@ -3152,18 +3155,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 	Relay.prototype.onRelayClose = function() {
 		// Update state
-		var wasConnected = this.connectedToRelay;
 		this.connectedToRelay = false;
 		if (self.pingInterval) { clearInterval(self.pingInterval); }
 
 		// Fire event
 		this.emit('notlistening');
-
-		// Did we expect this close event?
-		if (wasConnected) {
-			// No, we should reconnect
-			this.startListening();
-		}
 	};
 
 	Relay.prototype.onBridgeDisconnected = function(data) {
@@ -3272,8 +3268,10 @@ local.schemes.register(['http', 'https'], function(request, response) {
 
 	// abort on request close
 	request.on('close', function() {
-		if (xhrRequest.readyState !== XMLHttpRequest.DONE)
+		if (xhrRequest.readyState !== XMLHttpRequest.DONE) {
+			xhrRequest.aborted = true;
 			xhrRequest.abort();
+		}
 	});
 
 	// register response handlers
@@ -3351,7 +3349,7 @@ local.schemes.register(['http', 'https'], function(request, response) {
 		if (xhrRequest.readyState === XMLHttpRequest.DONE) {
 			if (streamPoller)
 				clearInterval(streamPoller);
-			if (response.status !== 0 && xhrRequest.status === 0) {
+			if (response.status !== 0 && xhrRequest.status === 0 && !xhrRequest.aborted) {
 				// a sudden switch to 0 (after getting a non-0) probably means a timeout
 				console.debug('XHR looks like it timed out; treating it as a premature close'); // just in case things get weird
 				response.close();
@@ -4927,6 +4925,7 @@ Agent.prototype.dispatch = function(req) {
 // Executes a GET text/event-stream request to our context
 Agent.prototype.subscribe = function(req) {
 	var self = this;
+	var eventStream;
 	if (!req) req = {};
 	return this.resolve({ nohead: true }).succeed(function(url) {
 		req.url = url;
@@ -4934,7 +4933,10 @@ Agent.prototype.subscribe = function(req) {
 		if (self.requestDefaults)
 			copyDefaults(req, self.requestDefaults);
 
-		return local.subscribe(req);
+		eventStream = local.subscribe(req);
+		return eventStream.response_;
+	}).then(function() {
+		return eventStream;
 	});
 };
 
