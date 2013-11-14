@@ -50,7 +50,8 @@ refreshConfig();
 var urlPort = config.downstream_port || config.port;
 if (config.ssl && urlPort == '443') urlPort = false;
 if (!config.ssl && urlPort == '80') urlPort = false;
-config.url = ((config.ssl) ? 'https://' : 'http://') + config.hostname + (urlPort ? (':' + urlPort) : '');
+config.authority = config.hostname + (urlPort ? (':' + urlPort) : '');
+config.url = ((config.ssl) ? 'https://' : 'http://') + config.authority;
 
 // Read HTML with config mixed in
 html.load(config);
