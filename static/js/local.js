@@ -2860,6 +2860,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		// Create APIs
 		this.relayService = local.agent(this.config.provider);
 		this.usersCollection = this.relayService.follow({ rel: 'gwr.io/user collection' });
+
+		if (this.accessToken) {
+			this.relayService.setRequestDefaults({ headers: { authorization: 'Bearer '+this.accessToken }});
+			this.usersCollection.setRequestDefaults({ headers: { authorization: 'Bearer '+this.accessToken }});
+		}
 	};
 
 	// Gets an access token from the provider & user using a popup
