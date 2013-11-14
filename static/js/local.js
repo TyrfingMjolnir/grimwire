@@ -1037,7 +1037,7 @@ local.parseNavUri = function(str) {
 // breaks a peer domain into its constituent parts
 // - returns { user:, relay:, provider:, app:, stream: }
 //   (relay == provider -- they are synonmyms)
-var peerDomainRE = /^(.+)@([^!]+)!([^:\/]+)(?::([\d]+))?$/i;
+var peerDomainRE = /^(.+)@([^!]+)!([^!\/]+)(?:!([\d]+))?$/i;
 local.parsePeerDomain = function parsePeerDomain(domain) {
 	var match = peerDomainRE.exec(domain);
 	if (match) {
@@ -1057,7 +1057,7 @@ local.parsePeerDomain = function parsePeerDomain(domain) {
 // constructs a peer domain from its constituent parts
 // - returns string
 local.makePeerDomain = function makePeerDomain(user, relay, app, stream) {
-	return user+'@'+relay.replace(':','.')+'!'+app.replace(':','.')+((stream) ? ':'+stream : '');
+	return user+'@'+relay+'!'+app+((stream) ? '!'+stream : '');
 };
 
 // EXPORTED
@@ -2299,7 +2299,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	// - `config.loopback`: optional bool, is this the local host? If true, will connect to self
 	// - `config.retryTimeout`: optional number, time (in ms) before a connection is aborted and retried (defaults to 15000)
 	// - `config.retries`: optional number, number of times to retry before giving up (defaults to 3)
-	// - `config.log`: optional bool, enables logging of all message traffic
+	// - `config.log`: optional bool, enables logging of all message traffic and webrtc connection processes
 	function RTCBridgeServer(config) {
 		// Config
 		var self = this;
@@ -2753,6 +2753,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	//   - defaults to 45000
 	// - `config.retryTimeout`: optional number, time (in ms) before a peer connection is aborted and retried (defaults to 15000)
 	// - `config.retries`: optional number, number of times to retry a peer connection before giving up (defaults to 5)
+	// - `config.log`: optional bool, enables logging of all message traffic and webrtc connection processes
 	function Relay(config) {
 		if (!config) config = {};
 		if (!config.app) config.app = window.location.host;
@@ -3193,6 +3194,20 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		return local.makePeerDomain(user, this.providerDomain, app, stream);
 	};
 
+	// :DEBUG: helper to deal with webrtc issues
+	local.logWebRTC = function(v) {
+		if (typeof v == 'undefined') v = true;
+		for (var k in __peer_relay_registry) {
+			__peer_relay_registry[k].config.log = v;
+		}
+		for (var k in local.getServers()) {
+			var s = local.getServer(k);
+			if (s.context && s.context instanceof local.RTCBridgeServer) {
+				s.context.config.log = v;
+			}
+		}
+	};
+
 })();// schemes
 // =======
 // EXPORTED
@@ -3388,10 +3403,10 @@ local.schemes.register('httpl', function(request, response) {
 		if (peerd) {
 			// See if this is a default stream miss
 			if (peerd.stream === '0') {
-				if (request.urld.authority.slice(-2) == ':0') {
+				if (request.urld.authority.slice(-2) == '!0') {
 					server = local.getServer(request.urld.authority.slice(0,-2));
 				} else {
-					server = local.getServer(request.urld.authority + ':0');
+					server = local.getServer(request.urld.authority + '!0');
 				}
 			}
 			if (!server) {
