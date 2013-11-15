@@ -5,6 +5,8 @@ Changes
 2013/11/14 pfraze
 
  - Altered peer URI scheme to support ports in relay and application hosts
+ - Improved start|stop to autoclean pidfiles that don't point to active processes
+ - Standardized 422 error responses
 
 
 2013/11/12 pfraze
