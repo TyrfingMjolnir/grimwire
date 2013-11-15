@@ -111,11 +111,7 @@ var grimwidget = {};
 		this.triggerEl = config.triggerEl;
 
 		// Wire up to relay
-		relay.on(['accessGranted', 'accessDenied', 'accessRemoved'], this.setPopupContent.bind(this));
-		relay.on('accessGranted', this.onAccessGranted.bind(this));
-		relay.on('accessInvalid', this.onAccessInvalid.bind(this));
-		relay.on('listening', this.onListening.bind(this));
-		relay.on('notlistening', this.setPopupContent.bind(this));
+		relay.on(['accessGranted', 'accessDenied', 'accessRemoved', 'accessInvalid', 'listening', 'notlistening'], this.setPopupContent.bind(this));
 
 		// Prepare UI
 		this.popupEl = null;
@@ -186,26 +182,6 @@ var grimwidget = {};
 		relay.requestAccessToken({ guestof: hostuser });
 	};
 
-
-	// Relay Event Handlers
-	// ====================
-
-	// Ready to connect
-	GrimWidget.prototype.onAccessGranted = function() {
-		relay.startListening();
-	};
-
-	// Bad access creds
-	GrimWidget.prototype.onAccessInvalid = function() {
-		// Update popup
-		this.setPopupContent();
-	};
-
-	// Accepting connections
-	GrimWidget.prototype.onListening = function() {
-		// Update popup
-		this.setPopupContent();
-	};
 
 	// UI Event Handlers
 	// =================
