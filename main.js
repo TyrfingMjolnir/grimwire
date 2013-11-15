@@ -86,13 +86,13 @@ server.options('*', function(request, response) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="self via service gwr.io/relay gwr.io/user"; title="Grimwire Relay"',
-		'</u{?online,links}>; rel="collection gwr.io/relay gwr.io/user"; id="users"',
-		'</u/{id}>; rel="item gwr.io/user"',
-		'</u/{user}/s/{app}/{stream}{?nc}>; rel="item gwr.io/relay"',
-		'</session>; rel="service gwr.io/session"; type="user"',
-		'</session/{app}>; rel="service gwr.io/session"; type="app"',
-		'</session/{app}?guestof={hostuser}>; rel="self service gwr.io/session"; type="guest"',
+		'</>; rel="self via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
+		'</u{?online,links}>; rel="collection gwr.io/relay/coll gwr.io/user/coll"; id="users"',
+		'</u/{id}>; rel="gwr.io/user/item"',
+		'</u/{user}/s/{app}/{stream}{?nc}>; rel="gwr.io/relay/item"',
+		'</session>; rel="gwr.io/session"; type="user"',
+		'</session/{app}>; rel="gwr.io/session"; type="app"',
+		'</session/{app}?guestof={hostuser}>; rel="gwr.io/session"; type="guest"',
 		'</status>; rel="service"; id="status"'
 	].join(', '));
 	next();
@@ -118,7 +118,7 @@ server.use('/session', require('./lib/servers/session.js')());
 // =====
 server.get('/status', function(request, response) {
 	response.setHeader('Link', [
-		'</>; rel="up via service gwr.io/relay gwr.io/user"; title="Grimwire Relay"',
+		'</>; rel="up via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
 		'</status>; rel="self service"; id="status"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
