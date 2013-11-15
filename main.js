@@ -19,7 +19,8 @@ var configDefaults = {
 	is_upstream: false,
 	downstream_port: false,
 	allow_signup: true,
-	max_user_streams: 10
+	max_user_streams: 10,
+	max_accounts: 100
 };
 var configCLI = {
 	hostname: argv.h || argv.hostname,
@@ -28,7 +29,8 @@ var configCLI = {
 	is_upstream: (typeof (argv.u || argv.is_upstream) != 'undefined') ? !!(argv.u || argv.is_upstream) : undefined,
 	downstream_port: argv.u || argv.is_upstream,
 	allow_signup: argv.allow_signup,
-	max_user_streams: argv.max_user_streams
+	max_user_streams: argv.max_user_streams,
+	max_accounts: argv.max_accounts
 };
 function refreshConfig() {
 	// Read config.json
