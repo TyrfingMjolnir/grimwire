@@ -114,7 +114,7 @@ function updateGuestSlotsCB(d_streams) {
 					url: url,
 					headers: { 'content-type': 'application/json' }
 				});
-				local.dispatch(_updateGuestStreamsReq).then(renderAll);
+				local.dispatch(_updateGuestStreamsReq).then(renderUserConnections);
 				_updateGuestStreamsReq.end({ max_guest_streams: target });
 			});
 		}
@@ -165,6 +165,30 @@ function renderLinks(userId) {
 	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'gwr.io/app' }).map(renderLinkRow).join('') : '';
 }
 
+// Update connections view
+function renderUserConnections() {
+	if (_session_user) {
+		// Render active connections
+		var max_guest_streams = Math.min(_session_user.max_user_streams - _session_user.num_user_streams, _session_user.max_guest_streams);
+		html = renderYourConnections({
+			num_user_streams: _session_user.num_user_streams,
+			max_user_streams: _session_user.max_user_streams,
+			num_guest_streams: _session_user.num_guest_streams,
+			max_guest_streams: _session_user.max_guest_streams,
+			pct_user_streams: Math.round((_session_user.num_user_streams / _session_user.max_user_streams) * 100),
+			pct_guest_streams: Math.round((_session_user.num_guest_streams / _session_user.max_user_streams) * 100),
+			pct_guest_remaining: Math.round(((max_guest_streams - _session_user.num_guest_streams) / _session_user.max_user_streams) * 100)
+		});
+		$your_connections.html(html);
+
+		// Bind guest slot add/remove btns
+		$('#remove-guest-slot').on('click', updateGuestSlotsCB(-1));
+		$('#add-guest-slot').on('click', updateGuestSlotsCB(+1));
+	} else {
+		$your_connections.html('');
+	}
+}
+
 // Update UI state
 function renderAll() {
 	var html;
@@ -196,25 +220,6 @@ function renderAll() {
 		$active_links.html('');
 	}
 
-	if (_session_user) {
-		// Render active connections
-		var max_guest_streams = Math.min(_session_user.max_user_streams - _session_user.num_user_streams, _session_user.max_guest_streams);
-		html = renderYourConnections({
-			num_user_streams: _session_user.num_user_streams,
-			max_user_streams: _session_user.max_user_streams,
-			num_guest_streams: _session_user.num_guest_streams,
-			max_guest_streams: _session_user.max_guest_streams,
-			pct_user_streams: Math.round((_session_user.num_user_streams / _session_user.max_user_streams) * 100),
-			pct_guest_streams: Math.round((_session_user.num_guest_streams / _session_user.max_user_streams) * 100),
-			pct_guest_remaining: Math.round(((max_guest_streams - _session_user.num_guest_streams) / _session_user.max_user_streams) * 100)
-		});
-		$your_connections.html(html);
-
-		// Bind guest slot add/remove btns
-		$('#remove-guest-slot').on('click', updateGuestSlotsCB(-1));
-		$('#add-guest-slot').on('click', updateGuestSlotsCB(+1));
-	} else {
-		$your_connections.html('');
-	}
+	renderUserConnections();
 }
 renderAll();

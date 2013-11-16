@@ -975,8 +975,8 @@ local.parseUri = function parseUri(str) {
 		var peerd = local.parsePeerDomain(peerdomain);
 		if (peerd) {
 			var urld = {};
-			if (firstSlashI !== -1 && str.slice(firstSlashI+1)) {
-				urld = local.parseUri(str.slice(firstSlashI+1));
+			if (firstSlashI !== -1 && str.slice(firstSlashI)) {
+				urld = local.parseUri(str.slice(firstSlashI));
 			}
 			urld.protocol = 'httpl';
 			urld.host = urld.authority = peerdomain;
@@ -1170,13 +1170,14 @@ local.patchXHR = function() {
 				this2.readyState = 2;
 				this2.status = res.status;
 				this2.statusText = res.status + ' ' + res.reason;
-				this2.responseText = '';
+				this2.responseText = null;
 				// Fire event
 				if (this2.onreadystatechange) {
 					this2.onreadystatechange();
 				}
 				res.on('data', function(chunk) {
 					this2.readyState = 3;
+					if (this2.responseText === null && typeof chunk == 'string') this2.responseText = '';
 					this2.responseText += chunk;
 					// Fire event
 					if (this2.onreadystatechange) {
@@ -2790,7 +2791,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 		// State
 		this.myPeerDomain = null;
-		this.connectedToRelay = false;
+		this.connectionStatus = 0;
+		Object.defineProperty(this, 'connectedToRelay', {
+			get: function() { return this.connectionStatus == Relay.CONNECTED; },
+			set: function(v) { this.connectionStatus = (v) ? Relay.CONNECTED : Relay.DISCONNECTED; }
+		});
 		this.userId = null;
 		this.accessToken = null;
 		this.bridges = {};
@@ -2815,6 +2820,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		window.addEventListener('beforeunload', this.onPageClose.bind(this));
 	}
 	local.Relay = Relay;
+
+	// Constants
+	Relay.DISCONNECTED = 0;
+	Relay.CONNECTING   = 1;
+	Relay.CONNECTED    = 2;
 
 	// Sets the access token and triggers a connect flow
 	// - `token`: required String?, the access token (null if denied access)
@@ -2975,8 +2985,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		if (!this.getAccessToken()) {
 			return;
 		}
-		if (this.connectedToRelay) {
-			console.error('startListening() called when already connected to relay. Must call stopListening() first.');
+		if (this.connectionStatus !== Relay.DISCONNECTED) {
+			console.error('startListening() called when already connected or connecting to relay. Must call stopListening() first.');
 			return;
 		}
 		// Update "src" object, for use in signal messages
@@ -2989,13 +2999,14 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			stream: this.getStreamId(),
 			nc:     Date.now() // nocache
 		});
+		this.connectionStatus = Relay.CONNECTING;
 		this.relayItem.subscribe()
 			.then(
 				function(stream) {
 					// Update state
 					__peer_relay_registry[self.providerDomain] = self;
 					self.relayEventStream = stream;
-					self.connectedToRelay = true;
+					self.connectionStatus = Relay.CONNECTED;
 					stream.response_.then(function(response) {
 						// Setup links
 						if (self.registeredLinks) {
@@ -3063,10 +3074,15 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		}
 
 		// Parse the url
-		var peerUrld = local.parseUri(peerUrl);
-		var peerd = local.parsePeerDomain(peerUrld.authority);
+		peerUrl = local.parseUri(peerUrl).authority;
+		var peerd = local.parsePeerDomain(peerUrl);
 		if (!peerd) {
 			throw new Error("Invalid peer url given to connect(): "+peerUrl);
+		}
+
+		// Make sure the url has a stream id
+		if (peerd.stream === 0 && peerUrl.slice(-2) != '!0') {
+			peerUrl += '!0';
 		}
 
 		// Spawn new server
@@ -3075,7 +3091,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			initiate:     config.initiate,
 			relay:        this,
 			serverFn:     this.config.serverFn,
-			loopback:     (peerUrld.authority == this.myPeerDomain),
+			loopback:     (peerUrl == this.myPeerDomain),
 			retryTimeout: config.retryTimeout || this.config.retryTimeout,
 			retries:      config.retries || this.config.retries,
 			log:          this.config.log || false
@@ -3089,8 +3105,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		server.on('error', this.emit.bind(this, 'error'));
 
 		// Add to hostmap
-		this.bridges[peerUrld.authority] = server;
-		local.addServer(peerUrld.authority, server);
+		this.bridges[peerUrl] = server;
+		local.addServer(peerUrl, server);
 
 		return server;
 	};
@@ -3124,7 +3140,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 		// Find bridge that represents this origin
 		var domain = e.data.src;
-		var bridgeServer = this.bridges[domain];
+		var bridgeServer = this.bridges[domain] || this.bridges[domain + '!0'];
 
 		// Does bridge exist?
 		if (bridgeServer) {
