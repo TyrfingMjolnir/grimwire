@@ -76,9 +76,9 @@ if (config.is_upstream) {
 	server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
 }
 server.all('*', middleware.setCorsHeaders);
-server.options('*', function(request, response) {
-	response.writeHead(204);
-	response.end();
+server.options('*', function(req, res) {
+	res.writeHead(204);
+	res.end();
 });
 
 
@@ -116,19 +116,22 @@ server.use('/session', require('./lib/servers/session.js')());
 
 // Admin
 // =====
-server.get('/status', function(request, response) {
-	response.setHeader('Link', [
-		'</>; rel="up via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
-		'</status>; rel="self service"; id="status"'
-	].join(', '));
-	var uptime = (new Date() - server.startTime);
-	response.json({
-		started_at: server.startTime.toLocaleString(),
-		uptime_seconds: uptime/1000,
-		uptime_minutes: uptime/(60*1000),
-		uptime_hours: uptime/(60*60*1000),
-		uptime_days: uptime/(24*60*60*1000),
-		relay: usersServer.getStatus()
+server.get('/status', middleware.authenticate, function(req, res) {
+	require('./lib/db').getUser(res.locals.session.user_id, function(err, user) {
+		if (err || !user.is_admin) { return res.send(403, '403 Forbidden.<br>User must have is_admin set to true.'); }
+		res.setHeader('Link', [
+			'</>; rel="up via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
+			'</status>; rel="self service"; id="status"'
+		].join(', '));
+		var uptime = (new Date() - server.startTime);
+		res.json({
+			started_at: server.startTime.toLocaleString(),
+			uptime_seconds: uptime/1000,
+			uptime_minutes: uptime/(60*1000),
+			uptime_hours: uptime/(60*60*1000),
+			uptime_days: uptime/(24*60*60*1000),
+			relay: usersServer.getStatus()
+		});
 	});
 });
 process.on('SIGHUP', function() {
