@@ -207,9 +207,9 @@ function renderAll() {
 			if (user.id == _session.user_id) { continue; }
 			html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id;
 			if (!user.online) {
-				html += ' offline</small></h4>';
+				html += ' <small>offline</small></h4>';
 			} else {
-				html += '</small></h4>';
+				html += '</h4>';
 				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
 			}
 		}
