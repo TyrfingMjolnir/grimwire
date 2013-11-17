@@ -10,7 +10,7 @@ var _session_user = null;
 
 // APIs
 var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
-var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user/coll', links: 1 });
+var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/user/coll', link_bodies: 1 });
 var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
 
 // Load session
@@ -36,10 +36,6 @@ function loadActiveUsers() {
 				_users = res.body.rows;
 				if (_session && _users[_session.user_id]) {
 					_session_user = _users[_session.user_id];
-				}
-				// Extract links for each user
-				for (var id in _users) {
-					_users[id].links = local.queryLinks(res, { host_user: id });
 				}
 				renderAll();
 			},
@@ -158,8 +154,10 @@ $('.avatars a').on('click', function() {
 
 // Rendering helpers
 function renderLinkRow(link) {
-	var app = link.host_app;
-	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+app+'" target="_blank">'+app+'</a></td></tr>';
+	var urld = local.parseUri(link.href);
+	var peerd = local.parsePeerDomain(urld.authority);
+	var appUrl = peerd ? peerd.app : urld.authority;
+	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a></td></tr>';
 }
 function renderLinks(userId) {
 	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'gwr.io/app' }).map(renderLinkRow).join('') : '';
