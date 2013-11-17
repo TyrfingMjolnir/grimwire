@@ -118,7 +118,7 @@ server.use('/session', require('./lib/servers/session.js')());
 // =====
 server.get('/status', middleware.authenticate, function(req, res) {
 	require('./lib/db').getUser(res.locals.session.user_id, function(err, user) {
-		if (err || !user.is_admin) { return res.send(403, '403 Forbidden.<br>User must have is_admin set to true.'); }
+		if (err || !user) { return res.send(403, '403 Forbidden'); }
 		res.setHeader('Link', [
 			'</>; rel="up via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
 			'</status>; rel="self service"; id="status"'
@@ -130,7 +130,7 @@ server.get('/status', middleware.authenticate, function(req, res) {
 			uptime_minutes: uptime/(60*1000),
 			uptime_hours: uptime/(60*60*1000),
 			uptime_days: uptime/(24*60*60*1000),
-			relay: usersServer.getStatus()
+			relay: usersServer.getStatus(user)
 		});
 	});
 });
