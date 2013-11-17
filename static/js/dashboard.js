@@ -160,7 +160,7 @@ function renderLinkRow(link) {
 	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a></td></tr>';
 }
 function renderLinks(userId) {
-	return (_users[userId]) ? local.queryLinks(_users[userId].links, { rel: 'gwr.io/app' }).map(renderLinkRow).join('') : '';
+	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
 }
 
 // Update connections view
