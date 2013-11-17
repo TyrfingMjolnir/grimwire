@@ -2,6 +2,11 @@ Changes
 =======
 0.5.0
 
+2013/11/17 pfraze
+
+ - Added ?link_bodies to users list route as a simpler way to render users' submitted links
+
+
 2013/11/15 pfraze
 
  - Updated gwr.io protocols to no longer combine semantics (gwr.io/user item -> gwr.io/user/item)
