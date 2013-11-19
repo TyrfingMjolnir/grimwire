@@ -273,7 +273,7 @@ var grimwidget = {};
 					'<div class="grimwidget-link">',
 						title+'<br/>',
 						'<small>Host: '+link.host_user+', App: <a href="//'+link.host_app+'" title="'+link.host_app+'" target="_blank">'+link.host_app+'</a></small><br/>',
-						(link.host_domain == relay.getDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
+						(link.host_domain == relay.getAssignedDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
 					'</div>'
 				].join('');
 			})

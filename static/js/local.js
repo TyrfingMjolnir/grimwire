@@ -1212,7 +1212,9 @@ local.patchXHR = function() {
 					if (typeof this[k] == 'function') continue;
 					this2[k] = this[k];
 				}
-				this2.onreadystatechange();
+				if (this2.onreadystatechange) {
+					this2.onreadystatechange();
+				}
 			};
 			return this.__xhr_request.send(data);
 		}
@@ -1405,9 +1407,12 @@ local.contentTypes.register('application/x-www-form-urlencoded',
 );
 local.contentTypes.register('text/event-stream',
 	function (obj) {
+		var str = '';
+		if (typeof obj.event != 'undefined')
+			str += 'event: '+obj.event+'\r\n';
 		if (typeof obj.data != 'undefined')
-			return "event: "+obj.event+"\r\ndata: "+JSON.stringify(obj.data)+"\r\n\r\n";
-		return "event: "+obj.event+"\r\n\r\n";
+			str += 'data: '+JSON.stringify(obj.data)+'\r\n';
+		return str + '\r\n';
 	},
 	function (str) {
 		var m = {};
@@ -2793,7 +2798,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		local.util.mixinEventEmitter(this);
 
 		// State
-		this.myPeerDomain = null;
+		this.assignedDomain = null;
 		this.connectionStatus = 0;
 		Object.defineProperty(this, 'connectedToRelay', {
 			get: function() { return this.connectionStatus == Relay.CONNECTED; },
@@ -2876,20 +2881,21 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			}
 		}
 	};
-	Relay.prototype.isListening     = function() { return this.connectedToRelay; };
-	Relay.prototype.getDomain       = function() { return this.myPeerDomain; };
-	Relay.prototype.getUserId       = function() { return this.userId; };
-	Relay.prototype.getApp          = function() { return this.config.app; };
-	Relay.prototype.setApp          = function(v) { this.config.app = v; };
-	Relay.prototype.getStreamId     = function() { return this.config.stream; };
-	Relay.prototype.setStreamId     = function(stream) { this.config.stream = stream; };
-	Relay.prototype.getAccessToken  = function() { return this.accessToken; };
-	Relay.prototype.getServer       = function() { return this.config.serverFn; };
-	Relay.prototype.setServer       = function(fn) { this.config.serverFn = fn; };
-	Relay.prototype.getRetryTimeout = function() { return this.config.retryTimeout; };
-	Relay.prototype.setRetryTimeout = function(v) { this.config.retryTimeout = v; };
-	Relay.prototype.getProvider     = function() { return this.config.provider; };
-	Relay.prototype.setProvider     = function(providerUrl) {
+	Relay.prototype.isListening       = function() { return this.connectedToRelay; };
+	Relay.prototype.getAssignedDomain = function() { return this.assignedDomain; };
+	Relay.prototype.getAssignedUrl    = function() { return 'httpl://'+this.assignedDomain; };
+	Relay.prototype.getUserId         = function() { return this.userId; };
+	Relay.prototype.getApp            = function() { return this.config.app; };
+	Relay.prototype.setApp            = function(v) { this.config.app = v; };
+	Relay.prototype.getStreamId       = function() { return this.config.stream; };
+	Relay.prototype.setStreamId       = function(stream) { this.config.stream = stream; };
+	Relay.prototype.getAccessToken    = function() { return this.accessToken; };
+	Relay.prototype.getServer         = function() { return this.config.serverFn; };
+	Relay.prototype.setServer         = function(fn) { this.config.serverFn = fn; };
+	Relay.prototype.getRetryTimeout   = function() { return this.config.retryTimeout; };
+	Relay.prototype.setRetryTimeout   = function(v) { this.config.retryTimeout = v; };
+	Relay.prototype.getProvider       = function() { return this.config.provider; };
+	Relay.prototype.setProvider       = function(providerUrl) {
 		// Abort if already connected
 		if (this.connectedToRelay) {
 			throw new Error("Can not change provider while connected to the relay. Call stopListening() first.");
@@ -2992,8 +2998,9 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			console.error('startListening() called when already connected or connecting to relay. Must call stopListening() first.');
 			return;
 		}
-		// Update "src" object, for use in signal messages
-		this.myPeerDomain = this.makeDomain(this.getUserId(), this.config.app, this.config.stream);
+		// Record our peer domain
+		this.assignedDomain = this.makeDomain(this.getUserId(), this.config.app, this.config.stream);
+		if (this.config.stream === 0) { this.assignedDomain += '!0'; } // full URI always
 		// Connect to the relay stream
 		this.relayItem = this.relayService.follow({
 			rel:    'gwr.io/relay/item',
@@ -3031,7 +3038,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 					if (self.pingInterval) { clearInterval(self.pingInterval); }
 					if (self.config.ping) {
 						self.pingInterval = setInterval(function() {
-							self.signal(self.getDomain(), { type: 'noop' });
+							self.signal(self.getAssignedDomain(), { type: 'noop' });
 						}, self.config.ping);
 					}
 				},
@@ -3071,11 +3078,6 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		if (!config) config = {};
 		if (typeof config.initiate == 'undefined') config.initiate = true;
 
-		// Make sure we're not already connected
-		if (peerUrl in this.bridges) {
-			return this.bridges[peerUrl];
-		}
-
 		// Parse the url
 		peerUrl = local.parseUri(peerUrl).authority;
 		var peerd = local.parsePeerDomain(peerUrl);
@@ -3088,13 +3090,18 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			peerUrl += '!0';
 		}
 
+		// Make sure we're not already connected
+		if (peerUrl in this.bridges) {
+			return this.bridges[peerUrl];
+		}
+
 		// Spawn new server
 		var server = new local.RTCBridgeServer({
 			peer:         peerUrl,
 			initiate:     config.initiate,
 			relay:        this,
 			serverFn:     this.config.serverFn,
-			loopback:     (peerUrl == this.myPeerDomain),
+			loopback:     (peerUrl == this.assignedDomain),
 			retryTimeout: config.retryTimeout || this.config.retryTimeout,
 			retries:      config.retries || this.config.retries,
 			log:          this.config.log || false
@@ -3120,7 +3127,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			return;
 		}
 		var self = this;
-		var response_ = this.relayItem.dispatch({ method: 'notify', body: { src: this.myPeerDomain, dst: dst, msg: msg } });
+		var response_ = this.relayItem.dispatch({ method: 'notify', body: { src: this.assignedDomain, dst: dst, msg: msg } });
 		response_.fail(function(res) {
 			if (res.status == 401) {
 				if (!self.accessToken) {
@@ -3189,6 +3196,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			if (this.connectedToRelay) {
 				this.onRelayClose();
 			}
+			this.connectedToRelay = false;
 			this.relayEventStream = null;
 
 			// Attempt to reconnect in 2 seconds
@@ -3235,7 +3243,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			req.open('NOTIFY', this.relayItem.context.url, false);
 			req.setRequestHeader('Authorization', 'Bearer '+this.accessToken);
 			req.setRequestHeader('Content-type', 'application/json');
-			req.send(JSON.stringify({ src: this.myPeerDomain, dst: dst, msg: { type: 'disconnect' } }));
+			req.send(JSON.stringify({ src: this.assignedDomain, dst: dst, msg: { type: 'disconnect' } }));
 		}
 	};
 
@@ -3451,11 +3459,12 @@ local.schemes.register('httpl', function(request, response) {
 		var peerd = local.parsePeerDomain(request.urld.authority);
 		if (peerd) {
 			// See if this is a default stream miss
-			if (peerd.stream === '0') {
+			if (peerd.stream == 0) {
 				if (request.urld.authority.slice(-2) == '!0') {
 					server = local.getServer(request.urld.authority.slice(0,-2));
 				} else {
-					server = local.getServer(request.urld.authority + '!0');
+					request.urld.authority += '!0';
+					server = local.getServer(request.urld.authority);
 				}
 			}
 			if (!server) {
