@@ -70,6 +70,7 @@ db.loadUsers();
 // ===============
 server.use(express.bodyParser());
 server.use(express.cookieParser());
+server.use(express.compress());
 if (config.is_upstream) {
 	server.use(express.cookieSession({ proxy: true, secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
 } else {
@@ -108,7 +109,7 @@ server.get('/',
 	}
 );
 // Servers
-server.use('/', express.static(__dirname + '/static'));
+server.use('/', express.static(__dirname + '/static', { maxAge: 1000*60*60*24 }));
 var usersServer = require('./lib/servers/users.js')();
 server.use('/u', usersServer);
 server.use('/session', require('./lib/servers/session.js')());
