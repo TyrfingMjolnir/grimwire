@@ -63,12 +63,12 @@ if (typeof this.local == 'undefined')
 			this.failCBs.push({ p:p, fn:failFn });
 		} else {
 			var self = this;
-			setTimeout(function() {
+			local.util.nextTick(function() {
 				if (self.isFulfilled())
 					execCallback(self, p, succeedFn);
 				else
 					execCallback(self, p, failFn);
-			}, 0);
+			});
 		}
 		return p;
 	};
@@ -748,7 +748,31 @@ local.util.extractRequestPayload = extractRequestPayload;
 local.util.finishPayloadFileReads = finishPayloadFileReads;// http://jsperf.com/cloning-an-object/2
 local.util.deepClone = function(obj) {
 	return JSON.parse(JSON.stringify(obj));
-};})();// Local HTTP
+};
+
+// https://github.com/timoxley/next-tick
+// fallback for other environments / postMessage behaves badly on IE8
+if (typeof window == 'undefined' || window.ActiveXObject || !window.postMessage) {
+	local.util.nextTick = function(fn) { setTimeout(fn, 0); };
+} else {
+	var nextTickQueue = [];
+	local.util.nextTick = function(fn) {
+		if (!nextTickQueue.length) window.postMessage('nextTick', '*');
+		nextTickQueue.push(fn);
+	};
+	window.addEventListener('message', function(){
+		var i = 0;
+		while (i < nextTickQueue.length) {
+			try { nextTickQueue[i++](); }
+			catch (e) {
+				nextTickQueue = nextTickQueue.slice(i);
+				window.postMessage('nextTick', '*');
+				throw e;
+			}
+		}
+		nextTickQueue.length = 0;
+	}, true);
+}})();// Local HTTP
 // ==========
 // pfraze 2013
 
@@ -2442,6 +2466,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	}
 
 	function onHttplChannelOpen(e) {
+		console.log('Successfully established WebRTC session with', this.config.peer);
 		this.debugLog('HTTPL CHANNEL OPEN', e);
 
 		// :HACK: canary appears to drop packets for a short period after the datachannel is made ready
@@ -2463,6 +2488,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 	}
 
 	function onHttplChannelClose(e) {
+		console.log('Closed WebRTC session with', this.config.peer);
 		this.debugLog('HTTPL CHANNEL CLOSE', e);
 		this.terminate({ noSignal: true });
 	}
@@ -2664,6 +2690,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 					self.sendOffer();
 				} else {
 					// Give up
+					console.log('Failed to establish WebRTC session with', self.config.peer, ' - Will continue bouncing traffic through the relay');
 					self.debugLog('CONNECTION TIMED OUT, GIVING UP');
 					self.resetPeerConn();
 					// ^ resets but doesn't terminate - can try again with sendOffer()
@@ -2715,9 +2742,9 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		);
 		// Emit 'connecting' on next tick
 		// (next tick to make sure objects creating us get a chance to wire up the event)
-		setTimeout(function() {
+		local.util.nextTick(function() {
 			self.emit('connecting', Object.create(self.peerInfo), self);
-		}, 0);
+		});
 	};
 
 	// Helper called whenever we have a remote session description
@@ -3096,6 +3123,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		}
 
 		// Spawn new server
+		console.log('Initiating WebRTC session with', peerUrl);
 		var server = new local.RTCBridgeServer({
 			peer:         peerUrl,
 			initiate:     config.initiate,
@@ -3532,7 +3560,7 @@ local.schemes.register('data', function(request, response) {
 	else data = decodeURIComponent(data);
 
 	// respond (async)
-	setTimeout(function() {
+	local.util.nextTick(function() {
 		response.writeHead(200, 'ok', {'content-type': contentType});
 		response.end(data);
 	});
@@ -3688,10 +3716,10 @@ local.dispatch = function dispatch(request) {
 	args.unshift(request);
 
 	// Wait until next tick, to make sure dispatch() is always async
-	setTimeout(function() {
+	local.util.nextTick(function() {
 		// Allow the wrapper to audit the message
 		webDispatchWrapper.apply(null, args);
-	}, 0);
+	});
 
 	response_.request = request;
 	return response_;
