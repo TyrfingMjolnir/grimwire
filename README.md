@@ -1,4 +1,4 @@
-Grimwire 0.4 (beta)
+Grimwire 0.5 (beta)
 ===================
 
 A node.js server for connecting client-side applications using [WebRTC](//webrtc.org) and the [Local.js Ajax Library](//github.com/grimwire/local).
@@ -16,10 +16,6 @@ Once connected, apps use HTTPL - a messaging protocol similar to HTTP - to make 
 ---
 
 *Grimwire is in public beta. For bugs and suggestions, submit reports to [github.com/grimwire/grimwire/issues](//github.com/grimwire/grimwire/issues).*
-
----
-
-*WebRTC is not fully implemented in all browsers! If your browser does not support it, Grimwire will "bounce" traffic through the relays to make sure you can still connect. Currently, you must use Chrome Canary or the latest Firefox to make a direct connection.*
 
 ---
 
@@ -48,6 +44,8 @@ Now that you're logged in, the chat app will query the relay for any rooms hoste
 **Save Time with the Bookmarklet**: Since entering your relay's address is tedious, Grimwire provides a bookmarklet that allows you to connect the GrimWidget to your relay automatically. Find it on the right side of the dashboard after logging in.
 
 **Set your Avatar Icon**: In your relay's dashboard, you should notice your username and a down-arrow on the top right. Click that, then select from the "Change Avatar" submenu.
+
+**Add Guest Slots**: (BETA FEATURE) People without accounts can borrow guest streams by specifying your username as a host. If you plan to host guests, allocate streams on the right side of the dashboard.
 
 
 ## Developing Applications for Grimwire
@@ -80,6 +78,8 @@ Grimwire's configuration can be controlled with command-line flags or the config
  - `-u/--is_upstream`: if grimwire is upstream of a server like Nginx, specify this flag with the port the server is using.
  - `--ssl`: enables TLS, and will look for `ssl-key.pem` and `ssl-cert.pem` in grimwire's directory to set the key & cert (default off).
  - `--allow_signup`: if set to 0, will remove the new-user signup interface from the login page (default 1).
+ - `--max_accounts`: the limit on the number of user accounts that can register (default 100).
+ - `--max_user_streams`: the limit on the streams a user can hold at once. Can be overridden per-user by setting `"max_user_streams"` in the userfile (default 10).
 
 The `config.json` file can include any of the long versions of those flags. Note that `grimwire reload` will not update the port or SSL status - you must restart the server process to do that.
 

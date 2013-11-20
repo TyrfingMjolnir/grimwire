@@ -58,6 +58,8 @@ switch (process.argv[2]) {
 		console.log('   -u/--is_upstream [port] (default off, should specify the downstream port in use)');
 		console.log('   --ssl (default off)');
 		console.log('   --allow_signup [0|1] (default 1)');
+		console.log('   --max_accounts [n] (default 100, the limit on user accounts)');
+		console.log('   --max_user_streams [n] (default 10, can be overridden per-user)');
 		break;
 }
 
