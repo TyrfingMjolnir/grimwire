@@ -76,6 +76,12 @@ if (config.is_upstream) {
 } else {
 	server.use(express.cookieSession({ secret: 'TODO -- INSERT SECRET TOKEN HERE', cookie: { httpOnly: true, secure: config.ssl } }));
 }
+if (config.ssl) {
+	server.use(function(req, res, next) {
+		res.setHeader('Strict-Transport-Security', 'max-age=8640000; includeSubDomains');
+		next();
+	});
+}
 server.all('*', middleware.setCorsHeaders);
 server.options('*', function(req, res) {
 	res.writeHead(204);
