@@ -143,8 +143,9 @@ var grimwidget = {};
 		}
 
 		// Stop click/tap events from passing up to the document, so we dont close on every click within us
-		this.popupEl.addEventListener('click', function(e) { e.stopPropagation(); });
-		this.popupEl.addEventListener('touchend', function(e) {  e.stopPropagation(); });
+		local.bindRequestEvents(this.popupEl, { forms: false });
+		this.popupEl.addEventListener('click', stopEvent);
+		this.popupEl.addEventListener('touchend', stopEvent);
 
 		// Add popup content
 		this.setPopupContent();
@@ -152,6 +153,8 @@ var grimwidget = {};
 		// Add the popup
 		this.triggerEl.parentNode.appendChild(this.popupEl);
 	};
+	function dispatchRequestEvent(e) { local.dispatch(e.detail); }
+	function stopEvent(e) { e.stopPropagation(); }
 
 	// Close the popup
 	GrimWidget.prototype.close = function() {
@@ -273,7 +276,7 @@ var grimwidget = {};
 					'<div class="grimwidget-link">',
 						title+'<br/>',
 						'<small>Host: '+link.host_user+', App: <a href="//'+link.host_app+'" title="'+link.host_app+'" target="_blank">'+link.host_app+'</a></small><br/>',
-						(link.host_domain == relay.getAssignedDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
+						(link.host_domain == relay.getRelayDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
 					'</div>'
 				].join('');
 			})

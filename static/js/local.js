@@ -760,7 +760,8 @@ if (typeof window == 'undefined' || window.ActiveXObject || !window.postMessage)
 		if (!nextTickQueue.length) window.postMessage('nextTick', '*');
 		nextTickQueue.push(fn);
 	};
-	window.addEventListener('message', function(){
+	window.addEventListener('message', function(evt){
+		if (evt.data != 'nextTick') { return; }
 		var i = 0;
 		while (i < nextTickQueue.length) {
 			try { nextTickQueue[i++](); }
@@ -2329,8 +2330,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 (function() {
 
 	var peerConstraints = {
-		// optional: [{ RtpDataChannels: true }]
-		optional: [{DtlsSrtpKeyAgreement: true}]
+		optional: [/*{RtpDataChannels: true}, */{DtlsSrtpKeyAgreement: true}]
 	};
 	var defaultIceServers = { iceServers: [{ url: 'stun:stun.l.google.com:19302' }] };
 
@@ -2438,7 +2438,15 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 				data: msg
 			});
 		} else {
-			this.rtcDataChannel.send(msg);
+			try { // :DEBUG: as soon as WebRTC stabilizes some more, let's ditch this
+				this.rtcDataChannel.send(msg);
+			} catch (e) {
+				// Probably a NetworkError - one known cause, one party gets a dataChannel and the other doesnt
+				this.signal({
+					type: 'httpl',
+					data: msg
+				});
+			}
 		}
 	};
 
@@ -2469,22 +2477,15 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		console.log('Successfully established WebRTC session with', this.config.peer);
 		this.debugLog('HTTPL CHANNEL OPEN', e);
 
-		// :HACK: canary appears to drop packets for a short period after the datachannel is made ready
+		// Update state
+		this.isConnecting = false;
+		this.isConnected = true;
 
-		var self = this;
-		setTimeout(function() {
-			console.warn('using rtcDataChannel delay hack');
+		// Can now rely on sctp ordering
+		this.useMessageReordering(false);
 
-			// Update state
-			self.isConnecting = false;
-			self.isConnected = true;
-
-			// Can now rely on sctp ordering
-			self.useMessageReordering(false);
-
-			// Emit event
-			self.emit('connected', Object.create(self.peerInfo), self);
-		}, 1000);
+		// Emit event
+		this.emit('connected', Object.create(this.peerInfo), this);
 	}
 
 	function onHttplChannelClose(e) {
@@ -2760,7 +2761,7 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 
 	// Called by the RTCPeerConnection when we get a possible connection path
 	function onIceCandidate(e) {
-		if (e && e.candidate) {
+		if (e && !!e.candidate) {
 			this.debugLog('FOUND ICE CANDIDATE', e.candidate);
 			// send connection info to peers on the relay
 			this.signal({ type: 'candidate', candidate: e.candidate.candidate });
@@ -2876,28 +2877,31 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			// Store
 			this.userId = tokenParts[0];
 			this.accessToken = token;
-			this.relayService.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
-			this.usersCollection.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
 
-			// Try to validate our access now
-			var self = this;
-			this.relayItem = this.relayService.follow({
-				rel:    'gwr.io/relay/item',
-				user:   this.getUserId(),
-				app:    this.getApp(),
-				stream: this.getStreamId(),
-				nc:     Date.now() // nocache
-			});
-			this.relayItem.resolve().then( // a successful HEAD request will verify access
-				function() {
-					// Emit an event
-					self.emit('accessGranted');
-				},
-				function(res) {
-					// Handle error
-					self.onRelayError({ event: 'error', data: res });
-				}
-			);
+			if (this.relayService) {
+				this.relayService.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
+				this.usersCollection.setRequestDefaults({ headers: { authorization: 'Bearer '+token }});
+
+				// Try to validate our access now
+				var self = this;
+				this.relayItem = this.relayService.follow({
+					rel:    'gwr.io/relay/item',
+					user:   this.getUserId(),
+					app:    this.getApp(),
+					stream: this.getStreamId(),
+					nc:     Date.now() // nocache
+				});
+				this.relayItem.resolve().then( // a successful HEAD request will verify access
+					function() {
+						// Emit an event
+						self.emit('accessGranted');
+					},
+					function(res) {
+						// Handle error
+						self.onRelayError({ event: 'error', data: res });
+					}
+				);
+			}
 		} else {
 			// Update state and emit event
 			var hadToken = !!this.accessToken;
@@ -2948,14 +2952,13 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		// Start listening for messages from the popup
 		if (!this.messageFromAuthPopupHandler) {
 			this.messageFromAuthPopupHandler = (function(e) {
-				console.log('Received access token from '+e.origin);
-
 				// Make sure this is from our popup
 				var originUrld = local.parseUri(e.origin);
 				var providerUrld = local.parseUri(this.config.provider);
 				if (originUrld.authority !== providerUrld.authority) {
 					return;
 				}
+				console.log('Received access token from '+e.origin);
 
 				// Use this moment to switch to HTTPS, if we're using HTTP
 				// - this occurs when the provider domain is given without a protocol, and the server is HTTPS

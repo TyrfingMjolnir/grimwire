@@ -1,6 +1,14 @@
 Changes
 =======
+0.4.1
+
+2013/11/21 pfraze
+
+ - Fix: grimwidget now correctly emits request events on anchors.
+
+
 0.5.0
+====-
 
 2013/11/17 pfraze
 
