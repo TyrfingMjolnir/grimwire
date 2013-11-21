@@ -1,6 +1,11 @@
 Changes
 =======
-0.4.1
+0.5.1
+
+2013/11/22 pfraze
+
+ - Added `config.width` to grimwidget
+
 
 2013/11/21 pfraze
 
@@ -8,7 +13,7 @@ Changes
 
 
 0.5.0
-====-
+=====
 
 2013/11/17 pfraze
 

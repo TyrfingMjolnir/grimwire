@@ -99,6 +99,7 @@ var grimwidget = {};
 	// - `config.render`: optional function, called with (el, links) to render the widget when opened (once connected to the relay index)
 	//   - can return a falsey value to not render the link
 	// - `config.halign`: optional string, 'right' or 'left', defaults to 'left'
+	// - `config.width`: optional number, the width of the popup in pixels (default 300)
 	// - `config.hostuser`: optional string, the default host user
 	function GrimWidget(config) {
 		// Validate
@@ -135,7 +136,7 @@ var grimwidget = {};
 		this.popupEl = document.createElement('div');
 		this.popupEl.className = 'grimwidget-popup';
 
-		// Position by config
+		// Position/size by config
 		if (this.config.halign == 'right') {
 			this.popupEl.style.right = '0px';
 		} else {
@@ -154,6 +155,7 @@ var grimwidget = {};
 		this.triggerEl.parentNode.appendChild(this.popupEl);
 	};
 	function dispatchRequestEvent(e) { local.dispatch(e.detail); }
+	function markEvent(e) { e.hitPopup = true; }
 	function stopEvent(e) { e.stopPropagation(); }
 
 	// Close the popup
@@ -298,6 +300,9 @@ var grimwidget = {};
 		// Update popup
 		if (this.popupEl) {
 			this.popupEl.innerHTML = this.renderContent();
+			if (this.config.width) {
+				this.popupEl.style.width = (relay.isListening()) ? this.config.width+'px' : null;
+			}
 			this.refresh();
 			this.bindContentEvents();
 		}
@@ -316,7 +321,9 @@ var grimwidget = {};
 				'<div class="grimwidget-body">',
 					'<div class="grimwidget-index"></div>',
 					'<hr/>',
-					'<p><input class="grimwidget-btn grimwidget-logoutbtn" type="button" value="Logout" /></p>',
+					'<p><input class="grimwidget-btn grimwidget-logoutbtn" type="button" value="Logout"',
+					((this.config.width) ? 'style="width: '+(this.config.width-30)+'px"' : ''),
+					' /></p>',
 				'</div>'
 			].join('');
 		}
