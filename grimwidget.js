@@ -249,21 +249,29 @@ var grimwidget = {};
 	// ============
 
 	// Fetches the user's links and updates the UI with them
-	GrimWidget.prototype.refresh = function() {
+	// - `opts.useCache`: optional bool, if true will use cached links
+	GrimWidget.prototype.refresh = function(opts) {
+		opts = opts || {};
 		if (!this.popupEl) return;
 		var listEl = this.popupEl.querySelector('.grimwidget-index');
 		if (!listEl) return;
-		listEl.innerHTML = 'Fetching index...';
+
+		var links_;
+		if (opts.useCache && this.cachedLinksResponse_) {
+			listEl.innerHTML = '';
+			links_ = this.cachedLinksResponse_;
+		} else {
+			listEl.innerHTML = 'Fetching index...';
+			this.cachedLinksResponse_ = links_ = relay.agent().head();
+		}
 
 		// Fetch links
-		var self = this;
-		relay.agent().head()
-			.then(function(res) {
-				var fn = self.config.render || defaultLinkRenderer;
-				fn(listEl, res.parsedHeaders.link);
-			}).fail(function(res) {
-				listEl.innerHTML = '<p>Could not fetch network data from <a href="'+relay.getProvider()+'" target="_blank">'+relay.getProvider()+'</a>.</p>';
-			});
+		var fn = this.config.render || defaultLinkRenderer;
+		this.cachedLinksResponse_.then(function(res) {
+			fn(listEl, res.parsedHeaders.link);
+		}).fail(function(res) {
+			listEl.innerHTML = '<p>Could not fetch network data from <a href="'+relay.getProvider()+'" target="_blank">'+relay.getProvider()+'</a>.</p>';
+		});
 	};
 	function defaultLinkRenderer(listEl, links) {
 		listEl.innerHTML = links

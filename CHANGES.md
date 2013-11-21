@@ -5,6 +5,7 @@ Changes
 2013/11/22 pfraze
 
  - Added `config.width` to grimwidget
+ - Added `opts.useCache` to grimwidget refresh function
 
 
 2013/11/21 pfraze
