@@ -2,6 +2,11 @@ Changes
 =======
 0.5.1
 
+2013/11/25 pfraze
+
+ - Added `config.defaultOpen` to grimwidget
+
+
 2013/11/22 pfraze
 
  - Added `config.width` to grimwidget

@@ -100,7 +100,9 @@ var grimwidget = {};
 	//   - can return a falsey value to not render the link
 	// - `config.halign`: optional string, 'right' or 'left', defaults to 'left'
 	// - `config.width`: optional number, the width of the popup in pixels (default 300)
-	// - `config.hostuser`: optional string, the default host user
+	// - `config.provider`: optional string, the default relay
+	// - `config.hostUser`: optional string, the default host user
+	// - `config.defaultOpen`: optional bool, open on load if true
 	function GrimWidget(config) {
 		// Validate
 		if (!config.triggerEl) {
@@ -122,6 +124,11 @@ var grimwidget = {};
 		this.triggerEl.style.background     = 'no-repeat right 15px url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAbCAYAAABr/T8RAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAABftJREFUeNqcVltsFFUY/s9lZi/tbi1bWixBYxU0KiQVXywQIyZGSPAWDTFqlahvhDef9EUlGh58MSb6hIkKPpgYCQn3EDAiUYnaKqhgwAZst5ft3rqzl5lzjt+ZTk2h7NJwkn9n5j9n/+v3//9hueIkXbtisTid/P44HTp0iNwgScRn2aANZOgMqMBTipg0ZAxzKB5skCmztU13fmB8Ok+MWq63drxLsumuYcTihpivydShmdFqcI+CslD8IWgfa1MPc9e8StKsNdjIF/IXTUnssobCpJbKJd1g8bQiXSKrfGvoiWHL8POe9sROKOC8Iwg9J2FIpthmVZG7GIPRjN+kYmuwtppNB+8MtqgJdxspa0gQ7umK4LooYZQgltCIjrbP+7UJejNtPaM93T2ktGquOB6PL2DG3Tg2+H2sPXiDp/kmeNsdGiGgOOPnSLPPjM8Pmzo9gShsNVWeMRW7aZZoow7yFN/huM5Jrpp7LYeHflvAdIRL49PZ9TJFL9sQmhkI1Yiz0CfMjHwSHpeCwKegTocdKXcyzl5hkraBv5IbvmYqN5UslooAXvM8y71ffbEwyjjvJPip2HK3Tj6L6XLoDZFiH6m8LOlEjXqXr6DuJT10OTsyVil57zeYt48n6W2eS/7Z1p48zmVraMtYwm2G6t9Nwz9ianyLaXCr+Cy4++tenfrv7afBwUGaqZXpwOmvqVarUaVUPYf8PqcznPr6+uiuO1aR1roFuBRrCi6EeC/yt2X2g75E0BvIHQ0MDJDggoqlQu90YXoj8qBEQpBAvHUyECU1XSx7hQPaNEeXDGu0yVJ5fjEEFbDPE3pYoaYTAGN7R5J8Vaeil+u/NPbX51I6ts7JRkbXDbV1TF4MGv4x5Lh6PbkDqx+ByFZ1bug1q9iWC+/0B2nS2V/1PPr15yFauXIVjY1OTPF67BTzRQOI901ePqCneRepmOYrpDGqBbh8379+4+D8ViHE0/bdNggof4wS+nZedkeOHzlBp06eJi74DxQk1tt4GsU6YOgQsNDFkgpdxaCntlC8dOnSBUzbeQCYdZ7ndaFUyKLa+LE0BL9JAb0D3pUGDA4jbJsHDEMne97U2O3MxXebts2nJaxlb2/v9bylXC73baVSeRFGDID1FBqEPfg66voFNMQTMOKYEeoCutqjzDEP6RrvJ4Meeguc5aKEfdUqjTIIAkJIw2KfK3j7RClM4HUP/rwHXu3GNPoRnnOgPAneZvizWYfdCl7HMEiq3EK1iirZrsriG5Nhyuiro8gFo8CfBbocGRmh9vZ26uzsJMdxFnYbEX7/gR59Cd7dibom26PNDCcTIA0FQN7mMhwgdE4V5G6WYiQk9nUkC3s60DR1pUj5sTLiF4FrfHycCoUCZTIZSqfT5Lou2dyGoHJsXZGnK/wg71Db4Z0nuvzzOsEPqknnMnL+LASvhdIOGH3Aelmb1DTKJuysRtpY6G0571FpagbOzc4laZk21Dbk2WyWclM5cuMu+UGDbKx0g5EV5s44n5DD/lY1zGHNRsLexsLW8jEULoOCTclU4mjYa0DlHKIOL2vodJZnHbFRsM+rxuLsDEUOUAn+jB+GhxtB2ipHyLiRZ7lmZwPl07WjFoqyXPJP00tSYbzt+brXoEqxCqf4vHOm+TyeM2AuN8ApoqlIWVDkOQl7FYoBsDwIh72QIjxq+3KtUoeXyEu5RkEjmJXDbvIGEh6C1UEVnjBzG/AHyeJfgzEZho2FntwT+MFoLpsvcRgTGs9bTydOi1osDBlkrkcq1tl02BQopUJs4PkMar/PYmXOmBs687/kWeLz3ueTXTVQAZSad9YWZVd4AcQIj84lo4vT3OVpLrF6Ht9YVLPIABldYZ3o3ZlHiYh3BdQd0eOg0UjpL/bGBHowMtAOgAYoiJ4qetaRFstTMrLAj6jaIjovgb4D4c6JuiXKgOwtIgcaBm2MZJxpFeI5ZC8yx+Eawp9yoH9Ad+P7J1AZ72siLy6BRhYrTC72IIQP25ZqCYCqYHoNA1BV3FL77VCp1+sXWl11rl3/CTAAPPf2VtowDiYAAAAASUVORK5CYII=)';
 		this.triggerEl.style.backgroundSize = '30px';
 		this.triggerEl.style.paddingRight   = '30px';
+
+		// Default open
+		if (config.defaultOpen) {
+			this.open();
+		}
 	}
 
 	// Open the popup
@@ -171,7 +178,7 @@ var grimwidget = {};
 	};
 
 	// Handle login process
-	GrimWidget.prototype.doLogin = function(hostuser) {
+	GrimWidget.prototype.doLogin = function(hostUser) {
 		// Pull provider from UI
 		var urlEl = this.popupEl.querySelector('.grimwidget-providerinput');
 		urlEl.classList.remove('grimwidget-error');
@@ -184,7 +191,7 @@ var grimwidget = {};
 		relay.setProvider(url);
 
 		// Initiate auth flow (will create a popup)
-		relay.requestAccessToken({ guestof: hostuser });
+		relay.requestAccessToken({ guestof: hostUser });
 	};
 
 
@@ -249,29 +256,21 @@ var grimwidget = {};
 	// ============
 
 	// Fetches the user's links and updates the UI with them
-	// - `opts.useCache`: optional bool, if true will use cached links
-	GrimWidget.prototype.refresh = function(opts) {
-		opts = opts || {};
+	GrimWidget.prototype.refresh = function() {
 		if (!this.popupEl) return;
 		var listEl = this.popupEl.querySelector('.grimwidget-index');
 		if (!listEl) return;
-
-		var links_;
-		if (opts.useCache && this.cachedLinksResponse_) {
-			listEl.innerHTML = '';
-			links_ = this.cachedLinksResponse_;
-		} else {
-			listEl.innerHTML = 'Fetching index...';
-			this.cachedLinksResponse_ = links_ = relay.agent().head();
-		}
+		listEl.innerHTML = 'Fetching index...';
 
 		// Fetch links
-		var fn = this.config.render || defaultLinkRenderer;
-		this.cachedLinksResponse_.then(function(res) {
-			fn(listEl, res.parsedHeaders.link);
-		}).fail(function(res) {
-			listEl.innerHTML = '<p>Could not fetch network data from <a href="'+relay.getProvider()+'" target="_blank">'+relay.getProvider()+'</a>.</p>';
-		});
+		var self = this;
+		relay.agent().head()
+			.then(function(res) {
+				var fn = self.config.render || defaultLinkRenderer;
+				fn(listEl, res.parsedHeaders.link);
+			}).fail(function(res) {
+				listEl.innerHTML = '<p>Could not fetch network data from <a href="'+relay.getProvider()+'" target="_blank">'+relay.getProvider()+'</a>.</p>';
+			});
 	};
 	function defaultLinkRenderer(listEl, links) {
 		listEl.innerHTML = links
@@ -318,12 +317,12 @@ var grimwidget = {};
 
 	// Gives a DOM element according to the connectivity state
 	GrimWidget.prototype.renderContent = function() {
-		var provider = relay.getProvider() || '';
-		var hostuser = this.config.hostuser || '';
+		var provider = relay.getProvider() || this.config.provider || '';
+		var hostUser = this.config.hostUser || '';
 		if (relay.isListening()) {
 			return [
 				'<div class="grimwidget-header">',
-					'Peer relay online: '+provider,
+					'Online: '+provider,
 					'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">?</a></span>',
 				'</div>',
 				'<div class="grimwidget-body">',
@@ -337,18 +336,18 @@ var grimwidget = {};
 		}
 		return [
 			'<div class="grimwidget-header">',
-				'Peer relay offline',
+				'Offline',
 				'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">?</a></span>',
 			'</div>',
 			'<div class="grimwidget-body">',
-				'<p>Connect to your peer relay:</p>',
+				'<p>Connect to your network:</p>',
 				'<p><input class="grimwidget-providerinput" type="text" value="'+provider+'" placeholder="eg grimwire.net" /></p>',
 				'<p><button class="grimwidget-btn grimwidget-loginbtn">Login</button></p>',
 				'<hr>',
 				'<p><small>No account? Connect as a guest:</small></p>',
 				'<p>',
-					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((!hostuser)?'disabled="disabled"':''),'>Guest of</button>',
-					'<input class="grimwidget-hostuserinput" type="text" value="'+hostuser+'" placeholder="eg bob" />',
+					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((!hostUser)?'disabled="disabled"':''),'>Guest of</button>',
+					'<input class="grimwidget-hostuserinput" type="text" value="'+hostUser+'" placeholder="eg bob" />',
 				'</p>',
 			'</div>'
 		].join('');
