@@ -4,7 +4,7 @@ Changes
 
 2013/11/25 pfraze
 
- - Added `config.defaultOpen` to grimwidget
+ - Added `config.defaultOpen` and `config.valign` to grimwidget
 
 
 2013/11/22 pfraze

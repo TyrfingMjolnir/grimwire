@@ -38,6 +38,10 @@ var grimwidget = {};
 	var styleEl = document.createElement('style');
 	styleEl.setAttribute('type', 'text/css');
 	styleEl.innerHTML = [
+		'.grimwidget-trigger { background: no-repeat left 15px url(data:image/png;base64,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) }',
+		'.grimwidget-trigger { background-size: 30px; padding: 15px 0 15px 30px; display: inline-block; color: #777; text-decoration: none }',
+		'.grimwidget-trigger-right { background-position: right 15px; padding: 15px 30px 15px 0; }',
+		'.grimwidget-trigger:hover { color: #333; text-decoration: none }',
 		'.grimwidget-popup { position: absolute; z-index: 10000; width: 300px; background: #fff; border: 1px solid #ccc; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.175); }',
 		'.grimwidget-popup > div { border: 1px solid #fff; }',
 		'.grimwidget-popup .grimwidget-header { background: #eee; padding: 0.2em 0.4em; font-size: 10px; }',
@@ -99,6 +103,7 @@ var grimwidget = {};
 	// - `config.render`: optional function, called with (el, links) to render the widget when opened (once connected to the relay index)
 	//   - can return a falsey value to not render the link
 	// - `config.halign`: optional string, 'right' or 'left', defaults to 'left'
+	// - `config.valign`: optional string, 'top' or 'bottom', defaults to 'bottom'
 	// - `config.width`: optional number, the width of the popup in pixels (default 300)
 	// - `config.provider`: optional string, the default relay
 	// - `config.hostUser`: optional string, the default host user
@@ -121,9 +126,10 @@ var grimwidget = {};
 		this.triggerEl.addEventListener('click', this.onTriggerElClick.bind(this));
 		document.body.addEventListener('click', this.onDocBodyClick.bind(this));
 		document.body.addEventListener('touchend', this.onDocBodyClick.bind(this));
-		this.triggerEl.style.background     = 'no-repeat right 15px url(data:image/png;base64,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)';
-		this.triggerEl.style.backgroundSize = '30px';
-		this.triggerEl.style.paddingRight   = '30px';
+		this.triggerEl.className += ' grimwidget-trigger';
+		if (this.config.halign == 'right') {
+			this.triggerEl.className += ' grimwidget-trigger-right';
+		}
 
 		// Default open
 		if (config.defaultOpen) {
@@ -148,6 +154,11 @@ var grimwidget = {};
 			this.popupEl.style.right = '0px';
 		} else {
 			this.popupEl.style.left = '0px';
+		}
+		if (this.config.valign == 'top') {
+			this.popupEl.style.bottom = '50px';
+		} else {
+			this.popupEl.style.top = '50px';
 		}
 
 		// Stop click/tap events from passing up to the document, so we dont close on every click within us
