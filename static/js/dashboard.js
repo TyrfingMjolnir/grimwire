@@ -88,6 +88,7 @@ $('.refresh').on('click', loadActiveUsers);
 
 // Guest slot +/- buttons
 var _updateGuestStreamsReq = null;
+var _updateGuestBufferingTimeout = null;
 function updateGuestSlotsCB(d_streams) {
 	return function() {
 		if (_session_user) {
@@ -101,18 +102,22 @@ function updateGuestSlotsCB(d_streams) {
 			if (_updateGuestStreamsReq) {
 				_updateGuestStreamsReq.close();
 			}
+			if (_updateGuestBufferingTimeout) {
+				clearTimeout(_updateGuestBufferingTimeout);
+			}
 
-			// Create the request
-			usersAPI.follow({ rel: 'item', id: _session.user_id }).resolve({ nohead: true }).then(function(url) {
-				// ^ resolve is required for now -  https://github.com/grimwire/local/issues/81
+			renderUserConnections();
+			_updateGuestBufferingTimeout = setTimeout(function() {
+				// Create the request
 				_updateGuestStreamsReq = new local.Request({
 					method: 'PATCH',
-					url: url,
 					headers: { 'content-type': 'application/json' }
 				});
-				local.dispatch(_updateGuestStreamsReq).then(renderUserConnections);
+				usersAPI.follow({ rel: 'item', id: _session.user_id })
+					.dispatch(_updateGuestStreamsReq)
+					.then(renderUserConnections);
 				_updateGuestStreamsReq.end({ max_guest_streams: target });
-			});
+			}, 250);
 		}
 		return false;
 	};
