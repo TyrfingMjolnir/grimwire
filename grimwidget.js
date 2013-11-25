@@ -74,14 +74,18 @@ var grimwidget = {};
 	if (localStorage.getItem('access-token')) {
 		relay.setAccessToken(localStorage.getItem('access-token'));
 	}
-
-	// Peer Relay Events
-	// =================
 	relay.on('accessGranted', function() {
 		// Access granted, remember the token
 		localStorage.setItem('access-token', relay.getAccessToken());
 		localStorage.setItem('provider', relay.getProvider());
 	});
+
+	// Patch the relay so we know when a connection is attempted
+	var startListeningFn = relay.startListening;
+	relay.startListening = function() {
+		startListeningFn.apply(relay, arguments);
+		relay.emit('startListeninged');
+	};
 
 	// Exported Functions
 	// ==================
@@ -119,7 +123,7 @@ var grimwidget = {};
 		this.triggerEl = config.triggerEl;
 
 		// Wire up to relay
-		relay.on(['accessGranted', 'accessDenied', 'accessRemoved', 'accessInvalid', 'listening', 'notlistening'], this.setPopupContent.bind(this));
+		relay.on(['accessGranted', 'accessDenied', 'accessRemoved', 'accessInvalid', 'startListeninged', 'listening', 'notlistening'], this.setPopupContent.bind(this));
 
 		// Prepare UI
 		this.popupEl = null;
@@ -330,6 +334,7 @@ var grimwidget = {};
 	GrimWidget.prototype.renderContent = function() {
 		var provider = relay.getProvider() || this.config.provider || '';
 		var hostUser = this.config.hostUser || '';
+		var isConnecting = relay.connectionStatus == local.Relay.CONNECTING;
 		if (relay.isListening()) {
 			return [
 				'<div class="grimwidget-header">',
@@ -347,17 +352,17 @@ var grimwidget = {};
 		}
 		return [
 			'<div class="grimwidget-header">',
-				'Offline',
+				((isConnecting) ? 'Connecting...' : 'Offline'),
 				'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">?</a></span>',
 			'</div>',
 			'<div class="grimwidget-body">',
 				'<p>Connect to your network:</p>',
 				'<p><input class="grimwidget-providerinput" type="text" value="'+provider+'" placeholder="eg grimwire.net" /></p>',
-				'<p><button class="grimwidget-btn grimwidget-loginbtn">Login</button></p>',
+				'<p><button class="grimwidget-btn grimwidget-loginbtn"',((isConnecting)?'disabled="disabled"':''),'>Login</button></p>',
 				'<hr>',
 				'<p><small>No account? Connect as a guest:</small></p>',
 				'<p>',
-					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((!hostUser)?'disabled="disabled"':''),'>Guest of</button>',
+					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((isConnecting || !hostUser)?'disabled="disabled"':''),'>Guest of</button>',
 					'<input class="grimwidget-hostuserinput" type="text" value="'+hostUser+'" placeholder="eg bob" />',
 				'</p>',
 			'</div>'
