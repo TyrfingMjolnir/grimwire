@@ -134,6 +134,7 @@ var grimwidget = {};
 		if (this.config.halign == 'right') {
 			this.triggerEl.className += ' grimwidget-trigger-right';
 		}
+		this.setPopupContent();
 
 		// Default open
 		if (config.defaultOpen) {
@@ -319,7 +320,10 @@ var grimwidget = {};
 	GrimWidget.prototype.setPopupContent = function() {
 		// Update trigger button
 		var triggerText = 'offline';
-		if (relay.isListening()) {
+		if (this.config.renderLabel) {
+			triggerText = this.config.renderLabel.call(this);
+		}
+		else if (relay.isListening()) {
 			triggerText = relay.getUserId()+' online';
 		}
 		else if (relay.getAccessToken()) {
