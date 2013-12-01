@@ -11,6 +11,10 @@
 	},
 	"devDependencies": {
 	},
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:grimwire/grimwire.git"
+	},
 	"scripts": {
 	}
 }
