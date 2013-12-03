@@ -2,6 +2,11 @@ Changes
 =======
 0.5.1
 
+2013/12/01 pfraze
+
+ - Added `config.renderLabel` to grimwidget
+
+
 2013/11/25 pfraze
 
  - Added `config.defaultOpen` and `config.valign` to grimwidget
