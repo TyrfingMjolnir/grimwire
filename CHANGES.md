@@ -2,6 +2,11 @@ Changes
 =======
 0.5.1
 
+2013/12/03 pfraze
+
+ - Added CORS caching header to reduce preflights dramatically
+
+
 2013/12/01 pfraze
 
  - Added `config.renderLabel` to grimwidget
