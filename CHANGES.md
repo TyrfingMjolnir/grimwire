@@ -5,6 +5,7 @@ Changes
 2013/12/03 pfraze
 
  - Added CORS caching header to reduce preflights dramatically
+ - Extended sessions from 1 day to 7
 
 
 2013/12/01 pfraze
