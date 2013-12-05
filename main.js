@@ -93,10 +93,10 @@ server.options('*', function(req, res) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="self via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
-		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relay/coll gwr.io/user/coll"; id="users"',
-		'</u/{id}>; rel="gwr.io/user/item"',
-		'</u/{user}/s/{app}/{sid}{?nc}>; rel="gwr.io/relay/item"',
+		'</>; rel="self via service gwr.io/grimwire"; title="Grimwire Relay"',
+		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relays gwr.io/users"; id="users"',
+		'</u/{id}>; rel="gwr.io/user"',
+		'</u/{user}/s/{app}/{sid}{?nc}>; rel="gwr.io/relay"',
 		'</session>; rel="gwr.io/session"; type="user"',
 		'</session/{app}>; rel="gwr.io/session"; type="app"',
 		'</session/{app}?guestof={hostuser}>; rel="gwr.io/session"; type="guest"',
@@ -127,7 +127,7 @@ server.get('/status', middleware.authenticate, function(req, res) {
 	require('./lib/db').getUser(res.locals.session.user_id, function(err, user) {
 		if (err || !user) { return res.send(403, '403 Forbidden'); }
 		res.setHeader('Link', [
-			'</>; rel="up via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
+			'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Relay"',
 			'</status>; rel="self service"; id="status"'
 		].join(', '));
 		var uptime = (new Date() - server.startTime);
