@@ -1,6 +1,42 @@
 Changes
 =======
+0.5.1
+
+2013/12/05 pfraze
+
+ - Altered peer URI semantics to always refer to the 4th item as the 'sid' (instead of the ambiguous 'stream' or 'streamId')
+ - Simplified gwr.io reltypes
+
+
+2013/12/03 pfraze
+
+ - Added CORS caching header to reduce preflights dramatically
+ - Extended sessions from 1 day to 7
+
+
+2013/12/01 pfraze
+
+ - Added `config.renderLabel` to grimwidget
+
+
+2013/11/25 pfraze
+
+ - Added `config.defaultOpen` and `config.valign` to grimwidget
+
+
+2013/11/22 pfraze
+
+ - Added `config.width` to grimwidget
+ - Added `opts.useCache` to grimwidget refresh function
+
+
+2013/11/21 pfraze
+
+ - Fix: grimwidget now correctly emits request events on anchors.
+
+
 0.5.0
+=====
 
 2013/11/17 pfraze
 

@@ -75,7 +75,7 @@
     <script>
     var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
     var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
-    var usersAPI = serviceAPI.follow({ rel: 'gwr.io/user/coll' });
+    var usersAPI = serviceAPI.follow({ rel: 'gwr.io/users' });
     sessionAPI.resolve();
 
     $('.form-login').on('submit', function(e) {
