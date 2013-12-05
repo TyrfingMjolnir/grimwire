@@ -2,6 +2,11 @@ Changes
 =======
 0.5.1
 
+2013/12/05 pfraze
+
+ - Altered peer URI semantics to always refer to the 4th item as the 'sid' (instead of the ambiguous 'stream' or 'streamId')
+
+
 2013/12/03 pfraze
 
  - Added CORS caching header to reduce preflights dramatically

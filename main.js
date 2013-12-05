@@ -96,7 +96,7 @@ server.all('/', function(req, res, next) {
 		'</>; rel="self via service gwr.io/relay/service gwr.io/user/service"; title="Grimwire Relay"',
 		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relay/coll gwr.io/user/coll"; id="users"',
 		'</u/{id}>; rel="gwr.io/user/item"',
-		'</u/{user}/s/{app}/{stream}{?nc}>; rel="gwr.io/relay/item"',
+		'</u/{user}/s/{app}/{sid}{?nc}>; rel="gwr.io/relay/item"',
 		'</session>; rel="gwr.io/session"; type="user"',
 		'</session/{app}>; rel="gwr.io/session"; type="app"',
 		'</session/{app}?guestof={hostuser}>; rel="gwr.io/session"; type="guest"',
