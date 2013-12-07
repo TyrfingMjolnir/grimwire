@@ -1,6 +1,14 @@
 Changes
 =======
+0.5.2
+
+2013/12/07 pfraze
+
+ - Lowercased all usernames on signup
+
+
 0.5.1
+=====
 
 2013/12/05 pfraze
 
