@@ -5,6 +5,7 @@ Changes
 2013/12/07 pfraze
 
  - Lowercased all usernames on signup
+ - Replaced grimwidget guests with account creation
 
 
 0.5.1

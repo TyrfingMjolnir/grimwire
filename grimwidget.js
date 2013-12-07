@@ -238,6 +238,12 @@ var grimwidget = {};
 		relay.setAccessToken(null);
 	};
 
+	// Create acct click
+	GrimWidget.prototype.onCreateBtnClick = function() {
+		relay.setProvider('https://grimwire.net');
+		relay.requestAccessToken();
+	};
+
 	// Guestof click
 	GrimWidget.prototype.onGuestofBtnClick = function() {
 		var hostuserEl = this.popupEl.querySelector('.grimwidget-hostuserinput');
@@ -309,7 +315,7 @@ var grimwidget = {};
 					'<div class="grimwidget-link">',
 						title+'<br/>',
 						'<small>Host: '+link.host_user+', App: <a href="//'+link.host_app+'" title="'+link.host_app+'" target="_blank">'+link.host_app+'</a></small><br/>',
-						(link.host_domain == relay.getAssignedDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
+						(link.host_domain == relay.getRelayDomain()) ? '<span class="grimwidget-label">this app</span>' : '',
 					'</div>'
 				].join('');
 			})
@@ -351,7 +357,7 @@ var grimwidget = {};
 			return [
 				'<div class="grimwidget-header">',
 					'Online: '+provider,
-					'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">?</a></span>',
+					'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">more info</a></span>',
 				'</div>',
 				'<div class="grimwidget-body">',
 					'<div class="grimwidget-index"></div>',
@@ -365,18 +371,19 @@ var grimwidget = {};
 		return [
 			'<div class="grimwidget-header">',
 				((isConnecting) ? 'Connecting...' : 'Offline'),
-				'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">?</a></span>',
+				'<span class="grimwidget-controls"><a href="http://grimwire.com" target="_blank">more info</a></span>',
 			'</div>',
 			'<div class="grimwidget-body">',
-				'<p>Connect to your network:</p>',
+				'<p>Connect to your WebRTC network:</p>',
 				'<p><input class="grimwidget-providerinput" type="text" value="'+provider+'" placeholder="eg grimwire.net" /></p>',
 				'<p><button class="grimwidget-btn grimwidget-loginbtn"',((isConnecting)?'disabled="disabled"':''),'>Login</button></p>',
-				'<hr>',
+				'<p><small>Create a free account at <a class="grimwidget-createbtn" href="https://grimwire.net" target="_blank">grimwire.net</a>.</small></p>',
+				/*'<hr>',
 				'<p><small>No account? Connect as a guest:</small></p>',
 				'<p>',
 					'<button class="grimwidget-btn grimwidget-guestofbtn" ',((isConnecting || !hostUser)?'disabled="disabled"':''),'>Guest of</button>',
 					'<input class="grimwidget-hostuserinput" type="text" value="'+hostUser+'" placeholder="eg bob" />',
-				'</p>',
+				'</p>',*/
 			'</div>'
 		].join('');
 	};
@@ -390,6 +397,7 @@ var grimwidget = {};
 		};
 		setEvent('.grimwidget-loginbtn', 'click', this.onLoginBtnClick);
 		setEvent('.grimwidget-logoutbtn', 'click', this.onLogoutBtnClick);
+		setEvent('.grimwidget-createbtn', 'click', this.onCreateBtnClick);
 		setEvent('.grimwidget-guestofbtn', 'click', this.onGuestofBtnClick);
 		setEvent('.grimwidget-providerinput', 'keypress', this.onProviderInputKeypress);
 		setEvent('.grimwidget-hostuserinput', 'keypress', this.onHostuserInputKeypress);
