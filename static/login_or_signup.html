@@ -44,17 +44,18 @@
         <div class="col-md-4 well forms">
           <form class="form-login">
             <h3 class="form-login-heading">Existing users</h3>
-            <input name="id" type="text" class="form-control" placeholder="Username" autofocus="" name="id">
-            <input name="password" type="password" class="form-control" placeholder="Password" name="password">
+            <input name="id" type="text" class="form-control" placeholder="Username" autofocus="">
+            <input name="password" type="password" class="form-control" placeholder="Password">
             <p id="login-error" class="text-danger"></p>
             <p id="login-status" class="text-info"></p>
+            <p><small><a id="forgot-pw" href="#">Forgot Password</a></small></p>
             <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
           </form>
           <form class="form-newuser">
             <h3 class="form-newuser-heading">New users</h3>
             <input type="text" class="form-control" placeholder="Username" name="id">
             <p id="id-error" class="text-danger hidden"></p>
-            <input type="text" class="form-control" placeholder="Email (optional)" name="email">
+            <input type="text" class="form-control" placeholder="Email (optional - for password resets)" name="email">
             <p id="email-error" class="text-danger hidden"></p>
             <input name="password" type="password" class="form-control" placeholder="Password" name="password">
             <p id="password-error" class="text-danger hidden"></p>
@@ -73,16 +74,16 @@
     <script src="/js/jquery-2.0.3.min.js"></script>
     <script src="/js/local.js"></script>
     <script>
-    var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
-    var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
-    var usersAPI = serviceAPI.follow({ rel: 'gwr.io/users' });
-    sessionAPI.resolve();
+    var serviceUA = local.agent(window.location.protocol+'//'+window.location.host);
+    var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
+    var usersUA = serviceUA.follow({ rel: 'gwr.io/users' });
+    sessionUA.resolve();
 
     $('.form-login').on('submit', function(e) {
       var creds = $('.form-login').serializeArray();
       $('#login-status').html('Processing...');
       $('#login-error').html('');
-      sessionAPI.post({ id: creds[0].value, password: creds[1].value })
+      sessionUA.post({ id: creds[0].value, password: creds[1].value })
         .then(function(res) {
           $('#login-status').html('Processing... Authenticated.');
           // Success, reload
@@ -103,10 +104,10 @@
       var creds = $('.form-newuser').serializeArray();
       $('#newuser-status').html('Processing...');
       $('#newuser-error').html('');
-      usersAPI.post({ id: creds[0].value, email: creds[1].value, password: creds[2].value })
+      usersUA.post({ id: creds[0].value, email: creds[1].value, password: creds[2].value })
         .then(function(res) {
           // Success, sign in
-          sessionAPI.post({ id: creds[0].value, password: creds[2].value })
+          sessionUA.post({ id: creds[0].value, password: creds[2].value })
             .then(function(res) {
               $('#newuser-status').html('Processing... Account created.');
               // Success, reload
@@ -132,6 +133,24 @@
           } else {
             $('#newuser-error').html('Unknown error ('+res.status+': "'+res.reason+'") sorry for the inconvenience.');
           }
+        });
+      return false;
+    });
+
+    // Forgot password link
+    $('#forgot-pw').on('click', function() {
+      var userid = prompt('Enter your username and we\'ll send a confirmation link to your email address.');
+      if (!userid) {
+        return false;
+      }
+      usersUA.follow({ rel: 'gwr.io/user', id: userid })
+        .follow({ rel: 'gwr.io/confirmed-update' })
+        .POST({ password: true })
+        .then(function() { alert('Check your inbox for the confirmation link.'); })
+        .fail(function(res) {
+          if (res.status == 404) return alert('Username '+userid+' does not exist. Please check your id and try again.');
+          if (res.status == 422) return alert('Unable to update password: your account doesn\'t have an email address.');
+          alert('Sorry! There seems to have been an error: '+res.status+' '+res.reason);
         });
       return false;
     });

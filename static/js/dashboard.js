@@ -9,12 +9,12 @@ var _session_user = null;
 // ===============
 
 // APIs
-var serviceAPI = local.agent(window.location.protocol+'//'+window.location.host);
-var usersAPI   = serviceAPI.follow({ rel: 'gwr.io/users', link_bodies: 1 });
-var sessionAPI = serviceAPI.follow({ rel: 'gwr.io/session', type: 'user' });
+var serviceUA = local.agent(window.location.protocol+'//'+window.location.host);
+var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
+var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
 
 // Load session
-_session_ = sessionAPI.get({ accept: 'application/json' });
+_session_ = sessionUA.get({ accept: 'application/json' });
 _session_.then(setSession);
 function setSession(res) {
 	// Update state
@@ -30,7 +30,7 @@ function setSession(res) {
 
 // Load active users
 function loadActiveUsers() {
-	usersAPI.get({ accept: 'application/json' })
+	usersUA.get({ accept: 'application/json' })
 		.then(
 			function(res) {
 				_users = res.body.rows;
@@ -74,9 +74,54 @@ var $active_links = $('#active-links');
 var $your_connections = $('#your-connections');
 var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
 
+// Change email link
+$('#change-email').on('click', function() {
+	if (!_session_user) return false;
+
+	var new_email = prompt('Your current address is '+(_session_user.email?_session_user.email:'not set')+'. Update your address to:');
+	if (!new_email) return false;
+
+	// Update or setup update process depending on whether this is the first time
+	var userUA = usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id });
+	if (!_session_user.email) {
+		userUA.PATCH({ email: new_email })
+			.then(function() { _session_user.email = new_email; alert('Your email has been updated to '+new_email); })
+			.fail(function(res) {
+				if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
+				alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
+			});
+	} else {
+		userUA.follow({ rel: 'gwr.io/confirmed-update' }).POST({ email: new_email })
+			.then(function() { _session_user.email = new_email; alert('An email has been sent to your old address to confirm the update to '+new_email); })
+			.fail(function(res) {
+				if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
+				alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
+			});
+	}
+	return false;
+});
+
+// Change password link
+$('#change-pw').on('click', function() {
+	if (!_session_user) return false;
+	if (!_session_user.email) {
+		alert('Password updates require an email account to confirm identity. Please use the "Change Email" to set this first.');
+		return false;
+	}
+	if (!confirm('For security purposes, a confirmation email will be sent to '+_session_user.email+' with an update link. Send the email?')) {
+		return false;
+	}
+	usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id })
+		.follow({ rel: 'gwr.io/confirmed-update' })
+		.POST({ password: true })
+		.then(function() { alert('Check your inbox for the confirmation link.'); })
+		.fail(function(res) { alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason); });
+	return false;
+});
+
 // Logout link
 $('#logout').on('click', function(e) {
-	sessionAPI.delete()
+	sessionUA.delete()
 		.then(window.location.reload.bind(window.location), function() {
 			console.warn('Failed to delete session');
 		});
@@ -113,7 +158,7 @@ function updateGuestSlotsCB(d_streams) {
 					method: 'PATCH',
 					headers: { 'content-type': 'application/json' }
 				});
-				usersAPI.follow({ rel: 'item', id: _session.user_id })
+				usersUA.follow({ rel: 'item', id: _session.user_id })
 					.dispatch(_updateGuestStreamsReq)
 					.then(renderUserConnections);
 				_updateGuestStreamsReq.end({ max_guest_streams: target });
@@ -151,7 +196,7 @@ $('.avatars a').on('click', function() {
 	$('.user-avatar').attr('src', '/img/avatars/'+avatar);
 
 	// Update the user
-	usersAPI.follow({ rel: 'item', id: _session.user_id }).patch({ avatar: avatar });
+	usersUA.follow({ rel: 'item', id: _session.user_id }).patch({ avatar: avatar });
 	_session.avatar = avatar;
 
 	return false;

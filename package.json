@@ -7,9 +7,14 @@
 		"node-uuid": "1.4.x",
 		"bcrypt": "0.7.x",
 		"winston": "0.7.x",
-		"optimist": "0.6.x"
+		"optimist": "0.6.x",
+		"nodemailer": "0.5.x"
 	},
 	"devDependencies": {
+	},
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:grimwire/grimwire.git"
 	},
 	"scripts": {
 	}

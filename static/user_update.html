@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" type="image/ico" href="https://grimwire.net/favicon.ico" />
+
+    <title>grimwire webrtc network</title>
+
+    <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/login.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="../../assets/js/html5shiv.js"></script>
+      <script src="../../assets/js/respond.min.js"></script>
+    <![endif]-->
+  </head>
+
+  <body id="dashboardapp">
+
+    <!-- Static navbar -->
+    <div class="navbar navbar-default navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/" title="Grimwire"><img id="logo" src="/img/logo_small.png" /> webrtc network</a>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="container">
+
+      <br/>
+      <div class="row">
+        <div class="col-md-4">
+          <form class="form-update">
+            <h3>Update your account</h3>
+            {EMAIL}
+            {PASSWORD}
+            <p id="update-error" class="text-danger"></p>
+            <p id="update-status" class="text-info"></p>
+            <button class="btn btn-lg btn-primary btn-block" type="submit">Update</button>
+          </form>
+        </div>
+      </div> <!-- /row -->
+
+    </div> <!-- /container -->
+
+    <script src="/js/jquery-2.0.3.min.js"></script>
+    <script src="/js/local.js"></script>
+    <script>
+    var updateUA = local.agent(window.location.toString());
+
+    $('.form-update').on('submit', function(e) {
+      $('#update-status').html('Processing...');
+      $('#update-error').html('');
+
+      var formarr = $('.form-update').serializeArray();
+      var updates = {};
+      formarr.forEach(function(formitem) { updates[formitem.name] = formitem.value; })
+      updateUA.post(updates)
+        .then(function(res) {
+          $('#update-status').html('Processing... Updated.');
+          // Success, go to home page
+          window.location.href = '/';
+        })
+        .fail(function(res) {
+          $('#update-status').html('');
+          if (res.status == 422) {
+            var errors = [];
+            for (var k in res.body.errors) {
+              errors.push(((k != '_form') ? k+': ' : '')+res.body.errors[k]);
+            }
+            $('#update-error').html(errors.join('<br>'));
+          } else {
+            $('#update-error').html('Unknown error ('+res.status+') sorry for the inconvenience.');
+          }
+        });
+      return false;
+    });
+    </script>
+  </body>
+</html>

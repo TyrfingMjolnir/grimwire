@@ -2,6 +2,11 @@ Changes
 =======
 0.5.2
 
+2013/12/09 pfraze
+
+ - Added forgot password, update password, and update email interfaces with email-confirmation flow
+
+
 2013/12/07 pfraze
 
  - Lowercased all usernames on signup
