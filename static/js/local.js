@@ -1471,8 +1471,10 @@ local.contentTypes.register('text/event-stream',
 			if (!kv[0]) return; // comment lines have nothing before the colon
 			m[kv[0]] = kv[1];
 		});
-		try { m.data = JSON.parse(m.data); }
-		catch(e) {}
+		if (m.data) {
+			try { m.data = JSON.parse(m.data); }
+			catch(e) {}
+		}
 		return m;
 	}
 );
@@ -2675,7 +2677,11 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			if (res.status == 404 && !self.isTerminated) {
 				// Peer not online, shut down for now. We can try to reconnect later
 				for (var k in self.incomingStreams) {
-					self.incomingStreams[k].writeHead(404, 'not found').end();
+					try {
+						self.incomingStreams[k].writeHead(404, 'not found').end();
+					} catch (e) {
+						console.error('That weird peer 404 error', e, self.incomingStreams[k]);
+					}
 				}
 				self.terminate({ noSignal: true });
 				local.removeServer(self.config.domain);
