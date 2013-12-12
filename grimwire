@@ -39,6 +39,10 @@ switch (process.argv[2]) {
 		}
 		break;
 
+	case 'monitor':
+		require('./monitor.js');
+		break;
+
 	case 'setup':
 		console.log('>> Creating ./config.json, ./motd.html, and ./welcome.html.');
 		console.log('(Edit these files to admin the server.)');
@@ -51,7 +55,7 @@ switch (process.argv[2]) {
 
 	default:
 		console.log('Unknown command, "'+process.argv[2]+'"');
-		console.log('  Usage: grimwire [start|stop|reload|setup]');
+		console.log('  Usage: grimwire [start|stop|reload|setup|monitor]');
 		console.log('  Flags:');
 		console.log('   -p/--port [port] (default 8000)');
 		console.log('   -h/--hostname [hostname] (defaults to system value)');

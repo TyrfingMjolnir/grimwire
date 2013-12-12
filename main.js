@@ -82,6 +82,7 @@ if (config.ssl) {
 		next();
 	});
 }
+server.all('*', middleware.metrics);
 server.all('*', middleware.setCorsHeaders);
 server.options('*', function(req, res) {
 	res.writeHead(204);
@@ -123,7 +124,19 @@ server.use('/session', require('./lib/servers/session.js')());
 
 // Admin
 // =====
-server.get('/status', middleware.authenticate, function(req, res) {
+server.get('/status', function(req, res) {
+	res.setHeader('Link', [
+		'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Relay"',
+		'</status>; rel="self service"; id="status"'
+	].join(', '));
+	var uptime = (new Date() - server.startTime);
+	var stats = require('./lib/metrics').toJSON();
+	stats.started_at = server.startTime.toLocaleString();
+	stats.uptime_hours = uptime/(60*60*1000);
+	stats.uptime_days = uptime/(24*60*60*1000);
+	res.json(stats);
+});
+/*server.get('/status', middleware.authenticate, function(req, res) {
 	require('./lib/db').getUser(res.locals.session.user_id, function(err, user) {
 		if (err || !user) { return res.send(403, '403 Forbidden'); }
 		res.setHeader('Link', [
@@ -131,16 +144,14 @@ server.get('/status', middleware.authenticate, function(req, res) {
 			'</status>; rel="self service"; id="status"'
 		].join(', '));
 		var uptime = (new Date() - server.startTime);
-		res.json({
-			started_at: server.startTime.toLocaleString(),
-			uptime_seconds: uptime/1000,
-			uptime_minutes: uptime/(60*1000),
-			uptime_hours: uptime/(60*60*1000),
-			uptime_days: uptime/(24*60*60*1000),
-			relay: usersServer.getStatus(user)
-		});
+		var stats = require('./lib/metrics').toJSON();
+		stats.started_at = server.startTime.toLocaleString();
+		stats.uptime_hours = uptime/(60*60*1000);
+		stats.uptime_days = uptime/(24*60*60*1000);
+		stats.relay = usersServer.getStatus(user);
+		res.json(stats);
 	});
-});
+});*/
 process.on('SIGHUP', function() {
 	winston.info('Received SIGHUP signal, reloading configuration.');
 	refreshConfig();

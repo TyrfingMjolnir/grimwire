@@ -2,6 +2,11 @@ Changes
 =======
 0.5.2
 
+2013/12/12 pfraze
+
+ - Added 'grimwire monitor' command to track new system resource metrics in /status
+
+
 2013/12/09 pfraze
 
  - Added forgot password, update password, and update email interfaces with email-confirmation flow

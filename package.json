@@ -8,7 +8,8 @@
 		"bcrypt": "0.7.x",
 		"winston": "0.7.x",
 		"optimist": "0.6.x",
-		"nodemailer": "0.5.x"
+		"nodemailer": "0.5.x",
+		"measured": "0.1.x"
 	},
 	"devDependencies": {
 	},

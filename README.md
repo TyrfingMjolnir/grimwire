@@ -1,4 +1,4 @@
-Grimwire 0.5 (beta)
+Grimwire 0.5.2 (beta)
 ===================
 
 A node.js server for connecting client-side applications using [WebRTC](//webrtc.org) and the [Local.js Ajax Library](//github.com/grimwire/local).

@@ -3281,6 +3281,8 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 		} else if (e.data && (e.data.status == 401 || e.data.status == 403)) { // unauthorized
 			// Remove bad access token to stop reconnect attempts
 			this.setAccessToken(null);
+			this.connectedToRelay = false;
+
 			// Fire event
 			this.emit('accessInvalid');
 		} else if (e.data && (e.data.status === 0 || e.data.status == 404 || e.data.status >= 500)) { // connection lost, looks like server fault?
