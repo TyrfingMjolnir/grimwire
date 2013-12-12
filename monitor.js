@@ -31,7 +31,7 @@ function fetch() {
 		res.on('data', function (chunk) { body += chunk; });
 		res.on('end', function() {
 			try { body = JSON.parse(body); }
-			catch (e) { handleRequestError(e); }
+			catch (e) { handleRequestError('a bad response body'); }
 
 			reviewStatus(body);
 		});
@@ -49,6 +49,7 @@ function handleRequestError(e) {
 		process.exit(2);
 	} else {
 		// Host down
+		mail('Alert: '+url+' gave '+e);
 	}
 }
 
