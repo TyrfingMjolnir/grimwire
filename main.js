@@ -82,7 +82,6 @@ if (config.ssl) {
 		next();
 	});
 }
-server.all('*', middleware.metrics);
 server.all('*', middleware.setCorsHeaders);
 server.options('*', function(req, res) {
 	res.writeHead(204);

@@ -13,15 +13,19 @@ if (!email) {
 	console.log('  Defaults: loadavg=0.75, memfree=15');
 	console.log('  Flags:');
 	console.log('   -h/--host [hostname] (the relay service to track)');
-	console.log('   -i/--interval [v] (default 15, how frequently to check, in seconds)');
+	console.log('   -i/--interval [v] (default 15, how frequently to check in seconds)');
 	return;
 }
 
+var is_https = (host.indexOf('https') === 0);
+var hostparts = host.split('//');
+if (hostparts.length == 2) host = hostparts[1];
 var url = require('url').resolve(host, 'status');
+
 var firstTry = true;
 function fetch() {
-	var transport = (url.indexOf('https') === 0) ? require('https') : require('http');
-	transport.get(url, function(res) {
+	var transport = is_https ? require('https') : require('http');
+	transport.get({ host: host, path: '/status' }, function(res) {
 		if (res.statusCode != 200) {
 			return handleRequestError(res.statusCode + ' ' + res.reasonPhrase);
 		}
@@ -91,7 +95,9 @@ function mail(status) {
 	mailer.sendMail({
 		from: 'noreply@'+require("os").hostname(),
 		to: email,
-		subject: status
+		subject: status,
+		text: url,
+		html: '<a href="'+url+'">'+url+'</a>'
 	}, function(err, response) {
 		if (err) {
 			console.error('Failed to send alert email', err, response);
