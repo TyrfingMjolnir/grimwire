@@ -1,37 +1,61 @@
 /* general styles */
-.btn-xxs, .btn-group-xxs > .btn {
-	padding: 0px 5px;
-	line-height: 1.25;
-	font-size: 12px;
-	border-radius: 3px;
-}
-
-/* header */
-.navbar-static-top .navbar-brand {
-	height: 50px;
-}
-#logo {
-	height: 50px;
-	position: relative;
-	float: left;
-	top: -7px;
-}
-.navbar-nav .dropdown-toggle {
-	border-left: solid #E5E5E5 1px; border-right: solid #E5E5E5 1px; box-shadow: -1px 0 0 #FFF, 1px 0 0 #FFF;
-}
+.btn-xxs, .btn-group-xxs > .btn { padding: 0px 5px; line-height: 1.25; font-size: 12px; border-radius: 3px; }
+.noborder { border: 0 !important; }
+.separator { border-left: 1px solid #ccc; margin-left: 3px; }
+iframe[seamless] { background-color: transparent; border: 0 none transparent; padding: 0; }
 
 /* ui controls */
-#toolbar { position: absolute; right: 0; }
 #connections-bar { margin-bottom: 10px; }
 .help-icon { color: #bbb; }
-#your-web {
-	position: absolute;
-    left: -55px;
-    top: 27px;
-    padding: 2px 7px 5px;
-    font-weight: normal;
-    background-color: #bbb;
-}
+
+/* updates to imported styles */
+.list-group-item.active, .list-group-item.active:hover, .list-group-item.active:focus { background: #999; border-color: #999; }
+.form-control {  box-shadow: none; }
+.form-control:focus { border: 1px solid #ccc; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075); }
+
+/* iconographic links */
+.glyphbg:before { -webkit-font-smoothing: antialiased; font-family: 'Glyphicons Halflings'; color: #ccc; position: absolute; margin-top: -16px; margin-left: -1px; }
+.glyphicon2:before { -webkit-font-smoothing: antialiased; font-family: 'Glyphicons Halflings'; color: #ccc; position: absolute; margin-top: -12px; margin-left: 10px; }
+.action { border: 0; margin-top: 10px; } .action:before { color: #3599FF; }
+a.glyphicon:before, a .glyphicon:before, .link-list .glyphicon:before { color: #3599FF; }
+
+/* layout */
+.ui-layout-center { padding: 0; }
+.ui-layout-west { padding: 0; overflow: hidden; }
+main { max-width: 960px; margin: 0 auto; }
+
+/* header */
+.navbar-static-top .navbar-brand { height: 50px; }
+#logo { height: 50px; position: relative; float: left; top: -7px; }
+.navbar-nav .dropdown-toggle { border-left: solid #E5E5E5 1px; border-right: solid #E5E5E5 1px; box-shadow: -1px 0 0 #FFF, 1px 0 0 #FFF; }
+
+/* toolbar */
+
+#header .navbar-nav a { border-radius: 0; }
+#header .navbar-nav a span { display: none; position: absolute; left: 14px; top: 50px; z-index: 100; color: #bbb; }
+#header .navbar-nav a:hover span { display: inline; }
+#header .navbar-nav .open > a, #header .navbar-nav .open > a:hover, #header .navbar-nav .open > a:focus { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+
+/* link lists */
+.link-list {}
+.link-list tr { cursor: pointer; }
+.link-list tr:hover { color: #000; background: #ebebeb; }
+.link-list tr:active td { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+.link-list tr:active td:first-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+.link-list tr:active td:last-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+.link-list tr td { padding: 5px 10px }
+.link-list tr td img { position: relative; top: -3px; }
+.link-list tr td .text-muted img { opacity: 0.5; }
+.link-list tr:hover td.message { background: #777; }
+
+/* worker editor */
+#worker-editor .list-inline { box-shadow: 0 2px 3px rgba(0,0,0,0.15); padding: 3px 0; }
+#worker-editor .list-inline > li { padding: 0; border-right: 1px solid #eee; }
+#worker-editor .list-inline > li > a { padding: 0 10px; }
+#worker-editor .nav > li > a { padding: 0 10px; }
+#worker-editor .dropdown:hover:not(.open) { background: #eee; }
+#worker-editor .dropdown a:hover { text-decoration: none; }
+#worker-editor #ace { position: absolute; width: 100%; height: 100px; margin-top: 10px; }
 
 /* dropdown submenus */
 /* http://bootply.com/71520 */

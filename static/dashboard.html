@@ -8,9 +8,10 @@
     <meta name="author" content="">
     <link rel="shortcut icon" type="image/ico" href="https://grimwire.net/favicon.ico" />
 
-    <title>grimwire webrtc network</title>
+    <title>Grimwire 0.6</title>
 
     <link href="/css/bootstrap.css" rel="stylesheet">
+    <link href="/css/jquery.layout-latest.css" rel="stylesheet">
     <link href="/css/dashboard.css" rel="stylesheet">
 
     <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -22,64 +23,88 @@
 
   <body id="dashboardapp">
 
-    <!-- Static navbar -->
-    <div id="header" class="navbar navbar-default navbar-static-top">
-      <div class="container">
-        <div class="navbar-header">
-          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
-          <a class="navbar-brand" href="/" title="Grimwire"><img id="logo" src="/img/logo_small.png" /> webrtc network</a>
-        </div>
-        <div class="navbar-collapse collapse">
-          <ul class="nav navbar-nav navbar-right">
-            <li class="dropdown">
-              <a id="userid" href="#" class="dropdown-toggle" data-toggle="dropdown"><b class="caret"></b></a>
-              <ul class="dropdown-menu">
-                <li><a id="change-email" href="#">Change Email</a></li>
-                <li><a id="change-pw" href="#">Change Password</a></li>
-                <li class="dropdown-submenu">
-                  <a tabindex="-1" href="#">Change Avatar</a>
-                  <ul class="dropdown-menu avatars"></ul>
-                </li>
-                <li class="divider"></li>
-                <li><a id="logout" href="#">Log Out</a></li>
-              </ul>
-            </li>
+    <div class="ui-layout-center">
+      <!-- Static navbar -->
+      <div id="header" class="navbar navbar-default navbar-static-top">
+        <div class="container">
+          <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/" title="Grimwire"><img id="logo" src="/img/logo_small.png" /></a>
+          </div>
+          <ul class="nav navbar-nav">
+            <li><a href="httpl://feed" target="_content"><b class="glyphicon glyphicon-list"></b> <span>Updates</span></a></li>
+            <li><a href="httpl://explorer" target="_content"><b class="glyphicon glyphicon-folder-open"></b> <span>Explorer</span></a></li>
+            <li><a href="httpl://explorer/intro" target="_content"><b class="glyphicon glyphicon-question-sign"></b> <span>About</span></a></li>
           </ul>
-        </div><!--/.nav-collapse -->
+          <div class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-right">
+              <li class="dropdown">
+                <a id="userid" href="#" class="dropdown-toggle" data-toggle="dropdown"><b class="caret"></b></a>
+                <ul class="dropdown-menu">
+                  <li><a id="change-email" href="#">Change Email</a></li>
+                  <li><a id="change-pw" href="#">Change Password</a></li>
+                  <li class="dropdown-submenu">
+                    <a tabindex="-1" href="#">Change Avatar</a>
+                    <ul class="dropdown-menu avatars"></ul>
+                  </li>
+                  <li class="divider"></li>
+                  <li><a id="logout" href="#">Log Out</a></li>
+                </ul>
+              </li>
+            </ul>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div id="content" class="container">
+        <main></main>
+      </div>
+    </div> <!-- /container -->
+
+    <div class="ui-layout-west">
+      <div id="worker-editor">
+        <!-- file menu -->
+        <ul class="list-inline">
+          <li class="dropdown">
+            <a class="title" data-toggle="dropdown" href="#">Worker<b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a method="NEW" href="httpl://workers/ed">New</a></li>
+              <li class="dropdown-submenu">
+                <a method="OPEN" href="httpl://workers/ed">Open</a>
+                <ul id="worker-open-dropdown" class="dropdown-menu">
+                  <li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>
+                </ul>
+              </li>
+              <li><a method="SAVE" href="httpl://workers/ed">Save</a></li>
+              <li><a method="SAVE" href="httpl://workers/ed?rename=1">Save As...</a></li>
+              <li class="divider"></li>
+              <!-- <li><a method="TODO" href="httpl://workers/ed">Export File</a></li> -->
+              <li><a method="CLOSE" href="httpl://workers/ed">Close</a></li>
+            </ul>
+          </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop"></a></li>
+        </ul>
+
+        <ul class="nav nav-tabs"></ul>
+        <div id="ace"></div>
       </div>
     </div>
 
-
-    <div class="container">
-
-      <div class="row">
-        <div class="col-md-8">
-          <div id="toolbar" class="btn-group">
-            <a class="refresh btn btn-xs btn-default" href="javascript:void(0)" title="Refresh"><span class="glyphicon glyphicon-refresh"></span> refresh</a>
-          </div>
-          <span id="your-web" class="label label-default">your web</span>
-          <div id="active-links"></div>
-          <br><br>
-          <hr>
-          <p class="text-muted"><small>First time online and not sure what to do? This is just your dashboard, where you can see who's online. Jump onto an app (eg&nbsp;<a href="http://chat.grimwire.com/">chat.grimwire.com</a>) then put {HOSTDOMAIN} in the <img src="/img/logo_tiny.png"/> on the top right to get started.</small></p>
-        </div>
-        <div class="col-md-4">
-          <div>{MOTD_HTML}</div>
-          <div id="your-connections"></div>
-          <hr/>
-          <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with GrimWidget.js to connect to this relay.</small></p>
-          <hr/>
-          <p>
-            <small>CSS by <a href="http://getbootstrap.com/" target="_blank">Bootstrap</a>. Icons by <a href="http://www.fatcow.com/free-icons" target="_blank">FatCow</a> and <a href="http://glyphicons.com/" target="_blank">Glyphicons</a>. Libraries by <a href="http://stevenlevithan.com/" target="_blank">Stephen Levithan, <a href="https://github.com/fxa" target="_blank">Franz Antesberger</a>, and <a href="https://github.com/federomero" target="_blank">Federico Romero</a>. Grimwire by <a href="https://github.com/pfraze" target="_blank">Paul Frazee</a>. Licensed MIT.</small>
-          </p>
-        </div>
-      </div> <!-- /row -->
-
-    </div> <!-- /container -->
+    <div class="ui-layout-east">
+      <div>{MOTD_HTML}</div>
+      <div id="your-connections"></div>
+      <div id="active-links"></div>
+      <hr/>
+      <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with GrimWidget.js to connect to this relay.</small></p>
+      <hr/>
+      <p>
+        <small>CSS by <a href="http://getbootstrap.com/" target="_blank">Bootstrap</a>. Icons by <a href="http://www.fatcow.com/free-icons" target="_blank">FatCow</a> and <a href="http://glyphicons.com/" target="_blank">Glyphicons</a>. Libraries by <a href="http://stevenlevithan.com/" target="_blank">Stephen Levithan, <a href="https://github.com/fxa" target="_blank">Franz Antesberger</a>, and <a href="https://github.com/federomero" target="_blank">Federico Romero</a>. Grimwire by <a href="https://github.com/pfraze" target="_blank">Paul Frazee</a>. Licensed MIT.</small>
+      </p>
+    </div>
 
     <script>
       var _avatars = {AVATARS};
@@ -99,10 +124,15 @@
       <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span> {{!--<a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
     </script>
 
+
     <script src="/js/jquery-2.0.3.min.js"></script>
-    <script src="/js/local.js"></script>
     <script src="/js/bootstrap.min.js"></script>
-    <script src="/js/handlebars.js"></script>
+    <script src="/js/pouchdb-nightly.js"></script>
+    <script src="/js/jquery.layout-latest.js"></script>
+    <script src="/js/handlebars.js"></script><!-- :TODO: remove -->
+    <script src="/js/ace/src-min-noconflict/ace.js"></script>
+    <script src="/js/local.js"></script>
+    <script src="/js/servware.js"></script>
     <script src="/js/dashboard.js"></script>
   </body>
 </html>

@@ -1,17 +1,1192 @@
+;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+
+var common = module.exports = {};
+var network_sid = localStorage.getItem('network_sid');
+var is_first_session = network_sid === null;
+if (is_first_session) network_sid = genDeviceSid();
+
+// App Setup
+// =========
+
+// Loadtime p2p setup
+// :TODO:
+common.setupRelay = function(relay) {
+	relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
+	relay.on('accessGranted', function() {
+		relay.setSid(network_sid);
+		relay.startListening();
+	});
+	relay.on('streamTaken', function() {
+		// If a stream collision occurred, generate a new sid based on whether this is a new device in the network
+		network_sid = (is_first_session) ? common.genDeviceSid() : common.genSessionSid(network_sid);
+		relay.setSid(network_sid);
+		relay.startListening();
+	});
+	relay.on('listening', function() {
+		relay.registerLinks([
+			{ href: '/', rel: 'self service mail.gwr.io', title: 'Syncmail' },
+			{ href: '/folders', rel: 'collection mail.gwr.io/folders', id: 'folders', title: 'Mail Folders' }
+		]);
+		local.dispatch({ method: 'REFRESH', url: 'layout.app' });
+		if (is_first_session) { // save the sid if this was a new device
+			console.log('Detected first run on this device, assigned network identity with sid:', network_sid);
+			localStorage.setItem('network_sid', network_sid);
+		} else {
+			console.log('Assumed existing network identity with sid:', network_sid);
+		}
+	});
+};
+
+
+// App Behavior
+// ============
+
+common.dispatchRequest = function(req, origin) {
+	// Relative link? Use context to make absolute
+	// :TODO:
+
+	// Content target? Update page
+	if (req.target == '_content' || req.target == '_card_group' || req.target == '_card_self') {
+		if ((!req.headers || !req.headers.accept) && !req.Accept) { req.Accept = 'text/html, */*'; }
+		return local.dispatch(req).always(function(res) {
+			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
+				if (res.headers.location) {
+					return common.dispatchRequest({ method: 'GET', url: res.headers.location, target: '_content' }, origin);
+				}
+				console.error('Redirect response is missing its location header');
+			}*/
+
+			// Update page
+			var html;
+			if (res.body && typeof res.body == 'string') {
+				html = res.body;
+			} else {
+				html = '<h2 style="margin:0 0 2px">'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h2>';
+				if (res.body && typeof res.body != 'string') { html += '<pre>'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
+			}
+			$('main').html(html);
+
+			// Update state
+			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
+			return 204;
+		});
+
+		/*.fail(function(res) {
+			if (res.status == 422 && e.target.tagName == 'FORM' && res.body) {
+				// Bad ent - fill errors
+				var $form = $(e.target);
+				$('.has-error', $form).removeClass('has-error');
+				for (var k in res.body) {
+					$('[name='+k+']', $form).parent('.form-group').addClass('has-error');
+					$('#'+k+'-error', $form).html(res.body[k]);
+				}
+			}
+			throw res;
+		});*/
+	}
+
+	// No special target? Simple dispatch
+	return local.dispatch(req);
+};
+
+// Database Utilities
+// ==================
+
+// Adds a message to the given db, guarantees a unique ID
+common.addMessage = function(db, doc) {
+	var p = local.promise();
+	doc._id = doc.from + '.' + Date.now() + '.' + Math.round(Math.random()*10000);
+	db.put(doc, function(err, res) {
+		if (err && err.status == 409) { common.addMessage(db, doc).chain(p); }
+		else if (err) p.reject(err);
+		else p.fulfill(res);
+	});
+	return p;
+};
+
+// Gets, updates, and puts a doc
+common.updateDoc = function(db, id, updates) {
+	var p = local.promise();
+	db.get(id, function(err, doc) {
+		if (err) { return p.reject([500, err]); }
+
+		for (var k in updates) {
+			doc[k] = updates[k];
+		}
+
+		db.put(doc, function(err) {
+			if (err) { return p.reject([500, err]); }
+			p.fulfill(204);
+		});
+	});
+	return p;
+};
+
+// App Utilities
+// =============
+
+/*var relay = grimwidget.getRelay();
+common.getSessionUser = relay.getUserId.bind(relay);
+common.getSessionRelay = function() {
+	var providerd = local.parseUri(relay.getProvider() || '');
+	if (providerd) return providerd.authority;
+	return '';
+};
+common.getSessionEmail = function() { return common.getSessionUser() + '@' + common.getSessionRelay(); };
+common.isPeerSessionUser = function(peer) {
+	return (peer.getPeerInfo().user == common.getSessionUser() && peer.getPeerInfo().relay == common.getSessionRelay());
+};*/
+function genDeviceSid() { return Math.round(Math.random()*10000)*100; }; // [0,1000000) with a step of 100
+common.genDeviceSid = genDeviceSid;
+common.genSessionSid = function(deviceSid) { return deviceSid+Math.round(Math.random()*99)+1; }; // [deviceSid+1, deviceSid+100)
+common.genDeviceName = function() {
+	if (navigator.userAgent.indexOf('Opera') !== -1) return 'Opera';
+	else if (navigator.userAgent.indexOf('MSIE') !== -1) return 'IE';
+	else if (navigator.userAgent.indexOf('Chrome') !== -1) return 'Chrome';
+	else if (navigator.userAgent.indexOf('Safari') !== -1) return 'Safari';
+	else if (navigator.userAgent.indexOf('Firefox') !== -1) return 'Firefox';
+	// :TODO: mobile
+	return 'device';
+};
+var ltregexp = /</g;
+var gtregexp = />/g;
+common.escape = function(str) {
+	return (''+str).replace(ltregexp, '&lt;').replace(gtregexp, '&gt;');
+};
+common.normalizeRel = function(rel) {
+	var reld = local.parseUri(rel);
+	if (!reld.path) reld.relative = '/'+reld.relative; // Always have a trailing slash on the hostname
+	else if (reld.path != '/' && reld.path.slice(-1) == '/') reld.relative = reld.relative.replace(reld.path, reld.path.slice(0,-1)); // Never have a trailing slash on the path
+	return reld.authority + reld.relative;
+};
+common.normalizeUri = function(uri) {
+	var urid = local.parseUri(uri);
+	if (!urid.path) urid.relative = '/'+urid.relative; // Always have a trailing slash on the hostname
+	else if (urid.path != '/' && urid.path.slice(-1) == '/') urid.relative = urid.relative.replace(urid.path, urid.path.slice(0,-1)); // Never have a trailing slash on the path
+	return (urid.protocol||'httpl') + '://' + urid.authority + urid.relative;
+};
+
+var sources = null;
+common.getSources = function(forceReload) {
+	if (!sources || forceReload) {
+		try { sources = JSON.parse(localStorage.getItem('sources')); }
+		catch (e) { return []; }
+	}
+	return sources || [];
+};
+common.setSources = function(s, noSave) {
+	sources = s;
+	if (!noSave) {
+		localStorage.setItem('sources', JSON.stringify(sources));
+	}
+};
+
+var relayUsers = null;
+common.getRelayUsers = function() {
+	if (relayUsers) {
+		return local.promise(relayUsers);
+	}
+	return relay.getUsers().then(
+		function(res) { relayUsers = res.body.rows; return relayUsers; },
+		function(res) { console.error('Failed to fetch relay users', res); return null; }
+	);
+};
+common.ucfirst = function(str) { return str.charAt(0).toUpperCase() + str.slice(1); };
+},{}],2:[function(require,module,exports){
+/*
+httpl://explorer
+
+The Link Explorer
+ - Renders indexes exported by hosts with the directory protocol
+*/
+
+
+var common = require('./common');
+var db = new PouchDB('linkstore');
+
+var server = servware();
+module.exports = server;
+
+server.route('/', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/', rel: 'self service', id: 'explorer', title: 'Explorer' });
+
+	method('GET', function(req, res) {
+		var uri = req.query.uri || 'httpl://hosts';
+		uri = local.UriTemplate.parse(uri).expand({});
+		local.HEAD(uri).always(function(res2) {
+			// Build explore interface
+			var links = (res2.parsedHeaders.link) ? res2.parsedHeaders.link : [];
+			var viaLink = local.queryLinks(links, { rel: 'via !up !self' })[0];
+			var upLink = local.queryLinks(links, { rel: 'up !self' })[0];
+			var selfLink = local.queryLinks(links, { rel: 'self' })[0];
+			if (!viaLink && (!selfLink || selfLink.host_domain != 'hosts')) {
+				viaLink = { href: 'httpl://hosts', rel: 'via', title: 'Page' };
+			}
+			var otherLinks = local.queryLinks(links, { rel: '!via !up !self' });
+			var niceuri = (uri.indexOf('httpl://') === 0) ? uri.slice(8) : uri;
+			var html = render_explorer({
+				uri: uri,
+				niceuri: niceuri,
+				success: res2.status >= 200 && res2.status < 300,
+				status: res2.status + ' ' + (res2.reason||''),
+
+				viaLink: viaLink,
+				upLink: upLink,
+				selfLink: selfLink,
+				links: otherLinks || [],
+			});
+			res.writeHead(200, 'Ok', {'Content-Type': 'text/html'}).end(html);
+		});
+	});
+});
+
+function icons(link) {
+	var icon = 'link';
+	if (local.queryLink(link, { rel: 'gwr.io/datauri' }))
+		icon = 'file';
+	else if (local.queryLink(link, { rel: 'gwr.io/folder' }))
+		icon = 'folder-open';
+	return '<span class="glyphicon glyphicon-'+icon+'"></span>';
+}
+
+function render_explorer(ctx) {
+	return [
+		'<h1>Explorer</h1>',
+		'<form action ="httpl://explorer" method="GET" target="_content">',
+			'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
+		'</form>',
+		'<ul class="list-inline" style="padding-top: 5px">',
+			((ctx.viaLink) ?
+				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+ctx.viaLink.title+'" target="_content">'+ctx.viaLink.title+'</a></li>'
+			: ''),
+			((ctx.upLink) ?
+				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+ctx.upLink.title+'" target="_content">'+ctx.upLink.title+'</a></li>'
+			: ''),
+			((ctx.selfLink) ? ([
+				'<li class="dropdown">',
+					'<a data-toggle="dropdown" href="#" title="Self: '+ctx.selfLink.title+'" target="_content">'+ctx.selfLink.title+' <b class="caret"></b></a>',
+					'<ul class="dropdown-menu">',
+						'<li><a href="'+ctx.selfLink.href+'" target="_content">Open</a></li>',
+					'</ul>',
+				'</li>'
+			].join('')) : ''),
+			((ctx.selfLink) ?
+				'<li><a class="glyphicon glyphicon-chevron-down" href="'+ctx.selfLink.href+'" title="Open (GET)" target="_content"></a></li>'
+			: ''),
+			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
+			'<li><small class="text-muted">'+ctx.status+'</small>',
+        '</ul>',
+		'<div class="link-list-outer">',
+			'<table class="link-list">',
+				'<tbody>',
+					ctx.links.map(function(link) {
+						if (link.hidden) return '';
+						return [
+							'<tr data-local-alias="a" href="httpl://explorer?uri='+encodeURIComponent(link.href)+'" target="_content">',
+								'<td>'+icons(link)+'</td>',
+								'<td>'+link.title+'</td>',
+								'<td class="text-muted">'+link.href+'</td>',
+							'</tr>',
+						].join('');
+					}).join(''),
+				'</tbody>',
+			'</table>',
+		'</div>'
+	].join('');
+}
+
+server.route('/intro', function(link, method) {
+	method('GET', function(req, res) {
+		req.assert({ accept: 'text/html' });
+		if (!req.query.page || req.query.page == '1') {
+			var pfraze_href = 'nav:||contacts|gwr.io/contact/user=pfraze@grimwire.net';
+			var pfraze_icon = 'https://grimwire.net/img/avatars/user_astronaut.png'; // :TODO:
+			return [200, [
+				'<div style="max-width: 600px">',
+					'<h1>About</h1>',
+					'<p>',
+						'Have fun, and don\'t put anything important on here.',
+					'</p>',
+					'<hr>',
+					'<p><span class="text-muted">What is it?</span></p>',
+					'<p>',
+						'Grimwire is a social runtime environment.',
+						'It connects user Web-servers that live in threads and in other tabs with the Web Worker and WebRTC APIs.',
+						'Use it to publish services, datasets, and interfaces to other users.',
+					'</p>',
+					'<hr>',
+					'<p><span class="text-muted">Getting Acquainted</span></p>',
+					'<ul>',
+						'<li>The list icon on the top left is your updates feed.</li>',
+						'<li>The folder icon on the top left is your explorer for Web interfaces.</li>',
+						'<li>See who\'s online by clicking the gray bar on the right edge.</li>',
+						'<li>Edit your Web Workers by clicking the gray bar on the left edge.</li>',
+						'<li>Try pressing <code>ctrl &larr;</code> and <code>ctrl &rarr;</code> on your keyboard.</li>',
+						'<li>Refer to the <a href="https://grimwire.com/local" title="local.js documentation" target="_blank">Local.js API docs</a> for dev help.</li>',
+					'</ul>',
+					'<hr>',
+					'<p><span class="text-muted">Core Principles</span></p>',
+					'<p>',
+						'This system uses the Link response header to export directories.',
+						'All software in Grimwire is a Web service, and so all of the interfaces are linkable.',
+						'Links can be assigned "relation-types" and other semantic meta-data like "title" and "author".',
+						'Their directories can be queried and navigated with client-side APIs.',
+						'Those link directories are what the explorer reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
+					'</p>',
+					'<hr>',
+					// '<p><span class="text-muted">Where does data live?</span></p>',
+					// '<p>',
+					// 	'Your links &amp; data can host from your browser, or go onto the network\'s central (public) routing service.',
+					// 	'Anything on the network service is available when you go offline, but it can also be accessed by network moderators without your permission.',
+					// 	'Therefore, you should consider using browser-hosting for more&nbsp;<a href="http://imgur.com/YLwRjM3" target="_blank">sensitive&nbsp;information</a>.',
+					// '</p>',
+					// '<hr>',
+					// '<p><span class="text-muted">How do I control my data?</span></p>',
+					// '<p>',
+					// 	'For security, the browser separates your local storage by domain.',
+					// 	'The Grimwire app is run on multiple subdomains so that you can take advantage&nbsp;of&nbsp;this.',
+					// '</p>',
+					// '<p>',
+					// 	'Use a new subdomain when you want to try something and don\'t want to risk corrupting or leaking existing data.',
+					// 	'You can copy data between the subdomains by opening both at once and using the&nbsp;Dataset&nbsp;panel.',
+					// '</p>',
+					// '<p>',
+					// 	'You can also use Dataset to copy between browsers&nbsp;&amp;&nbsp;devices.',
+					// '</p>',
+					// '<hr>',
+					// '<p><span class="text-muted">What is "bouncing?"</span></p>',
+					// '<p>',
+					// 	'Sometimes, peer-to-peer connections fail to establish.',
+					// 	'The system can be set up to automatically bounce your messages through the network service (peer to network to peer) in that situation.',
+					// 	'You can choose to enable this for a contact or set of contacts when convenient, but be sure to remember which subdomain&nbsp;you&nbsp;have&nbsp;open!',
+					// '</p>',
+					// '<hr>',
+					'<p><a href="https://twitter.com/pfrazee" target="_blank">Paul Frazee</a>.</p>',
+					'<p><small class="text-muted">Those who control the semantics, control the system.</small></p>',
+				'</div>'
+			].join(' '), { 'content-type': 'text/html' }];
+		} else if (req.query.page == '2') {
+			return [200, [
+				'<p>Interfaces accumulate in stacks as you navigate.</p>',
+				'<p><a href="httpl://explorer/intro?page=3" target="_card_self">Sometimes cards will change in place too.</a></p>'
+			].join(''), { 'content-type': 'text/html' }];
+		} else if (req.query.page == '3') {
+			return [200, [
+				'<p></p>'
+			].join(''), { 'content-type': 'text/html' }];
+		} else {
+			throw 404;
+		}
+	});
+});
+},{"./common":1}],3:[function(require,module,exports){
+/*
+httpl://feed
+
+System updates aggregator
+*/
+
+var server = servware();
+module.exports = server;
+
+var _updates = [];
+
+Array.prototype.mapRev = function(cb) {
+	var newarr = [];
+	for (var i=this.length-1; i >= 0; i--) {
+		newarr.push(cb(this[i], i));
+	}
+	return newarr;
+};
+
+function render_updates() {
+	return _updates.mapRev(function(update) {
+		return update.html;
+	}).join('');
+}
+
+server.route('/', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
+	link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
+
+	method('GET', function(req, res) {
+		var originUntrusted = false; //:TODO:
+
+		var html = [
+			'<div class="row">',
+				'<div class="col-xs-12">',
+					'<h1>'+(''+new Date()).split(' ').slice(1,4).join(' ')+'</h1>',
+					'<div id="feed-updates">'+render_updates()+'</div>',
+				'</div>',
+			'</div>'
+		].join('');
+		return [200, html, {'content-type': 'text/html'}];
+	});
+
+	method('POST', function(req, res) {
+		req.assert({ type: 'text/html' });
+		var origin_untrusted = false; // :TODO:
+
+		var html = req.body;
+		if (origin_untrusted) {
+			html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+update.html;
+			html = html.replace(/"/g, '&quot;');
+			html = '<iframe seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" srcdoc="'+html+'"></iframe>';
+		} else {
+			html = '<div>'+html+'</div>';
+		}
+
+		var id = _updates.length;
+		_updates.push({ id: id, html: html, created_at: Date.now() });
+
+		// :TODO: replace with nquery
+		$('#feed-updates').html(render_updates());
+
+		res.setHeader('location', 'httpl://'+req.host+'/'+id);
+		return 201;
+	});
+});
+
+server.route('/:id', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'Updates Feed' });
+	link({ href: '/:id', rel: 'self item', id: ':id', title: 'Update :id' });
+
+	method('GET', function(req, res) {
+		var update = _updates[req.pathArgs.id];
+		if (!update) throw 404;
+
+		var accept = local.preferredType(req, ['text/html', 'application/json']);
+		if (accept == 'text/html')
+			return [200, html, {'content-type': 'text/html'}];
+		if (accept == 'application/json')
+			return [200, update, {'content-type': 'application/json'}];
+		throw 406;
+	});
+
+	method('PUT', function(req, res) {
+		req.assert({ type: 'text/html' });
+		var origin_untrusted = false; // :TODO:
+
+		var update = _updates[req.pathArgs.id];
+		if (!update) throw 404;
+
+		if (/*!from_update_owner*/false) // :TODO:
+			throw 403;
+
+		var html = req.body;
+		if (origin_untrusted) {
+			html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+update.html;
+			html = html.replace(/"/g, '&quot;');
+			html = '<iframe seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" srcdoc="'+html+'"></iframe>';
+		} else {
+			html = '<div>'+html+'</div>';
+		}
+
+		update.html = html;
+		return 204;
+	});
+
+	method('DELETE', function(req, res) {
+		var update = _updates[req.pathArgs.id];
+		if (!update) throw 404;
+
+		delete _updates[req.pathArgs.id];
+		return 204;
+	});
+});
+},{}],4:[function(require,module,exports){
+/*
+A PouchDB wrapper for persisting and syncing links.
+ - Links are immutable once created
+   - This is because they are often shared among multiple environments, and agreeing that a GUID refers to
+     a fixed link object makes reasoning simpler
+   - For instance, if a GUID is present, it does not need to be synced
+ - Links are wrapped in a mutable object of env state, which includes (for syncmail):
+   - id*: a GUID (immutable)
+   - parent_id: if link is a reply, the GUID of the parent link (immutable)
+   - thread_id: if link is a reply, the GUID of the link that started the conversation (immutable)
+   - folders*: an array of folders (string ids) which the link belongs to
+   - author*: the network id (user@network) of the link's author
+   - date*: the numeric timestamp of creation by author
+   - is_read: has the local user read it
+   - is_deleted: has the local user deleted it (like being in the recycle bin, not yet permadeleted)
+   - link: the link object (immutable)
+     - href*
+     - rel*
+     - id
+     - title
+     - ...
+ - Folders are a view-producing semantic which mimic traditional folders
+   - There is no tree data-structure; data is stored in a flat p/couchdb document store
+   - Instead, views are produced by using the path as a filter to mimic a file-tree
+   - This means:
+     - Links can have multiple folders (because why not?)
+     - Views can be constructed from multiple folders (because why not!?)
+     - Link IDs are globally unique
+ - GUIDs are <network_id>.<timestamp>.<random>, so something like "pfraze@grimwire.net.1388076378683.12345"
+*/
+
+var common = require('./common');
+var db = new PouchDB('linkstore');
+
+var server = servware();
+module.exports = server;
+
+server.route('/', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/{?type}', rel: 'self service collection gwr.io/folder', id: 'href', title: 'Link System' });
+	// link({ href: '/{id}', rel: 'item gwr.io/link', title: 'Lookup Link by ID', hidden: true });
+	link({ href: 'https://gwr.io/folder', rel: 'gwr.io/rel', title: 'Folder', hidden: true });
+	link({ href: 'https://gwr.io/datauri', rel: 'gwr.io/rel', title: 'File', hidden: true });
+	link({ href: '/#TODO', rel: 'item collection gwr.io/folder', id: 'reltypes', title: 'Relation Types' });
+	link({ href: '/?type=gwr.io/shared', rel: 'item collection gwr.io/folder', id: 'hrefs', title: 'Shared Items' });
+
+	method('GET', function(req, res) {
+		var type = req.query.type || false;
+
+		var linkMapReduce = {
+			map: function(doc) {
+				if (!doc.rel) return;
+				doc.rel.split(' ').forEach(function(rel) {
+					emit(rel, doc);
+				});
+			},
+			reduce: false
+		};
+
+		var p = local.promise();
+		db.query(linkMapReduce, { descending: true, key: type }, p.cb.bind(p));
+		p.always(function(links) {
+			res.headers['link'] = res.headers['link']
+				.concat(links.rows.map(function(item) {
+					// Supply indirect links to data uris (dont put them in the index)
+					if (item.value.href.indexOf('data:') === 0) {
+						item.value.href = '/'+item.id;
+					}
+					return item.value;
+				}));
+			res.writeHead(204).end();
+		});
+	});
+
+	method('POST', function(req, res) {
+		// Validate request
+		if (req.headers['content-type'] != 'application/json' && req.headers['content-type'] != 'application/x-www-form-urlencoded')
+			throw 415;
+
+		var body = req.body || {}, errors = {};
+		if (!body.href || typeof body.href != 'string') { errors.href = 'Required.'; }
+		if (!body.rel || typeof body.rel != 'string') { errors.rel = 'Required.'; }
+		if (Object.keys(errors).length > 0) {
+			throw [422, errors, {'Content-Type': 'application/json'}];
+		}
+
+		// Massage data
+		body.rel = common.normalizeRel(body.rel);
+		body.href = common.normalizeUri(body.href);
+		body.href = local.UriTemplate.parse(body.href).expand({});
+		if (body.href.indexOf('data:') === 0) {
+			body.rel += ' gwr.io/datauri';
+		}
+
+		// Add to folder
+		return common.addMessage(db, body).then(function() { return 204; });
+	});
+});
+
+server.route('/edit', function(link, method) {
+	link({ href: '/{?folder}', rel: 'up service collection gwr.io/folder', id: 'href', title: 'Link System' });
+	link({ href: '/edit', rel: 'self', id: 'edit', title: 'Edit Interface' });
+
+	method('GET', function(req, res) {
+		var accept = local.preferredType(req, 'text/html');
+		if (!accept) { throw 406; }
+
+		// Standardize href
+		req.query.href = common.normalizeUri(req.query.href);
+
+		var linkMapReduce = {
+			map: function(doc) {
+				if (!doc.href) return;
+				emit(doc.href, doc);
+			},
+			reduce: false
+		};
+
+		db.query(linkMapReduce, { descending: true, key: req.query.href }, function(err, links) {
+			res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
+			res.end([
+				'<p class="title"><span class="glyphicon glyphicon-bookmark"></span> Semantic Links</p>',
+				'<p>'+links.rows.map(function(item) {
+					return '<a href="httpl://'+req.host+'/edit/'+item.value._id+'" target="_content">'+item.value.rel+'</a>';
+				}).join(', ')+'</p>',
+				'<p><a class="btn btn-sm btn-default action glyphbg glyphicon-plus" href="httpl://'+req.host+'/edit/new?href='+encodeURIComponent(req.query.href)+'" target="_card_group">add relationship</a></p>',
+			].join(''));
+		});
+	});
+});
+
+server.route('/edit/:id', function(link, method) {
+	link({ href: '/{?folder}', rel: 'via service collection gwr.io/folder', id: 'href', title: 'Link System' });
+	link({ href: '/edit', rel: 'up', id: 'edit', title: 'Edit Interface' });
+	link({ href: '/edit/:id', rel: 'self', id: ':id', title: 'Edit :id' });
+
+	method('GET', function(req, res) {
+		var accept = local.preferredType(req, 'text/html');
+		if (!accept) throw 406;
+
+		var id = req.pathArgs.id;
+		if (id == 'new') {
+			if (!req.query.rel) {
+				// Need to select a reltype
+				var localHosts = local.getServers();
+				var responses_ = [], domains = [];
+				for (var domain in localHosts) {
+					if (domain == 'hosts')
+						continue;
+					domains.push(domain);
+					responses_.push(local.dispatch({ method: 'HEAD', url: 'httpl://'+domain }));
+				}
+				local.promise.bundle(responses_).then(function(ress) {
+					var html = '';
+					ress.forEach(function(res2, i) {
+						var selfLink = local.queryLinks(res2, { rel: 'self' })[0];
+						var relLinks = local.queryLinks(res2, { rel: 'gwr.io/rel' });
+						if (!relLinks.length) return;
+						if (!selfLink) selfLink = { title: domains[i] };
+						html += '<p class="title">'+selfLink.title + '</p>';
+						relLinks.forEach(function(link) {
+							var uri = 'httpl://'+req.host+'/edit/new'+
+								'?rel='+encodeURIComponent(link.href)+
+								'&rel_title='+encodeURIComponent(link.title)+
+								'&href='+encodeURIComponent(req.query.href);
+							html += '<p><a class="btn btn-sm btn-default" href="'+uri+'" target="_content">is a '+link.title+'</a> <small class="text-muted">'+link.href+'</small></p>';
+						});
+					});
+					res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
+					res.end(html);
+				});
+			} else if (req.query.for === 0) {
+				var uri = 'httpl://'+req.host+'/edit/new'+
+					'?rel='+encodeURIComponent(req.query.rel)+
+					'&rel_title='+encodeURIComponent(req.query.rel_title)+
+					'&href='+encodeURIComponent(req.query.href);
+				res.writeHead(200, 'Ok', { 'content-type': 'text/html' }).end([
+					// :TODO: load this from somewhere dynamic
+					'<p><a class="btn btn-sm btn-default" href="'+uri+'&for=Family" target="_content">for Family</a> <small class="text-muted">nav:||files|gwr.io/friend</small></p>',
+					'<p><a class="btn btn-sm btn-default" href="'+uri+'&for=Friends" target="_content">for Friends</a> <small class="text-muted">nav:||files|gwr.io/friend</small></p>',
+					'<p><a class="btn btn-sm btn-default" href="'+uri+'&for=Your%20Network" target="_content">for Your Network</a> <small class="text-muted">nav:||network|gwr.io/users|item</small></p>',
+					'<p><a class="btn btn-sm btn-default" href="'+uri+'&for=Anybody" target="_content">for Anybody</a> <small class="text-muted">nav:||</small></p>',
+				].join(''));
+			} else {
+				local.HEAD(req.query.href).always(function(res2) {
+					var relTitle = req.query.rel_title || req.query.rel;
+					var selfLink = local.queryLinks(res2, { rel: 'self' })[0];
+					if (!selfLink) selfLink = { href: req.query.href, title: req.query.href };
+					res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
+					var uri = 'httpl://'+req.host+'/edit/new'+
+						'?rel='+encodeURIComponent(req.query.rel)+
+						'&rel_title='+encodeURIComponent(relTitle)+
+						'&href='+encodeURIComponent(selfLink.href);
+					var fortext = (req.query.for) ? (' for '+req.query.for) : ''; // :TODO: temporary until real "for" mechanism is done
+					res.end([
+						'<p class="title"><strong>'+selfLink.title+'</strong> is a '+relTitle+fortext+'</p>',
+						'<a class="btn btn-sm btn-default action glyphbg glyphicon-ok-sign" href="'+uri+'" method="PUT" target="_content">do it</a>',
+						((req.query.for) ? '' : '<a class="btn btn-sm btn-default action glyphbg glyphicon-lock" href="'+uri+'&for=0" target="_card_self">set audience</a>')
+					].join(''));
+				});
+			}
+		} else {
+			var uri = 'httpl://'+req.host+'/edit/'+id;
+			if (req.query.prompt == 'delete') {
+				res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
+				res.end([
+					'<p><strong>Are you sure?</strong></p>',
+					'<a class="btn btn-sm btn-default action glyphbg glyphicon-ok-sign" href="'+uri+'" method="DELETE" target="_content">delete it</a>'
+				].join(''));
+			} else {
+				db.get(id, function(err, doc) {
+					if (err && err.not_found) { return res.writeHead(404, 'Not Found').end(); }
+					if (err) { return res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err); }
+					delete doc._id; delete doc._rev; // clean up a bit
+					res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
+					res.end([
+						'<pre>'+(JSON.stringify(doc).replace(/</g, '&lt;').replace(/>/g, '&gt;'))+'</pre>',
+						'<a class="btn btn-sm btn-default action glyphbg glyphicon-remove-sign" href="'+uri+'?prompt=delete" target="_content">delete</a>'
+					].join(''));
+				});
+			}
+		}
+	});
+
+	method('PUT', function(req, res) {
+		var accept = local.preferredType(req, 'application/json');
+		if (!accept) { throw 406; }
+
+		if (!req.query.rel || !req.query.href) {
+			throw [400, { rel: 'Required', href: 'Required' }, {'content-type': 'application/json'}];
+		}
+		var id = req.pathArgs.id;
+
+		function fetchLink() {
+			local.HEAD(req.query.href).always(function(res2) {
+				// Find the self link
+				var selfLink = local.queryLinks(res2, { rel: 'self' })[0];
+				if (!selfLink) {
+					selfLink = { href: req.query.href, rel: '' };
+				}
+
+				// Standardize both rel and href
+				var rel = common.normalizeRel(req.query.rel);
+				selfLink.href = common.normalizeUri(req.query.href); // :NOTE: using the client-supplied href, not the self link's href
+				selfLink.href = local.UriTemplate.parse(selfLink.href).expand({});
+
+				// Add our new rel
+				if (!local.queryLink(selfLink, { rel: rel })) {
+					selfLink.rel = rel+' '+selfLink.rel; // up front so we know it's user-set
+				}
+
+				// Strip out non-URI rels
+				selfLink.rel = selfLink.rel.replace(/(^|\s)([^\.\/]*)(\s|$)/g, ' ').trim();
+				saveDoc(selfLink);
+			});
+		}
+
+		function saveDoc(doc) {
+			if (!doc._id) {
+				// :TODO: user current network id
+				doc._id = 'todo@grimwire.net' + ',' + Date.now() + ',' + Math.round(Math.random()*10000);
+			}
+			db.put(doc, function(err) {
+				if (err) return res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err);
+				return res.writeHead(200, 'Ok', { 'content-type': 'application/json' }).end({ done: true });
+			});
+		}
+
+		// Try to fetch link from DB, or do a HEAD request
+		if (id == 'new') {
+			fetchLink();
+		} else {
+			db.get(id, function(err, doc) {
+				if (!err) return saveDoc(doc);
+				if (err.not_found) return fetchLink();
+				res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err);
+			});
+		}
+	});
+
+	method('DELETE', function(req, res) {
+		var id = req.pathArgs.id;
+		db.get(id, function(err, doc) {
+			if (err && err.not_found) { return res.writeHead(404, 'Not Found').end(); }
+			if (err) { return res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err); }
+			db.remove(doc, function(err) {
+				if (err) { return res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err); }
+				res.writeHead(204, 'Ok, no content').end();
+			});
+		});
+	});
+});
+
+function linkRoute(req, res) {
+	res.headers['link'] = [
+		{ href: '/{?folder}', rel: 'up service collection gwr.io/folder', id: 'href', title: 'Link System' }
+	];
+
+	if (req.method == 'HEAD' || req.method == 'GET') {
+		return GETlinkRoute(req, res);
+	}
+	res.writeHead(405, 'Bad Method').end();
+}
+
+function GETlinkRoute(req, res) {
+	db.get(decodeURIComponent(req.path.slice(1)), function(err, doc) {
+		if (err) {
+			if (err.status == 404) { return res.writeHead(404).end(); }
+			return res.writeHead(500, 'internal error', {'Content-Type': 'application/json'}).end(err);
+		}
+
+		// Add link to header
+		var href = doc.link.href;
+		if (href.indexOf('data:') === 0) {
+			doc.link.href = req.path; // dont put data URIs directly in - point to this route
+		}
+		doc.link.rel += ' self';
+		res.headers['link'].push(doc.link);
+
+		// Stop here for head requests
+		if (req.method == 'HEAD') { return res.writeHead(204).end(); }
+
+		// Generate response
+		var accept = local.preferredType(req, ['*/*']);
+		var body;
+		if (accept == 'application/json') {
+			body = doc;
+		} else {
+			if (href.indexOf('data:') === 0) {
+				var parts = href.split(',');
+				body = parts.slice(1).join(',');
+				var type = /:([A-z\/]+)/.exec(parts.slice(0,1));
+				if (type) { accept = type[1]; }
+			} else {
+				body = '<a href="'+href+'">'+doc.link.href+'</a>';
+			}
+		}
+		res.writeHead(200, 'OK', { 'Content-Type': accept }).end(body);
+	});
+}
+
+/*server.route('/', function(link, method) {
+	link({ href: '/{?type,folder}', rel: 'self service via collection mail.gwr.io/linkstore', id: 'linkstore', title: 'Link System' });
+	link({ href: '/{id}', rel: 'item mail.gwr.io/link', title: 'Lookup Link by ID', hidden: true });
+
+	function addHostsLinks(req, res) {
+		if (req.query.folder) { return true; }
+
+		var localHosts = local.getServers();
+		var responses_ = [];
+		var domains = [], links = [];
+		for (var domain in localHosts) {
+			if (domain == 'hosts' || domain == 'links')
+				continue;
+			domains.push(domain);
+			responses_.push(local.dispatch({ method: 'HEAD', url: 'httpl://'+domain }));
+		}
+
+		return local.promise.bundle(responses_).then(function(ress) {
+			ress.forEach(function(res, i) {
+				var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+				if (!selfLink) {
+					selfLink = { rel: 'service', id: domains[i], href: 'httpl://'+domains[i] };
+				}
+				selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\s)self(\s|$)/i, '') : 'service';
+				links.push(selfLink);
+			});
+
+			res.link(links);
+			return true;
+		});
+	}
+
+	method('HEAD', addHostsLinks, function() { return 204; });
+	method('GET', addHostsLinks, function(req, res) {
+		var accept = local.preferredType(req, ['text/html', 'application/json']);
+		if (!accept) throw 406;
+
+		if (accept == 'text/html') {
+			var query = { type: 'link' };
+			if (req.query.folder) query.folder = req.query.folder;
+			return local.dispatch({ url: 'httpl://'+req.host, query: req.query, Accept: 'application/json' })
+				.then(function(res2) {
+					var html = tmpl.folder({
+						folder: 'Link System / '+((req.query.folder) ? req.query.folder : '*'),
+						links: res2.body.rows,
+						base_uri: req.host,
+						last_sync: +localStorage.getItem('last_sync'),
+						has_session: true,
+						// has_session: !!relay.getUserId(), :TODO:
+					});
+					return [200, html, {'Content-Type': 'text/html'}];
+				})
+				.fail(function(res2) { console.error('Failed to fetch folders', req, res2); throw 502; });
+		}
+
+		var fn = { map: false, reduce: false }, opts = { descending: true };
+		if (req.query.type == 'folder') {
+			fn.map = function(doc) {
+				if (doc.is_deleted) { return; }
+				if (!doc.folders) { return; }
+				doc.folders.forEach(function(folder) {
+					emit(folder, 1);
+				});
+			};
+			fn.reduce = function(keys, values) {
+				return keys.length;
+			};
+		}
+		else { // type == 'link'
+			if (req.query.folder) {
+				fn.map = function(doc) {
+					if (doc.is_deleted) { return; }
+					if (!doc.folders) { return; }
+					doc.folders.forEach(function(folder) {
+						emit([folder, doc.date], doc);
+					});
+				};
+				opts.startkey = [req.query.folder];
+				opts.endkey = [req.query.folder, {}];
+			} else {
+				fn.map = function(doc) {
+					if (doc.is_deleted) { return; }
+					doc.folders.forEach(function(folder) {
+						emit([folder, doc.date], doc);
+					});
+				};
+			}
+		}
+
+		var p = local.promise();
+		db.query(fn, opts, function(err, r) {
+			if (err) { return p.reject([500, err]); }
+			p.fulfill([200, { rows: r.rows }, { 'Content-Type': 'application/json' }]);
+		});
+		return p;
+	});
+
+	method('POST', function(req, res) {
+		// Validate request
+		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded'] });
+		var body = req.body || {}, errors = {};
+		if (!body.folders) { errors.folders = 'Required.'; }
+		if (!body.link || !body.link.href || typeof body.link.href != 'string') { errors.link = 'Required.'; }
+		if (Object.keys(errors).length > 0) { throw [422, errors]; }
+
+		// Massage data
+		if (!Array.isArray(body.folders)) body.folders = [body.folders];
+
+		// Construct record
+		var msg = {
+			folders: body.folders,
+			author: common.getSessionEmail(),
+			date: Date.now(),
+			is_read: true, // dont show as unread in the outbox
+			link: body.link
+		};
+		if (body.thread_id) { msg.thread_id = body.thread_id; }
+		if (body.parent_id) { msg.parent_id = body.parent_id; }
+
+		// Add to folder
+		return common.addMessage(db, msg).then(function() { return 204; });
+	});
+
+	// :TODO: - reenable when the dust settles
+	/*method('SYNC', common.getDb, function(req, res) {
+		var accept = local.preferredType(req, ['text/plain', 'text/event-stream']);
+		var successes = 0;
+
+		// For now, only allow on the inbox
+		if (req.pathArgs.db != 'inbox') throw 403;
+
+		// Get sources
+		var sources = common.getSources();
+		if (!sources.length) {
+			return res.writeHead(204).end();
+		}
+
+		// Handler for received data
+		function handleNewMessages(res2) {
+			if (res2.status != 200 || !res2.body) return;
+			successes++;
+
+			// Collect received docs into a bulk update
+			var docs = res2.body.results.map(function(result) {
+				delete result.doc._rev; // Strip _rev so that only additions come in
+				result.doc.is_read = false;
+				return result.doc;
+			});
+			if (docs.length === 0) {
+				if (accept == 'text/event-stream') {
+					res.write({ event: 'srcend', data: { sourceIndex: res2.sourceIndex } });
+				}
+				return res2;
+			}
+			db.bulkDocs({ docs: docs }, function(err) {
+				if (err) { console.error('Failed to add docs', err); }
+				if (accept == 'text/event-stream') {
+					res.write({ event: 'srcupdate', data: { sourceIndex: res2.sourceIndex } });
+					res.write({ event: 'srcend', data: { sourceIndex: res2.sourceIndex } });
+				}
+			});
+
+			return res2;
+		}
+
+		// Handler for unreachable contact
+		function handleFail(res2) {
+			if (accept == 'text/event-stream') {
+				res.write({ event: 'srcfail', data: { sourceIndex: res2.sourceIndex } });
+			}
+			throw res2;
+		}
+
+		// Setup event stream
+		if (accept == 'text/event-stream') {
+			res.writeHead(200, 'ok', { 'content-type': 'text/event-stream' });
+		}
+
+		// Fetch changes for each source
+		relay.agent().head().then(function(res2) {
+			var ress_ = [];
+			sources.forEach(function(source, sourceIndex) {
+				// Get the links for this source
+				var links = local.queryLinks(res2, {
+					rel: 'mail.gwr.io',
+					host_user: source.host_user,
+					host_relay: source.host_relay,
+					host_app: window.location.hostname
+				});
+
+				// Pull changes from each device
+				var deviceLinks = {};
+				links.forEach(function(link) {
+					// Reduce to 1 pull per device
+					var deviceSid = link.host_sid - link.host_sid % 100;
+					if (deviceLinks[deviceSid]) { return; }
+					deviceLinks[deviceSid] = true;
+
+					// Fetch changes
+					console.log('syncing with', link.href);
+					if (accept == 'text/event-stream') {
+						res.write({ event: 'srcstart', data: { sourceIndex: sourceIndex } });
+					}
+					var res_ = local.agent(link.href)
+						.follow({ rel: 'mail.gwr.io/changes', id: 'outbox' })
+						.get({ timeout: 15000 })
+						.then(
+							function(res3) {
+								// Tag the result with the source index so it can update
+								res3.sourceIndex = sourceIndex;
+								console.debug('data from', link.href, res3.status, res3.body);
+								return res3;
+							},
+							function(res3) { res3.sourceIndex = sourceIndex; throw res3; }
+						)
+						.then(handleNewMessages)
+						.fail(handleFail);
+					ress_.push(res_);
+				});
+				if (accept == 'text/event-stream') {
+					res.write({ event: 'started' });
+				}
+			});
+
+			// Handle finish
+			local.promise.bundle(ress_).always(function() {
+				// Update the sync time if there were any successful updates
+				if (successes > 0) {
+					localStorage.setItem('last_sync', Date.now());
+				}
+
+				// Finish the response
+				if (accept != 'text/event-stream') {
+					res.writeHead(204);
+				} else {
+					res.write({ event: 'end' });
+				}
+				res.end();
+			});
+		});
+	});
+});
+
+server.route('/:id', function(link, method) {
+	link({ href: '/{?folder}', rel: 'up service via collection mail.gwr.io/linkstore', id: 'linkstore', title: 'Link System' });
+	link({ href: '/:id', rel: 'self item mail.gwr.io/link', id: ':id' });
+
+	method('GET', function(req, res) {
+		var accept = local.preferredType(req, ['text/html', 'application/json']);
+		if (!accept) throw 406;
+
+		var p = local.promise();
+		db.get(decodeURIComponent(req.pathArgs.id), function(err, doc) {
+			if (err) { return p.reject([500, err]); }
+
+			var body;
+			if (accept == 'text/html') {
+				if (doc.link.href.indexOf('data:') == 0) {
+					body = doc.link.href.split(',').slice(1).join(',');
+				} else {
+					body = '<a href="'+doc.link.href+'">'+doc.link.href+'</a>';
+				}
+			} else {
+				body = { item: doc, folder: req.pathArgs.db };
+			}
+			p.fulfill([200, body, { 'Content-Type': accept }]);
+		});
+		return p;
+	});
+
+	method('MOVE', function(req, res) {
+		req.assert({ type: 'application/json' });
+		if (req.body && typeof req.body == 'string' || Array.isArray(req.body)) {
+			return common.updateDoc(db, req.pathArgs.id, { folders: req.body });
+		}
+		throw [422, { _body: 'Required.' }];
+	});
+
+	method('DELETE', function(req, res) {
+		return common.updateDoc(db, req.pathArgs.id, { is_deleted: true });
+	});
+
+	method('MARKREAD',function(req, res) {
+		return common.updateDoc(db, req.pathArgs.id, { is_read: true });
+	});
+
+	method('MARKUNREAD', function(req, res) {
+		return common.updateDoc(db, req.pathArgs.id, { is_read: false });
+	});
+});*/
+},{"./common":1}],5:[function(require,module,exports){
+var common = require('./common');
+
 // Page state
 // ==========
+
 var _session = null, _session_;
 var _users = {};
 var _session_user = null;
-
-
-// Backend Interop
-// ===============
 
 // APIs
 var serviceUA = local.agent(window.location.protocol+'//'+window.location.host);
 var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
+var feedUA = local.agent('httpl://feed');
+
+// Setup
+// =====
+
+feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
+common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
+
+// So PouchDB can target locals
+local.patchXHR();
+Pouch.adapter('httpl', Pouch.adapters['http']);
+
+// Traffic logging
+local.setDispatchWrapper(function(req, res, dispatch) {
+	dispatch(req, res).then(
+		function() { console.log(req, res); },
+		function() { console.error(req, res); }
+	);
+});
+
+// Servers
+local.addServer('href', require('./href'));
+local.addServer('explorer', require('./explorer'));
+local.addServer('feed', require('./feed'));
+local.addServer('workers', require('./workers'));
+
+// Dropdown behaviors
+$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
+$('body').on('click', function() { $('.dropdown').removeClass('open'); });
+
+// Collapsible panels
+$(document).ready(function () {
+	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+});
+
+// Request events
+local.bindRequestEvents(document.body);
+document.body.addEventListener('request', function(e) {
+	common.dispatchRequest(e.detail, e.target);
+});
+
+
+// Backend Interop
+// ===============
 
 // Load session
 _session_ = sessionUA.get({ Accept: 'application/json' });
@@ -46,7 +1221,7 @@ function loadActiveUsers() {
 }
 loadActiveUsers();
 
-// Users refresh on tab focus
+// Refresh users on tab focus
 (function() {
 	var lastRefresh = Date.now();
 	window.onfocus = function() {
@@ -57,7 +1232,7 @@ loadActiveUsers();
 	};
 })();
 
-// Request error handling
+// Standard request error handler for our host
 function handleFailedRequest(res) {
 	if (res.status == 401) {
 		// session lost
@@ -66,8 +1241,9 @@ function handleFailedRequest(res) {
 	}
 }
 
-// UI
-// ==
+
+// UI Behaviors
+// ============
 
 // Cache selectors and templates
 var $active_links = $('#active-links');
@@ -170,6 +1346,8 @@ function updateGuestSlotsCB(d_streams) {
 
 
 // Avatars
+// =======
+
 (function() {
 	var arr=[];
 	var nAvatars = _avatars.length;
@@ -202,7 +1380,10 @@ $('.avatars a').on('click', function() {
 	return false;
 });
 
-// Rendering helpers
+
+// Rendering Helpers
+// =================
+
 function renderLinkRow(link) {
 	var urld = local.parseUri(link.href);
 	var peerd = local.parsePeerDomain(urld.authority);
@@ -271,3 +1452,397 @@ function renderAll() {
 	renderUserConnections();
 }
 renderAll();
+},{"./common":1,"./explorer":2,"./feed":3,"./href":4,"./workers":6}],6:[function(require,module,exports){
+// workers
+// =======
+
+var common = require('./common');
+
+// constants
+var default_script_src = "importScripts('http://syncmaildev.grimwire.com/js/local.js');\nimportScripts('http://syncmaildev.grimwire.com/js/servware.js');\n\nvar server = servware();\nlocal.worker.setServer(server);\n\nserver.route('/', function(link, method) {\n    link({ href: '/', rel: 'self via service', title: 'Hello World Worker' });\n\n    method('GET', function(req, res) {\n        return [200, 'Hello, world!'];\n    });\n});";
+var whitelist = [ // a list of global objects which are allowed in the worker
+	'null', 'self', 'console', 'atob', 'btoa',
+	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+	'Proxy',
+	'importScripts',
+	'postMessage', 'addEventListener', 'removeEventListener',
+	'onmessage', 'onerror'
+];
+var bootstrap_src = "(function(){ var nulleds=[]; var whitelist = ['"+whitelist.join("', '")+"']; for (var k in self) { if (whitelist.indexOf(k) === -1) { Object.defineProperty(self, k, { value: null, configurable: false, writable: false }); nulleds.push(k); }} console.log('Nullified: '+nulleds.join(', ')); })();\n";
+
+// state
+var installed_workers;// = [/* string* */] loaded from local storage
+var active_workers = {/* name -> WorkerServer */};
+var active_editors = {/* name -> data */};
+var editor_id_counter = 0;
+var the_active_editor = 0;
+var $ace_editor_el = $('#ace');
+
+// load editor
+$(window).resize(function () {
+	for (var k in active_editors) {
+		active_editors[k].$div.height($(window).height() - active_editors[k].$div.offset().top);
+	}
+});
+
+// load workers
+try { installed_workers = JSON.parse(localStorage.getItem('workers')) || []; }
+catch(e) {}
+installed_workers.forEach(function(name) {
+	local.dispatch({ method: 'OPEN', url: 'httpl://workers/ed?name='+name });
+});
+if (installed_workers.length === 0) {
+	local.dispatch({ method: 'NEW', url: 'httpl://workers/ed' });
+}
+renderEditorChrome();
+
+
+// App Local Server
+// -
+var app_local_server = servware();
+module.exports = app_local_server;
+
+// root
+app_local_server.route('/', function(link, method) {
+	link({ href: '/', rel: 'self service', id: 'workers', title: 'Worker Programs' });
+	link({ href: '/w', rel: 'collection', id: 'w', title: 'Installed' });
+	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors' });
+
+	method('GET', function() {
+		return 204;
+	});
+});
+
+// editor collection
+app_local_server.route('/ed', function(link, method) {
+	link({ href: '/', rel: 'via up service', id: 'workers', title: 'Worker Programs' });
+	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
+	link({ href: '/ed/{id}', rel: 'item' });
+
+	// ui methods
+
+	method('NEW', function(req, res) {
+		// Hide current editor
+		if (active_editors[the_active_editor]) {
+			active_editors[the_active_editor].$div.hide();
+		}
+
+		// Alocate id
+		the_active_editor = editor_id_counter++;
+
+		// Create new editor div
+		$ace_editor_subdiv = $('<div id="ace-'+the_active_editor+'">'+default_script_src+'</div>');
+		$ace_editor_el.append($ace_editor_subdiv);
+		$ace_editor_subdiv.height($(window).height() - $ace_editor_el.offset().top);
+
+		// Create new ace editor
+		var ace_editor = ace.edit('ace-'+the_active_editor);
+		ace_editor.setTheme("ace/theme/textmate");
+		ace_editor.getSession().setMode("ace/mode/javascript");
+
+		// Store
+		active_editors[the_active_editor] = {
+			name: null,
+			url: null,
+			ua: null,
+			$div: $ace_editor_subdiv,
+			ace_editor: ace_editor
+		};
+		renderEditorChrome();
+		return 204;
+		/*the_active_editor = editor_id_counter++;
+		active_editors[the_active_editor] = {
+			name: null,
+			url: null,
+			ua: null,
+			ace_session: ace.createEditSession(default_script_src, 'ace/mode/javascript')
+		};
+		ace_editor.setSession(active_editors[the_active_editor].ace_session);
+		renderEditorChrome();
+		return 204;*/
+	});
+
+	method('OPEN', function(req, res) {
+		var url = req.query.url, name = req.query.name;
+		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
+		if (!url) url = prompt('Enter the URL of the script');
+		if (!url) throw 404;
+		if (!name) name = url.split('/').slice(-1)[0];
+		if (name.slice(-3) != '.js') name = name + '.js';
+
+		return local.GET({ url: url, Accept: 'application/javascript' })
+			.then(function(res) {
+				// Hide current editor
+				if (active_editors[the_active_editor]) {
+					active_editors[the_active_editor].$div.hide();
+				}
+
+				// Alocate id
+				the_active_editor = editor_id_counter++;
+
+				// Create new editor div
+				res.body = common.escape(res.body.replace(/&/g, '&amp;'));
+				$ace_editor_subdiv = $('<div id="ace-'+the_active_editor+'">'+res.body+'</div>');
+				$ace_editor_el.append($ace_editor_subdiv);
+				$ace_editor_subdiv.height($(window).height() - $ace_editor_el.offset().top);
+
+				// Create new ace editor
+				var ace_editor = ace.edit('ace-'+the_active_editor);
+				ace_editor.setTheme("ace/theme/textmate");
+				ace_editor.getSession().setMode("ace/mode/javascript");
+
+				// Store
+				active_editors[the_active_editor] = {
+					name: name,
+					url: url,
+					ua: local.agent(url),
+					$div: $ace_editor_subdiv,
+					ace_editor: ace_editor
+				};
+				renderEditorChrome();
+				return 204;
+
+				/*the_active_editor = editor_id_counter++;
+				active_editors[the_active_editor] = {
+					name: name,
+					url: url,
+					ua: local.agent(url),
+					ace_session: ace.createEditSession(''+res.body, 'ace/mode/javascript')
+				};
+				ace_editor.setSession(active_editors[the_active_editor].ace_session);
+				renderEditorChrome();
+				return 204;*/
+			})
+			.fail(function(res) {
+				alert('Failed to load script: '+res.status+' '+res.reason);
+				console.error('Failed to fetch script', res);
+				throw 502;
+			});
+	});
+
+	method('SAVE', function(req, res) {
+		var ed = active_editors[the_active_editor];
+		if (!ed) { throw 404; }
+
+		if (!ed.name || req.query.rename == 1) {
+			var oldname = ed.name, newname;
+			while (true) {
+				newname = prompt('Enter a name for this worker:', (oldname||''));
+				if (!newname) throw 404; // no value given, abort
+				if (newname.slice(-3) != '.js') newname = newname + '.js'; // make sure ends with .js
+				if (newname != oldname && installed_workers.indexOf(newname) !== -1) {
+					if (confirm('The worker "'+newname+'" already exists. Overwrite it?'))
+						break; // a good name
+				} else
+					break; // a good name
+			}
+			ed.name = newname;
+			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(common.escape(newname));
+			ed.ua = local.agent(ed.url);
+		}
+
+		return ed.ua.PUT(ed.ace_editor.getValue()||'', { Content_Type: 'application/javascript' })
+			.then(function(res) { renderEditorChrome(); return 204; })
+			.fail(function(res) {
+				console.error('Failed to store script', res);
+				throw 502;
+			});
+	});
+
+	method('CLOSE', function(req, res) {
+		if (!active_editors[the_active_editor]) throw 404;
+		active_editors[the_active_editor].ace_editor.destroy();
+		active_editors[the_active_editor].$div.remove();
+		delete active_editors[the_active_editor];
+
+		new_active_editor = Object.keys(active_editors).slice(-1)[0];
+		local.dispatch({ method: 'SHOW', url: 'httpl://'+req.host+'/ed/'+new_active_editor });
+
+		return 204;
+	});
+
+	method('START', function(req, res) {
+		if (!active_editors[the_active_editor]) throw 404;
+		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
+			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START' }); })
+			.then(function() { renderEditorChrome(); return 204; })
+			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
+	});
+
+	method('STOP', function(req, res) {
+		if (!active_editors[the_active_editor]) throw 404;
+		return active_editors[the_active_editor].ua.dispatch({ method: 'STOP' })
+			.then(function(res) { renderEditorChrome(); return 204; })
+			.fail(function(res) { console.error('Failed to stop worker', req, res); throw 502; });
+	});
+});
+
+// editor item
+app_local_server.route('/ed/:id', function(link, method) {
+	link({ href: '/', rel: 'via service', id: 'workers', title: 'Worker Programs' });
+	link({ href: '/ed', rel: 'up collection', id: 'ed', title: 'Editors' });
+	link({ href: '/ed/:id', rel: 'self item', id: ':id', title: 'Editor :id' }); // :TODO: uri templates
+
+	// UI methods
+
+	method('SHOW', function(req, res) {
+		var id = req.pathArgs.id;
+		if (!active_editors[id]) { throw 404; }
+		if (active_editors[the_active_editor])
+			active_editors[the_active_editor].$div.hide();
+		the_active_editor = +id;
+		active_editors[the_active_editor].$div.show();
+		renderEditorChrome();
+		return 204;
+
+		/*var id = req.pathArgs.id;
+		if (!active_editors[id]) { throw 404; }
+		the_active_editor = +id;
+		ace_editor.setSession(active_editors[id].ace_session);
+		renderEditorChrome();
+		return 204;*/
+	});
+});
+
+// worker collection
+app_local_server.route('/w', function(link, method) {
+	link({ href: '/', rel: 'via up service', id: 'programs', title: 'Worker Programs' });
+	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
+	link({ href: '/w/{id}', rel: 'item' });
+});
+
+// worker item
+app_local_server.route('/w/:id', function(link, method) {
+	link({ href: '/', rel: 'via service', id: 'programs', title: 'Worker Programs' });
+	link({ href: '/w', rel: 'up collection', id: 'w', title: 'Installed' });
+	link({ href: '/w/:id', rel: 'self item', id: ':id', title: 'Worker: :id' });
+
+	// CRUD methods
+
+	method('GET', function(req, res) {
+		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
+		res.setHeader('Content-Type', 'application/javascript');
+		return [200, localStorage.getItem('worker_'+req.pathArgs.id) || ''];
+	});
+
+	method('PUT', function(req, res) {
+		var name = req.pathArgs.id;
+		req.assert({ type: ['application/javascript', 'text/javascript', 'text/plain'] });
+		localStorage.setItem('worker_'+name, req.body || '');
+		if (installed_workers.indexOf(name) === -1) {
+			installed_workers.push(name);
+			localStorage.setItem('workers', JSON.stringify(installed_workers));
+		}
+		return 204;
+	});
+
+	method('DELETE', function(req, res) {
+		var name = req.pathArgs.id;
+
+		// stop worker
+		local.dispatch({ method: 'STOP', url: 'programs/w/'+name });
+
+		// update listing
+		var name_index = installed_workers.indexOf(name);
+		if (name_index !== -1) {
+			installed_workers.splice(name_index, 1);
+			localStorage.setItem('workers', JSON.stringify(installed_workers));
+		}
+
+		// update script
+		localStorage.removeItem('worker_'+name);
+
+		return 204;
+	});
+
+	// Worker control methods
+
+	method('START', function(req, res) {
+		var name = req.pathArgs.id;
+
+		// Unload script if active
+		if (active_workers[name]) {
+			active_workers[name].terminate();
+			local.removeServer(name);
+		}
+
+		// (Try to) Load script from localstorage
+		var script = localStorage.getItem('worker_'+name) || '';
+
+		// Prepend bootstrap script and convert to a URI
+		// var src = 'data:text/javascript;charset=US-ASCII,' + encodeURIComponent(script);
+		// ^ https://code.google.com/p/chromium/issues/detail?id=270979
+		var scriptblob = new Blob([bootstrap_src+'(function(){'+script+'})();']);
+		var src = URL.createObjectURL(scriptblob);
+
+		// Spawn server
+		active_workers[name] = local.spawnWorkerServer(src, { domain: name }, worker_remote_server);
+		// active_workers[name].getPort().addEventListener('error', onError, false); ?
+
+		return 204;
+	});
+
+	method('STOP', function(req, res) {
+		var name = req.pathArgs.id;
+
+		// Unload script if active
+		if (active_workers[name]) {
+			active_workers[name].terminate();
+			local.removeServer(name);
+		}
+		delete active_workers[name];
+
+		return 204;
+	});
+});
+
+
+// Worker Remote Server
+// -
+var worker_remote_server = function(req, res, worker) {
+	if (!req.query.uri) {
+		res.setHeader('Link', [
+			{ href: '/', rel: 'self service', id: 'host', title: 'Host Application' },
+			{ href: 'httpl://0.page?uri=httpl://links{&target}', rel: 'service', id: 'links', title: 'Link System' }
+		]);
+		return res.writeHead(204).end();
+	}
+
+	// :TODO: for now, simple pass-through proxy into the local namespace
+	req.on('end', function() {
+		var req2 = local.util.deepClone(req);
+		req2.url = req.query.uri;
+		req2.body = req.body;
+		delete req2.query.uri;
+		if (req2.query.target) {
+			req2.target = req2.query.target;
+			delete req2.query.target;
+		}
+		local.pipe(res, common.dispatchRequest(req2, worker));
+	});
+};
+
+
+// Helpers
+// -
+
+function renderEditorChrome() {
+	var html = '';
+	for (var k in active_editors) {
+		var name = (active_editors[k].name) ? common.escape(active_editors[k].name) : 'untitled';
+		var active = (the_active_editor === +k) ? 'active' : '';
+		var glyph = '';
+		if (active_workers[name])
+			glyph = '<b class="glyphicon glyphicon-play"></b> ';
+		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
+	}
+	$('#worker-open-dropdown').html([
+		'<li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>',
+		installed_workers.map(function(name) {
+			return '<li><a method="OPEN" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+common.escape(name)+'</a></li>';
+		}).join('')
+	].join(''));
+    $('#worker-editor > .nav-tabs').html(html);
+}
+},{"./common":1}]},{},[5])
+;
