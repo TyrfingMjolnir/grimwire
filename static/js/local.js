@@ -852,8 +852,11 @@ local.queryLink = function queryLink(link, query) {
 		else {
 			if (typeof link[attr] == 'undefined') {
 				// Attribute not explicitly set -- is it present in the href as a URI token?
-				if (RegExp('\\{[^\\}]*'+attr+'[^\\{]*\\}','i').test(link.href) === false)
-					return false;
+				if (RegExp('\\{[^\\}]*'+attr+'[^\\{]*\\}','i').test(link.href) === true)
+					continue;
+				// Is the test value not falsey?
+				if (!!query[attr])
+					return false; // specific value needed
 			}
 			else {
 				if (query[attr] && query[attr].indexOf && query[attr].indexOf('!') === 0) { // negation
@@ -1645,18 +1648,6 @@ function Request(options) {
 	if (typeof options == 'string')
 		options = { url: options };
 
-	// If there are any fully-uppercase keys, treat it like the method/url pair
-	if (!options.method && !options.url) {
-		for (var k in options) {
-			if (k.toUpperCase() == k) {
-				options.method = k;
-				options.url = options[k];
-				delete options[k];
-				break;
-			}
-		}
-	}
-
 	// Pull any header-like keys into the headers object
 	var headers = options.headers || {};
 	extractUppercaseKeys(options, headers); // Foo_Bar or Foo-Bar
@@ -1667,7 +1658,6 @@ function Request(options) {
 	this.host = options.host || null;
 	this.query = options.query || {};
 	this.headers = lowercaseKeys(headers);
-	this.body = '';
 
 	// Guess the content-type if a full body is included in the message
 	if (options.body && !this.headers['content-type']) {
@@ -1686,7 +1676,7 @@ function Request(options) {
 		writable: true
 	});
 	Object.defineProperty(this, 'body', {
-		value: '',
+		value: options.body || '',
 		configurable: true,
 		enumerable: false,
 		writable: true
@@ -3108,13 +3098,13 @@ WorkerBridgeServer.prototype.onWorkerLog = function(message) {
 			opts.rel = 'self';
 			api = api.follow(opts);
 		}
-		return api.get({ accept: 'application/json' });
+		return api.get({ Accept: 'application/json' });
 	};
 
 	// Fetches a user from p2pw service
 	// - `userId`: string
 	Relay.prototype.getUser = function(userId) {
-		return this.usersCollection.follow({ rel: 'gwr.io/user', id: userId }).get({ accept: 'application/json' });
+		return this.usersCollection.follow({ rel: 'gwr.io/user', id: userId }).get({ Accept: 'application/json' });
 	};
 
 	// Sends (or stores to send) links in the relay's registry
@@ -3750,14 +3740,16 @@ local.dispatch = function dispatch(request) {
 	// Create the request if needed
 	var body = null, shouldAutoSendRequestBody = false;
 	if (!(request instanceof local.Request)) {
-		body = request.body;
-		shouldAutoSendRequestBody = true; // we're going to end()
+		shouldAutoSendRequestBody = true; // we're going to end() because we were given a object literal
 
 		var timeout = request.timeout;
 		request = new local.Request(request);
 		if (timeout) { request.setTimeout(timeout); } // :TODO: should this be in the request constructor?
-	}
 
+		// pull out body for us to send
+		body = request.body;
+		request.body = '';
+	}
 	if (!request.url) { throw new Error("No url on request"); }
 
 	// If given a nav: scheme, spawn a agent to handle it
@@ -3765,7 +3757,9 @@ local.dispatch = function dispatch(request) {
 	if (scheme == 'nav') {
 		var url = request.url;
 		delete request.url;
-		return local.agent(url).dispatch(request);
+		var response_ = local.agent(url).dispatch(request);
+		if (shouldAutoSendRequestBody) request.end(body);
+		return response_;
 	}
 
 	// Prep request
@@ -3911,7 +3905,40 @@ function parseScheme(url) {
 			return 'httpl';
 	}
 	return schemeMatch[1];
-}// Events
+}
+
+
+(function() {
+function makeDispSugar(method) {
+	return function(options) {
+		var req = options || {};
+		if (typeof req == 'string') {
+			req = { url: req };
+		}
+		req.method = method;
+		return this.dispatch(req);
+	};
+}
+function makeDispWBodySugar(method) {
+	return function(body, options) {
+		var req = options || {};
+		if (typeof req == 'string') {
+			req = { url: req };
+		}
+		req.method = method;
+		req.body = body;
+		return this.dispatch(req);
+	};
+}
+local.SUBSCRIBE = makeDispSugar('SUBSCRIBE');
+local.HEAD      = makeDispSugar('HEAD');
+local.GET       = makeDispSugar('GET');
+local.DELETE    = makeDispSugar('DELETE');
+local.POST      = makeDispWBodySugar('POST');
+local.PUT       = makeDispWBodySugar('PUT');
+local.PATCH     = makeDispWBodySugar('PATCH');
+local.NOTIFY    = makeDispWBodySugar('NOTIFY');
+})();// Events
 // ======
 
 // subscribe()
@@ -5333,17 +5360,15 @@ Agent.prototype.lookupLink = function(context) {
 // Dispatch Sugars
 // ===============
 function makeDispSugar(method) {
-	return function(headers, options) {
+	return function(options) {
 		var req = options || {};
-		req.headers = headers || {};
 		req.method = method;
 		return this.dispatch(req);
 	};
 }
 function makeDispWBodySugar(method) {
-	return function(body, headers, options) {
+	return function(body, options) {
 		var req = options || {};
-		req.headers = headers || {};
 		req.method = method;
 		req.body = body;
 		return this.dispatch(req);
@@ -5391,7 +5416,7 @@ local.addServer('hosts', function(req, res) {
 
 	var responses_ = [];
 	var domains = [], links = [];
-	links.push({ href: '/', rel: 'self service via', id: 'hosts' });
+	links.push({ href: '/', rel: 'self service via', id: 'hosts', title: 'Page' });
 	for (var domain in localHosts) {
 		if (domain == 'hosts')
 			continue;
@@ -5405,7 +5430,7 @@ local.addServer('hosts', function(req, res) {
 			if (!selfLink) {
 				selfLink = { rel: 'service', id: domains[i], href: 'httpl://'+domains[i] };
 			}
-			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\s)self(\s|$)/i, '') : 'service';
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
 			links.push(selfLink);
 		});
 

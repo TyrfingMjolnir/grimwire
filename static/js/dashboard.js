@@ -14,7 +14,7 @@ var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
 
 // Load session
-_session_ = sessionUA.get({ accept: 'application/json' });
+_session_ = sessionUA.get({ Accept: 'application/json' });
 _session_.then(setSession);
 function setSession(res) {
 	// Update state
@@ -30,7 +30,7 @@ function setSession(res) {
 
 // Load active users
 function loadActiveUsers() {
-	usersUA.get({ accept: 'application/json' })
+	usersUA.get({ Accept: 'application/json' })
 		.then(
 			function(res) {
 				_users = res.body.rows;
