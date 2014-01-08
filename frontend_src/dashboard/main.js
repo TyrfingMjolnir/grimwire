@@ -12,16 +12,16 @@ var serviceURL = window.location.protocol+'//'+window.location.host;
 var serviceUA = local.agent(serviceURL);
 var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
-var feedUA = local.agent('httpl://feed');
+common.feedUA = local.agent('httpl://feed');
 
 // Setup
 // =====
 
-feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
+common.feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
-// local.patchXHR();
+local.patchXHR();
 Pouch.adapter('httpl', Pouch.adapters['http']);
 
 // Traffic logging
@@ -49,20 +49,67 @@ local.addServer(window.location.host, function(req, res) {
 	req.on('end', function() { req2.end(); });
 });
 
-// Dropdown behaviors
-$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
-$('body').on('click', function() { $('.dropdown').removeClass('open'); });
-
-// Collapsible panels
-$(document).ready(function () {
-	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
-});
-
 // Request events
 local.bindRequestEvents(document.body);
 document.body.addEventListener('request', function(e) {
 	common.dispatchRequest(e.detail, e.target);
 });
+
+// Network relay
+var relay = local.joinRelay(serviceURL);
+relay.setServer(function(req, res, peer) {
+	// Build link header
+	var links = [{ href: '/', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
+	if (relay.registeredLinks) {
+		links = links.concat(relay.registeredLinks);
+	}
+	res.setHeader('link', links);
+
+	// Home resource
+	if (req.path == '/') {
+		res.headers.link[0].rel += ' self';
+		return res.writeHead(204, 'OK, No Content').end();
+	}
+	res.headers.link[0].rel += ' via';
+
+	// Parse path
+	var path_parts = req.path.split('/');
+	var hostname = path_parts[1];
+	var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
+
+	// Only allow for published servers
+	var server = local.getServer(hostname);
+	if (!server) return res.writeHead(404, 'Not Found').end();
+	if (!server.context || !server.context.config || !server.context.config.on_network)
+		return res.writeHead(404, 'Not Found').end();
+
+	// Pass the request through
+	var req2 = new local.Request({
+		method: req.method,
+		url: url,
+		query: local.util.deepClone(req.query),
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+	local.pipe(res, local.dispatch(req2), function(headers) {
+		// Update links
+		if (headers.link) {
+			var links = local.httpHeaders.deserialize('link', headers.link);
+			links.forEach(function(link) {
+				if (!local.isAbsUri(link.href)) {
+					link.href = local.joinUri(hostname, link.href);
+				}
+				link.href = '/'+link.href;
+			});
+			headers.link = local.httpHeaders.deserialize('link', links);
+		}
+		console.log(headers);
+		return headers;
+	});
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
+});
+common.setupRelay(relay);
 
 
 // Backend Interop
@@ -73,9 +120,13 @@ _session_ = sessionUA.get({ Accept: 'application/json' });
 _session_.then(setSession);
 function setSession(res) {
 	// Update state
+	var first_time = (_session === null);
 	_session = res.body;
 	if (_users[_session.user_id]) {
 		_session_user = _users[_session.user_id];
+	}
+	if (first_time) {
+		relay.setAccessToken(_session.user_id+':using_cookie');
 	}
 
 	// Update UI
@@ -129,6 +180,15 @@ function handleFailedRequest(res) {
 var $active_links = $('#active-links');
 var $your_connections = $('#your-connections');
 var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
+
+// Dropdown behaviors
+$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
+$('body').on('click', function() { $('.dropdown').removeClass('open'); });
+
+// Collapsible panels
+$(document).ready(function () {
+	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+});
 
 // Change email link
 $('#change-email').on('click', function() {

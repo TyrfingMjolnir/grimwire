@@ -9,9 +9,14 @@ if (is_first_session) network_sid = genDeviceSid();
 // =========
 
 // Loadtime p2p setup
-// :TODO:
 common.setupRelay = function(relay) {
-	relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
+	common.relay = relay;
+	relay.on('accessGranted', function() { relay.startListening(); });
+	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
+	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
+	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
 	relay.on('accessGranted', function() {
 		relay.setSid(network_sid);
 		relay.startListening();
@@ -34,7 +39,7 @@ common.setupRelay = function(relay) {
 		} else {
 			console.log('Assumed existing network identity with sid:', network_sid);
 		}
-	});
+	});*/
 };
 
 
@@ -88,6 +93,36 @@ common.dispatchRequest = function(req, origin) {
 	// No special target? Simple dispatch
 	return local.dispatch(req);
 };
+
+// P2P Utilities
+// =============
+
+common.publishNetworkLinks = function() {
+	// Gather servers that are marked 'on_network'
+	var servers = local.getServers();
+	var domains = [];
+	for (var domain in servers) {
+		var server = servers[domain].context;
+		if (server && server.config && server.config.on_network) {
+			domains.push(domain);
+		}
+	}
+
+	// Fetch self links
+	var links = [];
+	local.promise.bundle(domains.map(local.HEAD.bind(local))).then(function(ress) {
+		common.relay.registerLinks(ress.map(function(res, i) {
+			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!selfLink) {
+				selfLink = { rel: 'service', id: domains[i] };
+			}
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
+			selfLink.href = '/'+domains[i]; // Overwrite href
+			return selfLink;
+		}));
+	});
+};
+
 
 // Database Utilities
 // ==================
@@ -391,16 +426,16 @@ module.exports = server;
 
 var _updates = [];
 
-Array.prototype.mapRev = function(cb) {
+function mapRev(arr, cb) {
 	var newarr = [];
-	for (var i=this.length-1; i >= 0; i--) {
-		newarr.push(cb(this[i], i));
+	for (var i=arr.length-1; i >= 0; i--) {
+		newarr.push(cb(arr[i], i));
 	}
 	return newarr;
-};
+}
 
 function render_updates() {
-	return _updates.mapRev(function(update) {
+	return mapRev(_updates, function(update) {
 		return update.html;
 	}).join('');
 }
@@ -1143,16 +1178,16 @@ var serviceURL = window.location.protocol+'//'+window.location.host;
 var serviceUA = local.agent(serviceURL);
 var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
-var feedUA = local.agent('httpl://feed');
+common.feedUA = local.agent('httpl://feed');
 
 // Setup
 // =====
 
-feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
+common.feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
-// local.patchXHR();
+local.patchXHR();
 Pouch.adapter('httpl', Pouch.adapters['http']);
 
 // Traffic logging
@@ -1180,20 +1215,67 @@ local.addServer(window.location.host, function(req, res) {
 	req.on('end', function() { req2.end(); });
 });
 
-// Dropdown behaviors
-$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
-$('body').on('click', function() { $('.dropdown').removeClass('open'); });
-
-// Collapsible panels
-$(document).ready(function () {
-	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
-});
-
 // Request events
 local.bindRequestEvents(document.body);
 document.body.addEventListener('request', function(e) {
 	common.dispatchRequest(e.detail, e.target);
 });
+
+// Network relay
+var relay = local.joinRelay(serviceURL);
+relay.setServer(function(req, res, peer) {
+	// Build link header
+	var links = [{ href: '/{?uri}', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
+	if (relay.registeredLinks) {
+		links = links.concat(relay.registeredLinks);
+	}
+	res.setHeader('link', links);
+
+	// Home resource
+	if (req.path == '/') {
+		res.headers.link[0].rel += ' self';
+		return res.writeHead(204, 'OK, No Content').end();
+	}
+	res.headers.link[0].rel += ' via';
+
+	// Parse path
+	var path_parts = req.path.split('/');
+	var hostname = path_parts[1];
+	var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
+
+	// Only allow for published servers
+	var server = local.getServer(hostname);
+	if (!server) return res.writeHead(404, 'Not Found').end();
+	if (!server.context || !server.context.config || !server.context.config.on_network)
+		return res.writeHead(404, 'Not Found').end();
+
+	// Pass the request through
+	var req2 = new local.Request({
+		method: req.method,
+		url: url,
+		query: local.util.deepClone(req.query),
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+	local.pipe(res, local.dispatch(req2), function(headers) {
+		// Update links
+		if (headers.link) {
+			var links = local.httpHeaders.deserialize('link', headers.link);
+			links.forEach(function(link) {
+				if (!local.isAbsUri(link.href)) {
+					link.href = local.joinUri(hostname, link.href);
+				}
+				link.href = '/'+link.href;
+			});
+			headers.link = local.httpHeaders.deserialize('link', links);
+		}
+		console.log(headers);
+		return headers;
+	});
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
+});
+common.setupRelay(relay);
 
 
 // Backend Interop
@@ -1204,9 +1286,13 @@ _session_ = sessionUA.get({ Accept: 'application/json' });
 _session_.then(setSession);
 function setSession(res) {
 	// Update state
+	var first_time = (_session === null);
 	_session = res.body;
 	if (_users[_session.user_id]) {
 		_session_user = _users[_session.user_id];
+	}
+	if (first_time) {
+		relay.setAccessToken(_session.user_id+':using_cookie');
 	}
 
 	// Update UI
@@ -1260,6 +1346,15 @@ function handleFailedRequest(res) {
 var $active_links = $('#active-links');
 var $your_connections = $('#your-connections');
 var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
+
+// Dropdown behaviors
+$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
+$('body').on('click', function() { $('.dropdown').removeClass('open'); });
+
+// Collapsible panels
+$(document).ready(function () {
+	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+});
 
 // Change email link
 $('#change-email').on('click', function() {
@@ -1761,6 +1856,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		// Spawn server
 		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
+		common.publishNetworkLinks();
 
 		return 204;
 	});
@@ -1774,6 +1870,7 @@ app_local_server.route('/w/:id', function(link, method) {
 			local.removeServer(name);
 		}
 		delete active_workers[name];
+		common.publishNetworkLinks();
 
 		return 204;
 	});
@@ -1785,7 +1882,7 @@ app_local_server.route('/w/:id', function(link, method) {
 var worker_remote_server = function(req, res, worker) {
 	if (!req.query.uri) {
 		res.setHeader('Link', [
-			{ href: '/', rel: 'self service', title: 'Host Application' },
+			{ href: '/{?uri}', rel: 'self service', title: 'Host Application' },
 			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
 		]);
 		return res.writeHead(204).end();
@@ -1794,7 +1891,7 @@ var worker_remote_server = function(req, res, worker) {
 	// :TODO: for now, simple pass-through proxy into the local namespace
 	var req2 = new local.Request({
 		method: req.method,
-		url: serviceURL+req.path,
+		url: req.query.uri,
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});

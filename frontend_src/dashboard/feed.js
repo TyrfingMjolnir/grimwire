@@ -9,16 +9,16 @@ module.exports = server;
 
 var _updates = [];
 
-Array.prototype.mapRev = function(cb) {
+function mapRev(arr, cb) {
 	var newarr = [];
-	for (var i=this.length-1; i >= 0; i--) {
-		newarr.push(cb(this[i], i));
+	for (var i=arr.length-1; i >= 0; i--) {
+		newarr.push(cb(arr[i], i));
 	}
 	return newarr;
-};
+}
 
 function render_updates() {
-	return _updates.mapRev(function(update) {
+	return mapRev(_updates, function(update) {
 		return update.html;
 	}).join('');
 }

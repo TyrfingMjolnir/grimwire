@@ -8,9 +8,14 @@ if (is_first_session) network_sid = genDeviceSid();
 // =========
 
 // Loadtime p2p setup
-// :TODO:
 common.setupRelay = function(relay) {
-	relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
+	common.relay = relay;
+	relay.on('accessGranted', function() { relay.startListening(); });
+	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
+	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
+	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
 	relay.on('accessGranted', function() {
 		relay.setSid(network_sid);
 		relay.startListening();
@@ -33,7 +38,7 @@ common.setupRelay = function(relay) {
 		} else {
 			console.log('Assumed existing network identity with sid:', network_sid);
 		}
-	});
+	});*/
 };
 
 
@@ -87,6 +92,36 @@ common.dispatchRequest = function(req, origin) {
 	// No special target? Simple dispatch
 	return local.dispatch(req);
 };
+
+// P2P Utilities
+// =============
+
+common.publishNetworkLinks = function() {
+	// Gather servers that are marked 'on_network'
+	var servers = local.getServers();
+	var domains = [];
+	for (var domain in servers) {
+		var server = servers[domain].context;
+		if (server && server.config && server.config.on_network) {
+			domains.push(domain);
+		}
+	}
+
+	// Fetch self links
+	var links = [];
+	local.promise.bundle(domains.map(local.HEAD.bind(local))).then(function(ress) {
+		common.relay.registerLinks(ress.map(function(res, i) {
+			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!selfLink) {
+				selfLink = { rel: 'service', id: domains[i] };
+			}
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
+			selfLink.href = '/'+domains[i]; // Overwrite href
+			return selfLink;
+		}));
+	});
+};
+
 
 // Database Utilities
 // ==================

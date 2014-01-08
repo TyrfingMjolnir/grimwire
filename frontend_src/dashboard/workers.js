@@ -295,6 +295,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		// Spawn server
 		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
+		common.publishNetworkLinks();
 
 		return 204;
 	});
@@ -308,6 +309,7 @@ app_local_server.route('/w/:id', function(link, method) {
 			local.removeServer(name);
 		}
 		delete active_workers[name];
+		common.publishNetworkLinks();
 
 		return 204;
 	});
@@ -319,7 +321,7 @@ app_local_server.route('/w/:id', function(link, method) {
 var worker_remote_server = function(req, res, worker) {
 	if (!req.query.uri) {
 		res.setHeader('Link', [
-			{ href: '/', rel: 'self service', title: 'Host Application' },
+			{ href: '/{?uri}', rel: 'self service', title: 'Host Application' },
 			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
 		]);
 		return res.writeHead(204).end();
@@ -328,7 +330,7 @@ var worker_remote_server = function(req, res, worker) {
 	// :TODO: for now, simple pass-through proxy into the local namespace
 	var req2 = new local.Request({
 		method: req.method,
-		url: serviceURL+req.path,
+		url: req.query.uri,
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
