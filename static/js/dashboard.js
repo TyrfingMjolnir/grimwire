@@ -312,14 +312,14 @@ server.route('/intro', function(link, method) {
 					'<p><span class="text-muted">What is it?</span></p>',
 					'<p>',
 						'Grimwire is a social runtime environment.',
-						'It connects user Web-servers that live in threads and in other tabs with the Web Worker and WebRTC APIs.',
+						'It connects user Web-servers that live in other threads and tabs with the Web Worker and WebRTC APIs.',
 						'Use it to publish services, datasets, and interfaces to other users.',
 					'</p>',
 					'<hr>',
 					'<p><span class="text-muted">Getting Acquainted</span></p>',
 					'<ul>',
-						'<li>The list icon on the top left is your updates feed.</li>',
-						'<li>The folder icon on the top left is your explorer for Web interfaces.</li>',
+						'<li>The updates feed is populated by your workers and peers.</li>',
+						'<li>The explorer page browses through the active Web interfaces.</li>',
 						'<li>See who\'s online by clicking the gray bar on the right edge.</li>',
 						'<li>Edit your Web Workers by clicking the gray bar on the left edge.</li>',
 						'<li>Try pressing <code>ctrl &larr;</code> and <code>ctrl &rarr;</code> on your keyboard.</li>',
@@ -328,10 +328,9 @@ server.route('/intro', function(link, method) {
 					'<hr>',
 					'<p><span class="text-muted">Core Principles</span></p>',
 					'<p>',
-						'This system uses the Link response header to export directories.',
 						'All software in Grimwire is a Web service, and so all of the interfaces are linkable.',
 						'Links can be assigned "relation-types" and other semantic meta-data like "title" and "author".',
-						'Their directories can be queried and navigated with client-side APIs.',
+						'They are exported in the \'Link\' headers of responses, and can be queried and navigated with client-side APIs.',
 						'Those link directories are what the explorer reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
 					'</p>',
 					'<hr>',
@@ -1140,7 +1139,8 @@ var _users = {};
 var _session_user = null;
 
 // APIs
-var serviceUA = local.agent(window.location.protocol+'//'+window.location.host);
+var serviceURL = window.location.protocol+'//'+window.location.host;
+var serviceUA = local.agent(serviceURL);
 var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
 var feedUA = local.agent('httpl://feed');
@@ -1152,7 +1152,7 @@ feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to o
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
-local.patchXHR();
+// local.patchXHR();
 Pouch.adapter('httpl', Pouch.adapters['http']);
 
 // Traffic logging
@@ -1168,6 +1168,17 @@ local.addServer('href', require('./href'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
 local.addServer('workers', require('./workers'));
+local.addServer(window.location.host, function(req, res) {
+	var req2 = new local.Request({
+		method: req.method,
+		url: serviceURL+req.path,
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+	local.pipe(res, local.dispatch(req2));
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
+});
 
 // Dropdown behaviors
 $('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
@@ -1550,16 +1561,6 @@ app_local_server.route('/ed', function(link, method) {
 		};
 		renderEditorChrome();
 		return 204;
-		/*the_active_editor = editor_id_counter++;
-		active_editors[the_active_editor] = {
-			name: null,
-			url: null,
-			ua: null,
-			ace_session: ace.createEditSession(default_script_src, 'ace/mode/javascript')
-		};
-		ace_editor.setSession(active_editors[the_active_editor].ace_session);
-		renderEditorChrome();
-		return 204;*/
 	});
 
 	method('OPEN', function(req, res) {
@@ -1601,17 +1602,6 @@ app_local_server.route('/ed', function(link, method) {
 				};
 				renderEditorChrome();
 				return 204;
-
-				/*the_active_editor = editor_id_counter++;
-				active_editors[the_active_editor] = {
-					name: name,
-					url: url,
-					ua: local.agent(url),
-					ace_session: ace.createEditSession(''+res.body, 'ace/mode/javascript')
-				};
-				ace_editor.setSession(active_editors[the_active_editor].ace_session);
-				renderEditorChrome();
-				return 204;*/
 			})
 			.fail(function(res) {
 				alert('Failed to load script: '+res.status+' '+res.reason);
@@ -1664,7 +1654,7 @@ app_local_server.route('/ed', function(link, method) {
 	method('START', function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
-			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START' }); })
+			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START', query: { network: req.query.network } }); })
 			.then(function() { renderEditorChrome(); return 204; })
 			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
 	});
@@ -1694,13 +1684,6 @@ app_local_server.route('/ed/:id', function(link, method) {
 		active_editors[the_active_editor].$div.show();
 		renderEditorChrome();
 		return 204;
-
-		/*var id = req.pathArgs.id;
-		if (!active_editors[id]) { throw 404; }
-		the_active_editor = +id;
-		ace_editor.setSession(active_editors[id].ace_session);
-		renderEditorChrome();
-		return 204;*/
 	});
 });
 
@@ -1776,7 +1759,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		var src = URL.createObjectURL(scriptblob);
 
 		// Spawn server
-		active_workers[name] = local.spawnWorkerServer(src, { domain: name }, worker_remote_server);
+		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
 
 		return 204;
@@ -1802,24 +1785,22 @@ app_local_server.route('/w/:id', function(link, method) {
 var worker_remote_server = function(req, res, worker) {
 	if (!req.query.uri) {
 		res.setHeader('Link', [
-			{ href: '/', rel: 'self service', id: 'host', title: 'Host Application' },
-			{ href: 'httpl://0.page?uri=httpl://links{&target}', rel: 'service', id: 'links', title: 'Link System' }
+			{ href: '/', rel: 'self service', title: 'Host Application' },
+			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
 		]);
 		return res.writeHead(204).end();
 	}
 
 	// :TODO: for now, simple pass-through proxy into the local namespace
-	req.on('end', function() {
-		var req2 = local.util.deepClone(req);
-		req2.url = req.query.uri;
-		req2.body = req.body;
-		delete req2.query.uri;
-		if (req2.query.target) {
-			req2.target = req2.query.target;
-			delete req2.query.target;
-		}
-		local.pipe(res, common.dispatchRequest(req2, worker));
+	var req2 = new local.Request({
+		method: req.method,
+		url: serviceURL+req.path,
+		headers: local.util.deepClone(req.headers),
+		stream: true
 	});
+	local.pipe(res, local.dispatch(req2));
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
 };
 
 
@@ -1832,8 +1813,12 @@ function renderEditorChrome() {
 		var name = (active_editors[k].name) ? common.escape(active_editors[k].name) : 'untitled';
 		var active = (the_active_editor === +k) ? 'active' : '';
 		var glyph = '';
-		if (active_workers[name])
+		if (active_workers[name]) {
 			glyph = '<b class="glyphicon glyphicon-play"></b> ';
+			if (active_workers[name].config.on_network) {
+				glyph += '<b class="glyphicon glyphicon-globe"></b> ';
+			}
+		}
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
 	}
 	$('#worker-open-dropdown').html([

@@ -33,7 +33,7 @@
               <span class="icon-bar"></span>
               <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="/" title="Grimwire"><img id="logo" src="/img/logo_small.png" /></a>
+            <a class="navbar-brand" href="httpl://feed" title="Grimwire" target="_content"><img id="logo" src="/img/logo_small.png" /></a>
           </div>
           <ul class="nav navbar-nav">
             <li><a href="httpl://feed" target="_content"><b class="glyphicon glyphicon-list"></b> <span>Updates</span></a></li>
@@ -86,7 +86,7 @@
               <!-- <li><a method="TODO" href="httpl://workers/ed">Export File</a></li> -->
               <li><a method="CLOSE" href="httpl://workers/ed">Close</a></li>
             </ul>
-          </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop"></a></li>
+          </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop"></a></li><li><a method="START" href="httpl://workers/ed?network=1" class="glyphicon glyphicon-globe" title="Put Worker on your Network"></a></li>
         </ul>
 
         <ul class="nav nav-tabs"></ul>
@@ -97,6 +97,7 @@
     <div class="ui-layout-east">
       <div>{MOTD_HTML}</div>
       <div id="your-connections"></div>
+      <a class="refresh btn btn-xs btn-primary" href="javascript:void(0)" title="Refresh">refresh</a>
       <div id="active-links"></div>
       <hr/>
       <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with GrimWidget.js to connect to this relay.</small></p>
@@ -117,11 +118,11 @@
         <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="{{pct_guest_streams}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_streams}}%"><span class="sr-only">{{pct_guest_streams}}% Allocated</span></div>
         <div class="progress-bar progress-bar-warning" role="progressbar" aria-valuenow="{{pct_guest_remaining}}" aria-valuemin="0" aria-valuemax="100" style="width: {{pct_guest_remaining}}%"><span class="sr-only">{{pct_guest_remaining}}% Allocated</span></div>
       </div>
-      <div class="btn-group btn-group-xxs">
+      {{!--<div class="btn-group btn-group-xxs">
         <button id="remove-guest-slot" class="btn btn-success" title="Remove guest slot">&ndash;</button>
         <button id="add-guest-slot" class="btn btn-success" title="Add guest slot">+</button>
       </div>
-      <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span> {{!--<a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
+      <span class="text-success">Guests: {{num_guest_streams}} / {{max_guest_streams}}</span>--}}{{!--<a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-guest1</a><a href="#" title="Kick">&times;</a> <a class="text-muted" href="//chat.grimwire.com" title="chat.grimwire.com" target="_blank">pfraze-bob</a><a href="#" title="Kick">&times;</a></span>--}}
     </script>
 
 

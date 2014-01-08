@@ -8,7 +8,8 @@ var _users = {};
 var _session_user = null;
 
 // APIs
-var serviceUA = local.agent(window.location.protocol+'//'+window.location.host);
+var serviceURL = window.location.protocol+'//'+window.location.host;
+var serviceUA = local.agent(serviceURL);
 var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
 var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
 var feedUA = local.agent('httpl://feed');
@@ -20,7 +21,7 @@ feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to o
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
-local.patchXHR();
+// local.patchXHR();
 Pouch.adapter('httpl', Pouch.adapters['http']);
 
 // Traffic logging
@@ -36,6 +37,17 @@ local.addServer('href', require('./href'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
 local.addServer('workers', require('./workers'));
+local.addServer(window.location.host, function(req, res) {
+	var req2 = new local.Request({
+		method: req.method,
+		url: serviceURL+req.path,
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+	local.pipe(res, local.dispatch(req2));
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
+});
 
 // Dropdown behaviors
 $('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });

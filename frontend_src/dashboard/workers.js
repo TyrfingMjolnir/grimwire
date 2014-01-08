@@ -95,16 +95,6 @@ app_local_server.route('/ed', function(link, method) {
 		};
 		renderEditorChrome();
 		return 204;
-		/*the_active_editor = editor_id_counter++;
-		active_editors[the_active_editor] = {
-			name: null,
-			url: null,
-			ua: null,
-			ace_session: ace.createEditSession(default_script_src, 'ace/mode/javascript')
-		};
-		ace_editor.setSession(active_editors[the_active_editor].ace_session);
-		renderEditorChrome();
-		return 204;*/
 	});
 
 	method('OPEN', function(req, res) {
@@ -146,17 +136,6 @@ app_local_server.route('/ed', function(link, method) {
 				};
 				renderEditorChrome();
 				return 204;
-
-				/*the_active_editor = editor_id_counter++;
-				active_editors[the_active_editor] = {
-					name: name,
-					url: url,
-					ua: local.agent(url),
-					ace_session: ace.createEditSession(''+res.body, 'ace/mode/javascript')
-				};
-				ace_editor.setSession(active_editors[the_active_editor].ace_session);
-				renderEditorChrome();
-				return 204;*/
 			})
 			.fail(function(res) {
 				alert('Failed to load script: '+res.status+' '+res.reason);
@@ -209,7 +188,7 @@ app_local_server.route('/ed', function(link, method) {
 	method('START', function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
-			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START' }); })
+			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START', query: { network: req.query.network } }); })
 			.then(function() { renderEditorChrome(); return 204; })
 			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
 	});
@@ -239,13 +218,6 @@ app_local_server.route('/ed/:id', function(link, method) {
 		active_editors[the_active_editor].$div.show();
 		renderEditorChrome();
 		return 204;
-
-		/*var id = req.pathArgs.id;
-		if (!active_editors[id]) { throw 404; }
-		the_active_editor = +id;
-		ace_editor.setSession(active_editors[id].ace_session);
-		renderEditorChrome();
-		return 204;*/
 	});
 });
 
@@ -321,7 +293,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		var src = URL.createObjectURL(scriptblob);
 
 		// Spawn server
-		active_workers[name] = local.spawnWorkerServer(src, { domain: name }, worker_remote_server);
+		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
 
 		return 204;
@@ -347,24 +319,22 @@ app_local_server.route('/w/:id', function(link, method) {
 var worker_remote_server = function(req, res, worker) {
 	if (!req.query.uri) {
 		res.setHeader('Link', [
-			{ href: '/', rel: 'self service', id: 'host', title: 'Host Application' },
-			{ href: 'httpl://0.page?uri=httpl://links{&target}', rel: 'service', id: 'links', title: 'Link System' }
+			{ href: '/', rel: 'self service', title: 'Host Application' },
+			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
 		]);
 		return res.writeHead(204).end();
 	}
 
 	// :TODO: for now, simple pass-through proxy into the local namespace
-	req.on('end', function() {
-		var req2 = local.util.deepClone(req);
-		req2.url = req.query.uri;
-		req2.body = req.body;
-		delete req2.query.uri;
-		if (req2.query.target) {
-			req2.target = req2.query.target;
-			delete req2.query.target;
-		}
-		local.pipe(res, common.dispatchRequest(req2, worker));
+	var req2 = new local.Request({
+		method: req.method,
+		url: serviceURL+req.path,
+		headers: local.util.deepClone(req.headers),
+		stream: true
 	});
+	local.pipe(res, local.dispatch(req2));
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
 };
 
 
@@ -377,8 +347,12 @@ function renderEditorChrome() {
 		var name = (active_editors[k].name) ? common.escape(active_editors[k].name) : 'untitled';
 		var active = (the_active_editor === +k) ? 'active' : '';
 		var glyph = '';
-		if (active_workers[name])
+		if (active_workers[name]) {
 			glyph = '<b class="glyphicon glyphicon-play"></b> ';
+			if (active_workers[name].config.on_network) {
+				glyph += '<b class="glyphicon glyphicon-globe"></b> ';
+			}
+		}
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
 	}
 	$('#worker-open-dropdown').html([
