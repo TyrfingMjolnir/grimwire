@@ -185,6 +185,15 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
+	method('DELETE', function(req, res) {
+		if (!active_editors[the_active_editor]) throw 404;
+		if (!confirm('Delete '+active_editors[the_active_editor].name+'. Are you sure?')) throw 400;
+		active_editors[the_active_editor].ua.DELETE();
+		local.dispatch({ method: 'CLOSE', url: 'httpl://'+req.host+'/ed' });
+
+		return 204;
+	});
+
 	method('START', function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })

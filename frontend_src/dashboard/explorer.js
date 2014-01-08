@@ -58,9 +58,9 @@ function icons(link) {
 function render_explorer(ctx) {
 	return [
 		'<h1>Explorer</h1>',
-		'<form action ="httpl://explorer" method="GET" target="_content">',
-			'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
-		'</form>',
+		// '<form action ="httpl://explorer" method="GET" target="_content">',
+		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
+		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
 			((ctx.viaLink) ?
 				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+ctx.viaLink.title+'" target="_content">'+ctx.viaLink.title+'</a></li>'

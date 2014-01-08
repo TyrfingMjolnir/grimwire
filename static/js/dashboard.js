@@ -46,6 +46,49 @@ common.setupRelay = function(relay) {
 // App Behavior
 // ============
 
+var $chrome_url = $('#chrome-url');
+var $chrome_back = $('#chrome-back');
+var $chrome_forward = $('#chrome-forward');
+var $chrome_refresh = $('#chrome-refresh');
+var chrome_history = [];
+var chrome_history_position = -1;
+
+function displayHistory() {
+	var history = chrome_history[chrome_history_position];
+	$chrome_url.val(history.url);
+	$('main').html(history.html);
+}
+
+common.setupChromeUI = function() {
+	$chrome_back.on('click', function() {
+		chrome_history_position--;
+		if (chrome_history_position < 0) {
+			chrome_history_position = 0;
+			return false;
+		}
+		displayHistory();
+		return false;
+	});
+	$chrome_forward.on('click', function() {
+		chrome_history_position++;
+		if (chrome_history_position >= chrome_history.length) {
+			chrome_history_position = chrome_history.length - 1;
+			return false;
+		}
+		displayHistory();
+		return false;
+	});
+	$chrome_refresh.on('click', function() {
+		common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+		return false;
+	});
+	$chrome_url.on('keydown', function(e) {
+		if (e.which === 13) {
+			common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+		}
+	});
+};
+
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
 	// :TODO:
@@ -72,6 +115,12 @@ common.dispatchRequest = function(req, origin) {
 			$('main').html(html);
 
 			// Update state
+			$('#chrome-url').val(decodeURIComponent(req.url));
+			if (chrome_history.length > (chrome_history_position+1)) {
+				chrome_history.length = chrome_history_position+1;
+			}
+			chrome_history.push({ url: req.url, html: html });
+			chrome_history_position++;
 			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
 			return 204;
 		});
@@ -288,9 +337,9 @@ function icons(link) {
 function render_explorer(ctx) {
 	return [
 		'<h1>Explorer</h1>',
-		'<form action ="httpl://explorer" method="GET" target="_content">',
-			'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
-		'</form>',
+		// '<form action ="httpl://explorer" method="GET" target="_content">',
+		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
+		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
 			((ctx.viaLink) ?
 				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+ctx.viaLink.title+'" target="_content">'+ctx.viaLink.title+'</a></li>'
@@ -1225,7 +1274,7 @@ document.body.addEventListener('request', function(e) {
 var relay = local.joinRelay(serviceURL);
 relay.setServer(function(req, res, peer) {
 	// Build link header
-	var links = [{ href: '/{?uri}', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
+	var links = [{ href: '/', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
 	if (relay.registeredLinks) {
 		links = links.concat(relay.registeredLinks);
 	}
@@ -1342,6 +1391,8 @@ function handleFailedRequest(res) {
 // UI Behaviors
 // ============
 
+common.setupChromeUI();
+
 // Cache selectors and templates
 var $active_links = $('#active-links');
 var $your_connections = $('#your-connections');
@@ -1411,7 +1462,7 @@ $('#logout').on('click', function(e) {
 });
 
 // Refresh button
-$('.refresh').on('click', loadActiveUsers);
+$('#refresh-active-links').on('click', loadActiveUsers);
 
 // Guest slot +/- buttons
 var _updateGuestStreamsReq = null;
@@ -1494,7 +1545,12 @@ function renderLinkRow(link) {
 	var urld = local.parseUri(link.href);
 	var peerd = local.parsePeerDomain(urld.authority);
 	var appUrl = peerd ? peerd.app : urld.authority;
-	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a></td></tr>';
+
+	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
+	if (appUrl != window.location.host) {
+		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+	}
+	return html+'</td></tr>';
 }
 function renderLinks(userId) {
 	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
@@ -1742,6 +1798,15 @@ app_local_server.route('/ed', function(link, method) {
 
 		new_active_editor = Object.keys(active_editors).slice(-1)[0];
 		local.dispatch({ method: 'SHOW', url: 'httpl://'+req.host+'/ed/'+new_active_editor });
+
+		return 204;
+	});
+
+	method('DELETE', function(req, res) {
+		if (!active_editors[the_active_editor]) throw 404;
+		if (!confirm('Delete '+active_editors[the_active_editor].name+'. Are you sure?')) throw 400;
+		active_editors[the_active_editor].ua.DELETE();
+		local.dispatch({ method: 'CLOSE', url: 'httpl://'+req.host+'/ed' });
 
 		return 204;
 	});

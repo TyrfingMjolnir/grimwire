@@ -45,6 +45,49 @@ common.setupRelay = function(relay) {
 // App Behavior
 // ============
 
+var $chrome_url = $('#chrome-url');
+var $chrome_back = $('#chrome-back');
+var $chrome_forward = $('#chrome-forward');
+var $chrome_refresh = $('#chrome-refresh');
+var chrome_history = [];
+var chrome_history_position = -1;
+
+function displayHistory() {
+	var history = chrome_history[chrome_history_position];
+	$chrome_url.val(history.url);
+	$('main').html(history.html);
+}
+
+common.setupChromeUI = function() {
+	$chrome_back.on('click', function() {
+		chrome_history_position--;
+		if (chrome_history_position < 0) {
+			chrome_history_position = 0;
+			return false;
+		}
+		displayHistory();
+		return false;
+	});
+	$chrome_forward.on('click', function() {
+		chrome_history_position++;
+		if (chrome_history_position >= chrome_history.length) {
+			chrome_history_position = chrome_history.length - 1;
+			return false;
+		}
+		displayHistory();
+		return false;
+	});
+	$chrome_refresh.on('click', function() {
+		common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+		return false;
+	});
+	$chrome_url.on('keydown', function(e) {
+		if (e.which === 13) {
+			common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+		}
+	});
+};
+
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
 	// :TODO:
@@ -71,6 +114,12 @@ common.dispatchRequest = function(req, origin) {
 			$('main').html(html);
 
 			// Update state
+			$('#chrome-url').val(decodeURIComponent(req.url));
+			if (chrome_history.length > (chrome_history_position+1)) {
+				chrome_history.length = chrome_history_position+1;
+			}
+			chrome_history.push({ url: req.url, html: html });
+			chrome_history_position++;
 			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
 			return 204;
 		});

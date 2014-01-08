@@ -30,15 +30,17 @@ main { max-width: 960px; margin: 0 auto; }
 .navbar-nav .dropdown-toggle { border-left: solid #E5E5E5 1px; border-right: solid #E5E5E5 1px; box-shadow: -1px 0 0 #FFF, 1px 0 0 #FFF; }
 
 /* toolbar */
-
 #header .navbar-nav a { border-radius: 0; }
 #header .navbar-nav a span { display: none; position: absolute; left: 14px; top: 50px; z-index: 100; color: #bbb; }
 #header .navbar-nav a:hover span { display: inline; }
 #header .navbar-nav .open > a, #header .navbar-nav .open > a:hover, #header .navbar-nav .open > a:focus { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
 
+/* subwindow chrome */
+#chrome-url { margin-bottom: 5px; }
+
 /* link lists */
 .link-list {}
-.link-list tr { cursor: pointer; }
+#active-links tr, .link-list tr { cursor: pointer; }
 .link-list tr:hover { color: #000; background: #ebebeb; }
 .link-list tr:active td { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
 .link-list tr:active td:first-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }

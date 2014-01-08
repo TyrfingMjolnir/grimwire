@@ -176,6 +176,8 @@ function handleFailedRequest(res) {
 // UI Behaviors
 // ============
 
+common.setupChromeUI();
+
 // Cache selectors and templates
 var $active_links = $('#active-links');
 var $your_connections = $('#your-connections');
@@ -245,7 +247,7 @@ $('#logout').on('click', function(e) {
 });
 
 // Refresh button
-$('.refresh').on('click', loadActiveUsers);
+$('#refresh-active-links').on('click', loadActiveUsers);
 
 // Guest slot +/- buttons
 var _updateGuestStreamsReq = null;
@@ -328,7 +330,12 @@ function renderLinkRow(link) {
 	var urld = local.parseUri(link.href);
 	var peerd = local.parsePeerDomain(urld.authority);
 	var appUrl = peerd ? peerd.app : urld.authority;
-	return '<tr><td>'+(link.title||link.href)+'<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a></td></tr>';
+
+	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
+	if (appUrl != window.location.host) {
+		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+	}
+	return html+'</td></tr>';
 }
 function renderLinks(userId) {
 	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';

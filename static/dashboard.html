@@ -62,6 +62,12 @@
 
       <!-- Content -->
       <div id="content" class="container">
+        <div id="chrome">
+          <input id="chrome-url" class="form-control" type="text">
+          <a id="chrome-back" href="#" title="Back"><span class="glyphicon glyphicon-arrow-left"></span></a>
+          &nbsp; <a id="chrome-forward" href="#" title="Forward"><span class="glyphicon glyphicon-arrow-right"></span></a>
+          &nbsp; <a id="chrome-refresh" href="#" title="Refresh"><span class="glyphicon glyphicon-refresh"></span></a>
+        </div>
         <main></main>
       </div>
     </div> <!-- /container -->
@@ -84,6 +90,7 @@
               <li><a method="SAVE" href="httpl://workers/ed?rename=1">Save As...</a></li>
               <li class="divider"></li>
               <!-- <li><a method="TODO" href="httpl://workers/ed">Export File</a></li> -->
+              <li><a method="DELETE" href="httpl://workers/ed">Delete</a></li>
               <li><a method="CLOSE" href="httpl://workers/ed">Close</a></li>
             </ul>
           </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop"></a></li><li><a method="START" href="httpl://workers/ed?network=1" class="glyphicon glyphicon-globe" title="Put Worker on your Network"></a></li>
@@ -97,7 +104,7 @@
     <div class="ui-layout-east">
       <div>{MOTD_HTML}</div>
       <div id="your-connections"></div>
-      <a class="refresh btn btn-xs btn-primary" href="javascript:void(0)" title="Refresh">refresh</a>
+      <a id="refresh-active-links" class="btn btn-xs btn-primary" href="javascript:void(0)" title="Refresh">refresh</a>
       <div id="active-links"></div>
       <hr/>
       <p>Bookmarklet: <a href="javascript:if(typeof grimwidget=='undefined'){alert('Sorry, this site doesn\'t appear to have the grimwire widget installed.');}else{var r=grimwidget.getRelay();r.stopListening();r.setProvider('{HOSTDOMAIN}');r.requestAccessToken();}" title="join({HOSTLABEL})">join({HOSTLABEL})</a>. <small class="text-muted">Bookmark this link, then use it on sites with GrimWidget.js to connect to this relay.</small></p>
