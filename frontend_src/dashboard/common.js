@@ -107,8 +107,13 @@ common.dispatchRequest = function(req, origin) {
 			var html;
 			if (res.body && typeof res.body == 'string') {
 				html = res.body;
+				if (res.Content_Type == 'text/html') {
+					$('main').addClass('content-is-html');
+				} else {
+					$('main').removeClass('content-is-html');
+				}
 			} else {
-				html = '<h2 style="margin:0 0 2px">'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h2>';
+				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
 				if (res.body && typeof res.body != 'string') { html += '<pre>'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
 			}
 			$('main').html(html);

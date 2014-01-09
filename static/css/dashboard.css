@@ -4,6 +4,7 @@
 .separator { border-left: 1px solid #ccc; margin-left: 3px; }
 iframe[seamless] { background-color: transparent; border: 0 none transparent; padding: 0; }
 
+
 /* ui controls */
 #connections-bar { margin-bottom: 10px; }
 .help-icon { color: #bbb; }
@@ -17,12 +18,13 @@ iframe[seamless] { background-color: transparent; border: 0 none transparent; pa
 .glyphbg:before { -webkit-font-smoothing: antialiased; font-family: 'Glyphicons Halflings'; color: #ccc; position: absolute; margin-top: -16px; margin-left: -1px; }
 .glyphicon2:before { -webkit-font-smoothing: antialiased; font-family: 'Glyphicons Halflings'; color: #ccc; position: absolute; margin-top: -12px; margin-left: 10px; }
 .action { border: 0; margin-top: 10px; } .action:before { color: #3599FF; }
-a.glyphicon:before, a .glyphicon:before, .link-list .glyphicon:before { color: #3599FF; }
+a.glyphicon:before, a .glyphicon:before, .link-list .glyphicon:before { color: #63815C; }
 
 /* layout */
 .ui-layout-center { padding: 0; }
 .ui-layout-west { padding: 0; overflow: hidden; }
 main { max-width: 960px; margin: 0 auto; }
+main:not(.content-is-html) { white-space: pre-wrap; }
 
 /* header */
 .navbar-static-top .navbar-brand { height: 50px; }
@@ -39,12 +41,13 @@ main { max-width: 960px; margin: 0 auto; }
 #chrome-url { margin-bottom: 5px; }
 
 /* link lists */
-.link-list {}
-#active-links tr, .link-list tr { cursor: pointer; }
-.link-list tr:hover { color: #000; background: #ebebeb; }
-.link-list tr:active td { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+.link-list { margin-bottom: 20px; }
+#active-links tr/*, .link-list tr*/ { cursor: pointer; }
+.link-list tr td { padding: 5px 10px }
+.link-list tr:hover { color: #000; background: #f0f0f0; }
+/*.link-list tr:active td { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
 .link-list tr:active td:first-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
-.link-list tr:active td:last-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
+.link-list tr:active td:last-child { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }*/
 .link-list tr td { padding: 5px 10px }
 .link-list tr td img { position: relative; top: -3px; }
 .link-list tr td .text-muted img { opacity: 0.5; }

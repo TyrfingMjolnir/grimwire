@@ -18,11 +18,12 @@ common.feedUA = local.agent('httpl://feed');
 // =====
 
 common.feedUA.POST('Welcome to Grimwire v0.6. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
+common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
-local.patchXHR();
-Pouch.adapter('httpl', Pouch.adapters['http']);
+// local.patchXHR();
+// Pouch.adapter('httpl', Pouch.adapters['http']);
 
 // Traffic logging
 local.setDispatchWrapper(function(req, res, dispatch) {
@@ -33,7 +34,7 @@ local.setDispatchWrapper(function(req, res, dispatch) {
 });
 
 // Servers
-local.addServer('href', require('./href'));
+// local.addServer('href', require('./href'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
 local.addServer('workers', require('./workers'));
@@ -41,6 +42,7 @@ local.addServer(window.location.host, function(req, res) {
 	var req2 = new local.Request({
 		method: req.method,
 		url: serviceURL+req.path,
+		query: local.util.deepClone(req.query),
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});

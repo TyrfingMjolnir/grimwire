@@ -62,7 +62,14 @@ app_local_server.route('/', function(link, method) {
 app_local_server.route('/ed', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
-	link({ href: '/ed/{id}', rel: 'item' });
+	link({ href: '/ed/{id}', rel: 'item', title: 'Editor by ID' });
+
+	method('HEAD', function(req, res) {
+		for (var k in active_editors) {
+			res.link({ href: '/ed/'+k, rel: 'item', id: k, title: 'Editor '+k });
+		}
+		return 204;
+	});
 
 	// ui methods
 
@@ -235,6 +242,13 @@ app_local_server.route('/w', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'programs', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
 	link({ href: '/w/{id}', rel: 'item' });
+
+	method('HEAD', function(req, res) {
+		installed_workers.forEach(function(name) {
+			res.link({ href: '/w/'+name, rel: 'item', id: name, title: name });
+		});
+		return 204;
+	});
 });
 
 // worker item

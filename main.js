@@ -93,14 +93,17 @@ server.options('*', function(req, res) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="self via service gwr.io/grimwire"; title="Grimwire Relay"',
-		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relays gwr.io/users"; id="users"',
-		'</u/{id}>; rel="gwr.io/user"',
-		'</u/{user}/s/{app}/{sid}{?nc}>; rel="gwr.io/relay"',
-		'</session>; rel="gwr.io/session"; type="user"',
-		'</session/{app}>; rel="gwr.io/session"; type="app"',
-		'</session/{app}?guestof={hostuser}>; rel="gwr.io/session"; type="guest"',
-		'</status>; rel="service"; id="status"'
+		'</>; rel="self via service gwr.io/grimwire"; title="Grimwire Network"',
+		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relays gwr.io/users"; id="users"; title="Users"; hidden',
+		'</u?index=users&online=1>; rel="collection gwr.io/relays gwr.io/users"; title="Online Users"; online',
+		'</u?index=programs>; rel="collection gwr.io/relays gwr.io/users"; title="Online Programs"; online',
+		'</u?index=users>; rel="collection gwr.io/relays gwr.io/users"; title="User Directory"; index=users',
+		'</u/{id}>; rel="gwr.io/user"; title="User by ID"',
+		'</u/{user}/s/{app}/{sid}{?nc}>; rel="gwr.io/relay"; title="Relay Stream by User, App and SID"; hidden',
+		'</session>; rel="gwr.io/session"; type="user"; title="Sessions Service"; hidden',
+		'</session/{app}>; rel="gwr.io/session"; type="app"; title="3rd-party App Sessions Service"; hidden',
+		'</session/{app}?guestof={hostuser}>; rel="gwr.io/session"; type="guest"; title="Guest Sessions Service"; hidden',
+		'</status>; rel="service"; id="status"; title="Network Host Stats"; hidden'
 	].join(', '));
 	next();
 });
@@ -125,8 +128,8 @@ server.use('/session', require('./lib/servers/session.js')());
 // =====
 server.get('/status', function(req, res) {
 	res.setHeader('Link', [
-		'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Relay"',
-		'</status>; rel="self service"; id="status"'
+		'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Network"',
+		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);
 	var stats = require('./lib/metrics').toJSON();
@@ -135,22 +138,6 @@ server.get('/status', function(req, res) {
 	stats.uptime_days = uptime/(24*60*60*1000);
 	res.json(stats);
 });
-/*server.get('/status', middleware.authenticate, function(req, res) {
-	require('./lib/db').getUser(res.locals.session.user_id, function(err, user) {
-		if (err || !user) { return res.send(403, '403 Forbidden'); }
-		res.setHeader('Link', [
-			'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Relay"',
-			'</status>; rel="self service"; id="status"'
-		].join(', '));
-		var uptime = (new Date() - server.startTime);
-		var stats = require('./lib/metrics').toJSON();
-		stats.started_at = server.startTime.toLocaleString();
-		stats.uptime_hours = uptime/(60*60*1000);
-		stats.uptime_days = uptime/(24*60*60*1000);
-		stats.relay = usersServer.getStatus(user);
-		res.json(stats);
-	});
-});*/
 process.on('SIGHUP', function() {
 	winston.info('Received SIGHUP signal, reloading configuration.');
 	refreshConfig();

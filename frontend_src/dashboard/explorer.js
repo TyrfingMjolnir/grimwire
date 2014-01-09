@@ -7,7 +7,6 @@ The Link Explorer
 
 
 var common = require('./common');
-var db = new PouchDB('linkstore');
 
 var server = servware();
 module.exports = server;
@@ -15,10 +14,22 @@ module.exports = server;
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service', id: 'explorer', title: 'Explorer' });
+	link({ href: '/intro', rel: 'service gwr.io/page', id: 'intro', title: 'About' });
 
 	method('GET', function(req, res) {
 		var uri = req.query.uri || 'httpl://hosts';
-		uri = local.UriTemplate.parse(uri).expand({});
+		var uritmpl = local.UriTemplate.parse(uri);
+		var ctx = {};
+		uritmpl.expressions.forEach(function(expr) {
+			if (expr.operator && expr.operator.symbol == '') {
+				// This is a path token, ask for values
+				expr.varspecs.forEach(function(varspec) {
+					ctx[varspec.varname] = prompt(varspec.varname);
+					if (ctx[varspec.varname] === null) throw 204; // aborted
+				});
+			}
+		});
+		uri = uritmpl.expand(ctx);
 		local.HEAD(uri).always(function(res2) {
 			// Build explore interface
 			var links = (res2.parsedHeaders.link) ? res2.parsedHeaders.link : [];
@@ -55,6 +66,13 @@ function icons(link) {
 	return '<span class="glyphicon glyphicon-'+icon+'"></span>';
 }
 
+function title(link) {
+	return link.title || link.id || link.href;
+}
+function notmpl(uri) {
+	return local.UriTemplate.parse(uri).expand({});
+}
+
 function render_explorer(ctx) {
 	return [
 		'<h1>Explorer</h1>',
@@ -63,21 +81,13 @@ function render_explorer(ctx) {
 		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
 			((ctx.viaLink) ?
-				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+ctx.viaLink.title+'" target="_content">'+ctx.viaLink.title+'</a></li>'
+				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
 			: ''),
 			((ctx.upLink) ?
-				'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+ctx.upLink.title+'" target="_content">'+ctx.upLink.title+'</a></li>'
+				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
 			: ''),
-			((ctx.selfLink) ? ([
-				'<li class="dropdown">',
-					'<a data-toggle="dropdown" href="#" title="Self: '+ctx.selfLink.title+'" target="_content">'+ctx.selfLink.title+' <b class="caret"></b></a>',
-					'<ul class="dropdown-menu">',
-						'<li><a href="'+ctx.selfLink.href+'" target="_content">Open</a></li>',
-					'</ul>',
-				'</li>'
-			].join('')) : ''),
 			((ctx.selfLink) ?
-				'<li><a class="glyphicon glyphicon-chevron-down" href="'+ctx.selfLink.href+'" title="Open (GET)" target="_content"></a></li>'
+				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
 			: ''),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
 			'<li><small class="text-muted">'+ctx.status+'</small>',
@@ -88,20 +98,26 @@ function render_explorer(ctx) {
 					ctx.links.map(function(link) {
 						if (link.hidden) return '';
 						return [
-							'<tr data-local-alias="a" href="httpl://explorer?uri='+encodeURIComponent(link.href)+'" target="_content">',
+							'<tr>',
 								'<td>'+icons(link)+'</td>',
-								'<td>'+link.title+'</td>',
+								'<td><a href="httpl://explorer?uri='+encodeURIComponent(link.href)+'" target="_content">'+title(link)+'</a></td>',
 								'<td class="text-muted">'+link.href+'</td>',
 							'</tr>',
 						].join('');
 					}).join(''),
 				'</tbody>',
 			'</table>',
-		'</div>'
+		'</div>',
+		((ctx.selfLink) ?
+			'<a class="btn btn-sm btn-default" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">Open '+title(ctx.selfLink)+'</a></li>'
+		: ''),
 	].join('');
 }
 
 server.route('/intro', function(link, method) {
+	link({ href: '/', rel: 'up service', id: 'explorer', title: 'Explorer' });
+	link({ href: '/intro', rel: 'self service gwr.io/page', id: 'intro', title: 'About' });
+
 	method('GET', function(req, res) {
 		req.assert({ accept: 'text/html' });
 		if (!req.query.page || req.query.page == '1') {
