@@ -1495,6 +1495,9 @@ function renderEditorChrome() {
 				glyph += '<b class="glyphicon glyphicon-globe"></b> ';
 			}
 		}
+		if (installed_workers.indexOf(name) === -1) {
+			name += '*'; // unsafed
+		}
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
 	}
 	$('#worker-open-dropdown').html([
