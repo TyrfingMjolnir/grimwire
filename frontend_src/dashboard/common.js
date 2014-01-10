@@ -76,7 +76,7 @@ function renderFromCache(pos) {
 	$chrome_url.val(history.url);
 	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
 	var $iframe = $('main iframe');
-	$iframe.contents().find('body').html(html);
+	$iframe.contents().find('body').html(common.sanitizeHtml(html));
 	// $('main').html(history.html);
 }
 
@@ -102,14 +102,11 @@ common.setupChromeUI = function() {
 	});
 };
 
-
+// Iframe Behaviors
 var $iframe = $('main iframe');
-$iframe.contents().find('body').click(function(e) {
-	var e2 = document.createEvent("MouseEvents");
-	e2.initMouseEvent("click", true, true, window, 1, e.screenX, e.screenY, e.clientX, e.clientY, e.ctrlKey, e.altKey, e.shiftKey, e.metaKey, e.button, null);
-	e2.orgtarget = e.target;
-	$iframe[0].dispatchEvent(e2);
-	return false;
+local.bindRequestEvents($iframe.contents()[0].body);
+$iframe.contents()[0].body.addEventListener('request', function(e) {
+	common.dispatchRequest(e.detail, e.target);
 });
 
 common.dispatchRequest = function(req, origin) {
@@ -127,10 +124,7 @@ common.dispatchRequest = function(req, origin) {
 				console.error('Redirect response is missing its location header');
 			}*/
 
-			// Reset view
-			var is_resetting_view = (res.status == 205);
-
-			// Update page
+			// Generate final html
 			var html;
 			if (res.body && typeof res.body == 'string') {
 				html = res.body;
@@ -141,15 +135,8 @@ common.dispatchRequest = function(req, origin) {
 				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
 				if (res.body && typeof res.body != 'string') { html += '<pre class="plain">'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
 			}
-			if (!is_resetting_view) {
-				html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+html;
-				var $iframe = $('main iframe');
-				$iframe.contents().find('body').html(html);
-				// $iframe.attr('srcdoc', html);
-				// $('main').html(html);
-			}
 
-			// Update state
+			// Update history
 			$('#chrome-url').val(decodeURIComponent(req.url));
 			if (chrome_history.length > (chrome_history_position+1)) {
 				chrome_history.length = chrome_history_position+1;
@@ -157,13 +144,14 @@ common.dispatchRequest = function(req, origin) {
 			chrome_history.push({ url: req.url, html: html });
 			chrome_history_position++;
 			window.location.hash = chrome_history_position;
-			// window.history.pushState({ history_position: chrome_history_position }, '', window.location.pathname+'#'+chrome_history_position);
 
 			// Reset view
-			if (is_resetting_view) {
+			if (res.status == 205) {
 				goBack();
-				renderFromCache();
 			}
+
+			// Render
+			renderFromCache();
 
 			return res;
 		});
@@ -286,6 +274,12 @@ var ltregexp = /</g;
 var gtregexp = />/g;
 common.escape = function(str) {
 	return (''+str).replace(ltregexp, '&lt;').replace(gtregexp, '&gt;');
+};
+var sanitizeHtmlRegexp = /<\s*script/g;
+common.sanitizeHtml = function(html) {
+	// :TODO: this is probably naive in some important way that I'm too naive to diagnose
+	// CSP stops inline or remote script execution, but we still want to stop inclusions of scripts on our domain
+	return html.replace(sanitizeHtmlRegexp, '&lt;script');
 };
 common.normalizeRel = function(rel) {
 	var reld = local.parseUri(rel);

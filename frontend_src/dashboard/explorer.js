@@ -11,12 +11,16 @@ var common = require('./common');
 var server = servware();
 module.exports = server;
 
+var show_hidden = false;
+
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service', id: 'explorer', title: 'Explorer' });
 	link({ href: '/intro', rel: 'service gwr.io/page', id: 'intro', title: 'About' });
 
 	method('GET', function(req, res) {
+		if (typeof req.query.show_hidden != 'undefined')
+			show_hidden = (req.query.show_hidden == 1);
 		var uri = req.query.uri || 'httpl://hosts';
 		var uritmpl = local.UriTemplate.parse(uri);
 		var ctx = {};
@@ -98,9 +102,16 @@ function render_explorer(ctx) {
 			'<table class="link-list">',
 				'<tbody>',
 					ctx.links.map(function(link) {
-						if (link.hidden) return '';
+						var cls='';
+						if (link.hidden) {
+							if (show_hidden) {
+								cls = 'class=\"hidden-link\"';
+							} else {
+								return '';
+							}
+						}
 						return [
-							'<tr>',
+							'<tr '+cls+'>',
 								'<td>'+icons(link)+'</td>',
 								'<td><a href="httpl://explorer?uri='+encodeURIComponent(link.href)+'" target="_content">'+title(link)+'</a></td>',
 								'<td class="text-muted">'+link.href+'</td>',
@@ -110,9 +121,15 @@ function render_explorer(ctx) {
 				'</tbody>',
 			'</table>',
 		'</div>',
-		((ctx.selfLink) ?
-			'<hr><small><a class="" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">&raquo; '+title(ctx.selfLink)+'</a></small>'
-		: ''),
+		((ctx.selfLink) ? [
+			'<hr>',
+			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">&raquo; '+title(ctx.selfLink)+'</a></small>',
+			'<br>',
+			((show_hidden) ?
+				'<small><a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'&show_hidden=0" title="Hide Hidden Links" target="_content">hide hidden</a></small>' :
+				'<small><a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'&show_hidden=1" title="Show Hidden Links" target="_content">show hidden</a></small>'
+			)
+		].join('') : ''),
 	].join('');
 }
 

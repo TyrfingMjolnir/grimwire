@@ -61,7 +61,7 @@ server.route('/', function(link, method) {
 		_updates.push({ id: id, html: html, created_at: Date.now() });
 
 		// :TODO: replace with nquery
-		$('#feed-updates').html(render_updates());
+		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
 		res.setHeader('location', 'httpl://'+req.host+'/'+id);
 		return 201;
