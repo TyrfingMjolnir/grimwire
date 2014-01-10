@@ -298,32 +298,32 @@ function servware() {
 
 function writeResponse(res, data) {
 	// Standardize data
-	var head = [null, null, null];
+	var head = [null, null];
+	var headers = {};
 	var body = undefined;
 	if (Array.isArray(data)) {
 		head[0] = data[0];
 		head[1] = reasons[data[0]] || null;
 		body    = data[1];
-		head[2] = data[2] || {};
+		headers = data[2] || {};
 	}
 	else if (typeof data == 'number') {
 		head[0] = data;
 		head[1] = reasons[data] || null;
-		head[2] = {};
 	}
 	else if (typeof data == 'object' && data) {
 		head[0] = data.status;
 		head[1] = data.reason || reasons[data.status] || null;
 		body    = data.body;
-		head[2] = data.headers || {};
+		headers = data.headers || {};
 	}
 	else {
 		throw new Error('Unusuable response given');
 	}
 
 	// Set headers on the response object
-	for (var k in head[2]) {
-		res.setHeader(k, head[2][k]);
+	for (var k in headers) {
+		res.setHeader(k, headers);
 	}
 
 	// Set default content-type if needed
@@ -333,7 +333,7 @@ function writeResponse(res, data) {
 
 	// Write response
 	if (!res.status) {
-		res.writeHead.apply(res);
+		res.writeHead.apply(res, head);
 	}
 	res.end(body);
 }
