@@ -323,7 +323,7 @@ function writeResponse(res, data) {
 
 	// Set headers on the response object
 	for (var k in headers) {
-		res.setHeader(k, headers);
+		res.setHeader(k, headers[k]);
 	}
 
 	// Set default content-type if needed
