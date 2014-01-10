@@ -52,29 +52,41 @@ var $chrome_refresh = $('#chrome-refresh');
 var chrome_history = [];
 var chrome_history_position = -1;
 
-function displayHistory() {
-	var history = chrome_history[chrome_history_position];
+function goBack() {
+	chrome_history_position--;
+	if (chrome_history_position < 0) {
+		chrome_history_position = 0;
+		return false;
+	}
+}
+
+function goForward() {
+	chrome_history_position++;
+	if (chrome_history_position >= chrome_history.length) {
+		chrome_history_position = chrome_history.length - 1;
+		return false;
+	}
+}
+
+function renderFromCache(pos) {
+	pos = (typeof pos == 'undefined') ? chrome_history_position : pos;
+	var history = chrome_history[pos];
 	$chrome_url.val(history.url);
-	$('main').html(history.html);
+	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
+	var $iframe = $('main iframe');
+	$iframe.contents().find('body').html(html);
+	// $('main').html(history.html);
 }
 
 common.setupChromeUI = function() {
 	$chrome_back.on('click', function() {
-		chrome_history_position--;
-		if (chrome_history_position < 0) {
-			chrome_history_position = 0;
-			return false;
-		}
-		displayHistory();
+		goBack();
+		renderFromCache();
 		return false;
 	});
 	$chrome_forward.on('click', function() {
-		chrome_history_position++;
-		if (chrome_history_position >= chrome_history.length) {
-			chrome_history_position = chrome_history.length - 1;
-			return false;
-		}
-		displayHistory();
+		goForward();
+		renderFromCache();
 		return false;
 	});
 	$chrome_refresh.on('click', function() {
@@ -87,6 +99,16 @@ common.setupChromeUI = function() {
 		}
 	});
 };
+
+
+var $iframe = $('main iframe');
+$iframe.contents().find('body').click(function(e) {
+	var e2 = document.createEvent("MouseEvents");
+	e2.initMouseEvent("click", true, true, window, 1, e.screenX, e.screenY, e.clientX, e.clientY, e.ctrlKey, e.altKey, e.shiftKey, e.metaKey, e.button, null);
+	e2.orgtarget = e.target;
+	$iframe[0].dispatchEvent(e2);
+	return false;
+});
 
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
@@ -103,6 +125,9 @@ common.dispatchRequest = function(req, origin) {
 				console.error('Redirect response is missing its location header');
 			}*/
 
+			// Reset view
+			var is_resetting_view = (res.status == 205);
+
 			// Update page
 			var html;
 			if (res.body && typeof res.body == 'string') {
@@ -116,7 +141,13 @@ common.dispatchRequest = function(req, origin) {
 				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
 				if (res.body && typeof res.body != 'string') { html += '<pre>'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
 			}
-			$('main').html(html);
+			if (!is_resetting_view) {
+				html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+html;
+				var $iframe = $('main iframe');
+				$iframe.contents().find('body').html(html);
+				// $iframe.attr('srcdoc', html);
+				// $('main').html(html);
+			}
 
 			// Update state
 			$('#chrome-url').val(decodeURIComponent(req.url));
@@ -126,7 +157,14 @@ common.dispatchRequest = function(req, origin) {
 			chrome_history.push({ url: req.url, html: html });
 			chrome_history_position++;
 			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
-			return 204;
+
+			// Reset view
+			if (is_resetting_view) {
+				goBack();
+				renderFromCache();
+			}
+
+			return res;
 		});
 
 		/*.fail(function(res) {

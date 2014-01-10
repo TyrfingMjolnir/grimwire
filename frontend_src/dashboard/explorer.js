@@ -25,7 +25,7 @@ server.route('/', function(link, method) {
 				// This is a path token, ask for values
 				expr.varspecs.forEach(function(varspec) {
 					ctx[varspec.varname] = prompt(varspec.varname);
-					if (ctx[varspec.varname] === null) throw 204; // aborted
+					if (ctx[varspec.varname] === null) throw 205; // aborted, reset view
 				});
 			}
 		});
@@ -80,15 +80,17 @@ function render_explorer(ctx) {
 		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
 		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
-			((ctx.viaLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
-			: ''),
-			((ctx.upLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
-			: ''),
-			((ctx.selfLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
-			: ''),
+			[
+				((ctx.viaLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
+				: ''),
+				((ctx.upLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
+				: ''),
+				((ctx.selfLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
+				: ''),
+			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
 			'<li><small class="text-muted">'+ctx.status+'</small>',
         '</ul>',
@@ -109,7 +111,7 @@ function render_explorer(ctx) {
 			'</table>',
 		'</div>',
 		((ctx.selfLink) ?
-			'<a class="btn btn-sm btn-default" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">Open '+title(ctx.selfLink)+'</a></li>'
+			'<hr><small><a class="" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">&raquo; '+title(ctx.selfLink)+'</a></small>'
 		: ''),
 	].join('');
 }
@@ -127,13 +129,16 @@ server.route('/intro', function(link, method) {
 				'<div style="max-width: 600px">',
 					'<h1>About</h1>',
 					'<p>',
-						'Have fun, and don\'t put anything important on here.',
+						'Have fun but beware, hacker, for these are the days of chaos, the <strong class="text-danger">Age of Fire and Unfinished Security Models</strong>.',
+						'Trolls inhabit these roadless hill-sides, and <strong class="text-muted">the great fog of unproven ideas</strong> still blankets the virtual Earth.',
+						'Tread lightly and craft tools to defend thyselves.',
 					'</p>',
+					'<p><small class="text-muted">Let\'s try to make this fun for everybody!</small></p>',
 					'<hr>',
-					'<p><span class="text-muted">What is it?</span></p>',
+					'<p><span class="text-muted">What is this?</span></p>',
 					'<p>',
-						'Grimwire is a social runtime environment.',
-						'It connects user Web-servers that live in other threads and tabs with the Web Worker and WebRTC APIs.',
+						'Grimwire is a live-editing environment for networked user software.',
+						'It connects user Web-servers that live in threads (Web Workers) and browsers (WebRTC) into a service-oriented architecture.',
 						'Use it to publish services, datasets, and interfaces to other users.',
 					'</p>',
 					'<hr>',
@@ -152,7 +157,7 @@ server.route('/intro', function(link, method) {
 						'All software in Grimwire is a Web service, and so all of the interfaces are linkable.',
 						'Links can be assigned "relation-types" and other semantic meta-data like "title" and "author".',
 						'They are exported in the \'Link\' headers of responses, and can be queried and navigated with client-side APIs.',
-						'Those link directories are what the explorer reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
+						'Those link directories are what the <a href="httpl://explorer" target="_content">explorer</a> reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
 					'</p>',
 					'<hr>',
 					// '<p><span class="text-muted">Where does data live?</span></p>',

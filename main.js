@@ -93,7 +93,7 @@ server.options('*', function(req, res) {
 // =================
 server.all('/', function(req, res, next) {
 	res.setHeader('Link', [
-		'</>; rel="self via service gwr.io/grimwire"; title="Grimwire Network"',
+		'</>; rel="self via service gwr.io/grimwire"; title="'+config.hostname+'"',
 		'</u{?online,links,link_bodies}>; rel="collection gwr.io/relays gwr.io/users"; id="users"; title="Users"; hidden',
 		'</u?index=users&online=1>; rel="collection gwr.io/relays gwr.io/users"; title="Online Users"; online',
 		'</u?index=programs>; rel="collection gwr.io/relays gwr.io/users"; title="Online Programs"; online',
@@ -128,7 +128,7 @@ server.use('/session', require('./lib/servers/session.js')());
 // =====
 server.get('/status', function(req, res) {
 	res.setHeader('Link', [
-		'</>; rel="up via service gwr.io/grimwire"; title="Grimwire Network"',
+		'</>; rel="up via service gwr.io/grimwire"; title="'+config.hostname+'"',
 		'</status>; rel="self service"; id="status"; title="Network Host Stats"'
 	].join(', '));
 	var uptime = (new Date() - server.startTime);

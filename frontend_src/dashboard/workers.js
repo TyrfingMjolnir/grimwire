@@ -62,7 +62,7 @@ app_local_server.route('/', function(link, method) {
 app_local_server.route('/ed', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
-	link({ href: '/ed/{id}', rel: 'item', title: 'Editor by ID' });
+	link({ href: '/ed/{id}', rel: 'item', title: 'Lookup by ID' });
 
 	method('HEAD', function(req, res) {
 		for (var k in active_editors) {
@@ -241,7 +241,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 app_local_server.route('/w', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'programs', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
-	link({ href: '/w/{id}', rel: 'item' });
+	link({ href: '/w/{id}', rel: 'item', title: 'Lookup by Name' });
 
 	method('HEAD', function(req, res) {
 		installed_workers.forEach(function(name) {
@@ -259,10 +259,18 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// CRUD methods
 
+	method('HEAD', function(req, res) {
+		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		if (!js) throw 404;
+		return 204;
+	});
+
 	method('GET', function(req, res) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
+		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		if (!js) throw 404;
 		res.setHeader('Content-Type', 'application/javascript');
-		return [200, localStorage.getItem('worker_'+req.pathArgs.id) || ''];
+		return [200,  js];
 	});
 
 	method('PUT', function(req, res) {

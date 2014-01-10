@@ -53,29 +53,41 @@ var $chrome_refresh = $('#chrome-refresh');
 var chrome_history = [];
 var chrome_history_position = -1;
 
-function displayHistory() {
-	var history = chrome_history[chrome_history_position];
+function goBack() {
+	chrome_history_position--;
+	if (chrome_history_position < 0) {
+		chrome_history_position = 0;
+		return false;
+	}
+}
+
+function goForward() {
+	chrome_history_position++;
+	if (chrome_history_position >= chrome_history.length) {
+		chrome_history_position = chrome_history.length - 1;
+		return false;
+	}
+}
+
+function renderFromCache(pos) {
+	pos = (typeof pos == 'undefined') ? chrome_history_position : pos;
+	var history = chrome_history[pos];
 	$chrome_url.val(history.url);
-	$('main').html(history.html);
+	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
+	var $iframe = $('main iframe');
+	$iframe.contents().find('body').html(html);
+	// $('main').html(history.html);
 }
 
 common.setupChromeUI = function() {
 	$chrome_back.on('click', function() {
-		chrome_history_position--;
-		if (chrome_history_position < 0) {
-			chrome_history_position = 0;
-			return false;
-		}
-		displayHistory();
+		goBack();
+		renderFromCache();
 		return false;
 	});
 	$chrome_forward.on('click', function() {
-		chrome_history_position++;
-		if (chrome_history_position >= chrome_history.length) {
-			chrome_history_position = chrome_history.length - 1;
-			return false;
-		}
-		displayHistory();
+		goForward();
+		renderFromCache();
 		return false;
 	});
 	$chrome_refresh.on('click', function() {
@@ -88,6 +100,16 @@ common.setupChromeUI = function() {
 		}
 	});
 };
+
+
+var $iframe = $('main iframe');
+$iframe.contents().find('body').click(function(e) {
+	var e2 = document.createEvent("MouseEvents");
+	e2.initMouseEvent("click", true, true, window, 1, e.screenX, e.screenY, e.clientX, e.clientY, e.ctrlKey, e.altKey, e.shiftKey, e.metaKey, e.button, null);
+	e2.orgtarget = e.target;
+	$iframe[0].dispatchEvent(e2);
+	return false;
+});
 
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
@@ -104,6 +126,9 @@ common.dispatchRequest = function(req, origin) {
 				console.error('Redirect response is missing its location header');
 			}*/
 
+			// Reset view
+			var is_resetting_view = (res.status == 205);
+
 			// Update page
 			var html;
 			if (res.body && typeof res.body == 'string') {
@@ -117,7 +142,13 @@ common.dispatchRequest = function(req, origin) {
 				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
 				if (res.body && typeof res.body != 'string') { html += '<pre>'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
 			}
-			$('main').html(html);
+			if (!is_resetting_view) {
+				html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+html;
+				var $iframe = $('main iframe');
+				$iframe.contents().find('body').html(html);
+				// $iframe.attr('srcdoc', html);
+				// $('main').html(html);
+			}
 
 			// Update state
 			$('#chrome-url').val(decodeURIComponent(req.url));
@@ -127,7 +158,14 @@ common.dispatchRequest = function(req, origin) {
 			chrome_history.push({ url: req.url, html: html });
 			chrome_history_position++;
 			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
-			return 204;
+
+			// Reset view
+			if (is_resetting_view) {
+				goBack();
+				renderFromCache();
+			}
+
+			return res;
 		});
 
 		/*.fail(function(res) {
@@ -309,7 +347,7 @@ server.route('/', function(link, method) {
 				// This is a path token, ask for values
 				expr.varspecs.forEach(function(varspec) {
 					ctx[varspec.varname] = prompt(varspec.varname);
-					if (ctx[varspec.varname] === null) throw 204; // aborted
+					if (ctx[varspec.varname] === null) throw 205; // aborted, reset view
 				});
 			}
 		});
@@ -364,15 +402,17 @@ function render_explorer(ctx) {
 		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
 		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
-			((ctx.viaLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
-			: ''),
-			((ctx.upLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
-			: ''),
-			((ctx.selfLink) ?
-				'<li><b class=text-muted>.</b> <a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
-			: ''),
+			[
+				((ctx.viaLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
+				: ''),
+				((ctx.upLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
+				: ''),
+				((ctx.selfLink) ?
+					'<li><a href="httpl://explorer?uri='+encodeURIComponent(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
+				: ''),
+			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
 			'<li><small class="text-muted">'+ctx.status+'</small>',
         '</ul>',
@@ -393,7 +433,7 @@ function render_explorer(ctx) {
 			'</table>',
 		'</div>',
 		((ctx.selfLink) ?
-			'<a class="btn btn-sm btn-default" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">Open '+title(ctx.selfLink)+'</a></li>'
+			'<hr><small><a class="" href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">&raquo; '+title(ctx.selfLink)+'</a></small>'
 		: ''),
 	].join('');
 }
@@ -411,13 +451,16 @@ server.route('/intro', function(link, method) {
 				'<div style="max-width: 600px">',
 					'<h1>About</h1>',
 					'<p>',
-						'Have fun, and don\'t put anything important on here.',
+						'Have fun but beware, hacker, for these are the days of chaos, the <strong class="text-danger">Age of Fire and Unfinished Security Models</strong>.',
+						'Trolls inhabit these roadless hill-sides, and <strong class="text-muted">the great fog of unproven ideas</strong> still blankets the virtual Earth.',
+						'Tread lightly and craft tools to defend thyselves.',
 					'</p>',
+					'<p><small class="text-muted">Let\'s try to make this fun for everybody!</small></p>',
 					'<hr>',
-					'<p><span class="text-muted">What is it?</span></p>',
+					'<p><span class="text-muted">What is this?</span></p>',
 					'<p>',
-						'Grimwire is a social runtime environment.',
-						'It connects user Web-servers that live in other threads and tabs with the Web Worker and WebRTC APIs.',
+						'Grimwire is a live-editing environment for networked user software.',
+						'It connects user Web-servers that live in threads (Web Workers) and browsers (WebRTC) into a service-oriented architecture.',
 						'Use it to publish services, datasets, and interfaces to other users.',
 					'</p>',
 					'<hr>',
@@ -436,7 +479,7 @@ server.route('/intro', function(link, method) {
 						'All software in Grimwire is a Web service, and so all of the interfaces are linkable.',
 						'Links can be assigned "relation-types" and other semantic meta-data like "title" and "author".',
 						'They are exported in the \'Link\' headers of responses, and can be queried and navigated with client-side APIs.',
-						'Those link directories are what the explorer reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
+						'Those link directories are what the <a href="httpl://explorer" target="_content">explorer</a> reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
 					'</p>',
 					'<hr>',
 					// '<p><span class="text-muted">Where does data live?</span></p>',
@@ -518,10 +561,12 @@ server.route('/', function(link, method) {
 	method('GET', function(req, res) {
 		var originUntrusted = false; //:TODO:
 
+		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
+		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
 			'<div class="row">',
 				'<div class="col-xs-12">',
-					'<h1>'+(''+new Date()).split(' ').slice(1,4).join(' ')+'</h1>',
+					'<h1>'+today+'</h1>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
@@ -1070,7 +1115,7 @@ app_local_server.route('/', function(link, method) {
 app_local_server.route('/ed', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
-	link({ href: '/ed/{id}', rel: 'item', title: 'Editor by ID' });
+	link({ href: '/ed/{id}', rel: 'item', title: 'Lookup by ID' });
 
 	method('HEAD', function(req, res) {
 		for (var k in active_editors) {
@@ -1249,7 +1294,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 app_local_server.route('/w', function(link, method) {
 	link({ href: '/', rel: 'via up service', id: 'programs', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
-	link({ href: '/w/{id}', rel: 'item' });
+	link({ href: '/w/{id}', rel: 'item', title: 'Lookup by Name' });
 
 	method('HEAD', function(req, res) {
 		installed_workers.forEach(function(name) {
@@ -1267,10 +1312,18 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// CRUD methods
 
+	method('HEAD', function(req, res) {
+		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		if (!js) throw 404;
+		return 204;
+	});
+
 	method('GET', function(req, res) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
+		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		if (!js) throw 404;
 		res.setHeader('Content-Type', 'application/javascript');
-		return [200, localStorage.getItem('worker_'+req.pathArgs.id) || ''];
+		return [200,  js];
 	});
 
 	method('PUT', function(req, res) {

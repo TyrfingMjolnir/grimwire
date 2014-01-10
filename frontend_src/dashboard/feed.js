@@ -31,10 +31,12 @@ server.route('/', function(link, method) {
 	method('GET', function(req, res) {
 		var originUntrusted = false; //:TODO:
 
+		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
+		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
 			'<div class="row">',
 				'<div class="col-xs-12">',
-					'<h1>'+(''+new Date()).split(' ').slice(1,4).join(' ')+'</h1>',
+					'<h1>'+today+'</h1>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
