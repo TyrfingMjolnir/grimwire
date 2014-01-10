@@ -59,6 +59,7 @@ function goBack() {
 		chrome_history_position = 0;
 		return false;
 	}
+	window.location.hash = chrome_history_position;
 }
 
 function goForward() {
@@ -67,6 +68,7 @@ function goForward() {
 		chrome_history_position = chrome_history.length - 1;
 		return false;
 	}
+	window.location.hash = chrome_history_position;
 }
 
 function renderFromCache(pos) {
@@ -133,14 +135,12 @@ common.dispatchRequest = function(req, origin) {
 			var html;
 			if (res.body && typeof res.body == 'string') {
 				html = res.body;
-				if (res.Content_Type == 'text/html') {
-					$('main').addClass('content-is-html');
-				} else {
-					$('main').removeClass('content-is-html');
+				if (res.Content_Type != 'text/html') {
+					html = '<pre class="plain">'+html+'</pre>';
 				}
 			} else {
 				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
-				if (res.body && typeof res.body != 'string') { html += '<pre>'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
+				if (res.body && typeof res.body != 'string') { html += '<pre class="plain">'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
 			}
 			if (!is_resetting_view) {
 				html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+html;
@@ -157,7 +157,8 @@ common.dispatchRequest = function(req, origin) {
 			}
 			chrome_history.push({ url: req.url, html: html });
 			chrome_history_position++;
-			//window.history.pushState({ uri: req.url }, '', window.location.pathname+'#'+req.url);
+			window.location.hash = chrome_history_position;
+			// window.history.pushState({ history_position: chrome_history_position }, '', window.location.pathname+'#'+chrome_history_position);
 
 			// Reset view
 			if (is_resetting_view) {
@@ -184,6 +185,13 @@ common.dispatchRequest = function(req, origin) {
 
 	// No special target? Simple dispatch
 	return local.dispatch(req);
+};
+
+window.onhashchange = function() {
+	var new_pos = (+window.location.hash.slice(1)) || 0;
+	if (new_pos == chrome_history_position) return;
+	chrome_history_position = new_pos;
+	renderFromCache();
 };
 
 // P2P Utilities
@@ -695,7 +703,12 @@ local.addServer(window.location.host, function(req, res) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
-	local.pipe(res, local.dispatch(req2));
+	local.dispatch(req2).always(function(res2) {
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(data) { res.write(data); });
+		res2.on('end', function() { res.end(); });
+		return res2;
+	});
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 });
@@ -1104,7 +1117,7 @@ module.exports = app_local_server;
 app_local_server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'collection', id: 'w', title: 'Installed' });
-	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors' });
+	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors', hidden: true });
 
 	method('GET', function() {
 		return 204;

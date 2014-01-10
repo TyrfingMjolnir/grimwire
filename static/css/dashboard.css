@@ -22,8 +22,8 @@ a.glyphicon:before, a .glyphicon:before, .link-list .glyphicon:before { color: #
 /* layout */
 .ui-layout-center { padding: 0; }
 .ui-layout-west { padding: 0; overflow: hidden; }
+#content { height: 100%; }
 main { max-width: 960px; height: 100%; margin: 0 auto; }
-main:not(.content-is-html) { white-space: pre-wrap; }
 main > iframe { width: 100%; height: 100%; }
 
 /* header */

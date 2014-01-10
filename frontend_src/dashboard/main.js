@@ -46,7 +46,12 @@ local.addServer(window.location.host, function(req, res) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
-	local.pipe(res, local.dispatch(req2));
+	local.dispatch(req2).always(function(res2) {
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(data) { res.write(data); });
+		res2.on('end', function() { res.end(); });
+		return res2;
+	});
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 });

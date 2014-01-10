@@ -51,7 +51,7 @@ module.exports = app_local_server;
 app_local_server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'collection', id: 'w', title: 'Installed' });
-	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors' });
+	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors', hidden: true });
 
 	method('GET', function() {
 		return 204;
