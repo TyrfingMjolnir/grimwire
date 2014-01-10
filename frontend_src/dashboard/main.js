@@ -98,6 +98,7 @@ relay.setServer(function(req, res, peer) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
+	req2.headers['From'] = peer.config.domain;
 	local.pipe(res, local.dispatch(req2), function(headers) {
 		// Update links
 		if (headers.link) {

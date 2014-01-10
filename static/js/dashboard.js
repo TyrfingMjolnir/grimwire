@@ -766,6 +766,7 @@ relay.setServer(function(req, res, peer) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
+	req2.headers['From'] = peer.config.domain;
 	local.pipe(res, local.dispatch(req2), function(headers) {
 		// Update links
 		if (headers.link) {
@@ -1442,6 +1443,7 @@ var worker_remote_server = function(req, res, worker) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
+	req2.headers['From'] = worker.config.domain;
 	local.pipe(res, local.dispatch(req2));
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
