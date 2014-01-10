@@ -301,6 +301,7 @@ function updateGuestSlotsCB(d_streams) {
 
 (function() {
 	var arr=[];
+	_avatars = JSON.parse($('#avatars').text());
 	var nAvatars = _avatars.length;
 	$('.avatars').html(
 		_avatars.sort().map(function(avatar, i) {
