@@ -321,19 +321,19 @@ function writeResponse(res, data) {
 		throw new Error('Unusuable response given');
 	}
 
-	// Fall back to headers from the response object if present
-	for (var k in res.headers) {
-		head[2][k] = head[2][k] || res.headers[k];
+	// Set headers on the response object
+	for (var k in head[2]) {
+		res.setHeader(k, head[2][k]);
 	}
 
 	// Set default content-type if needed
-	if (typeof body != 'undefined' && !head[2]['content-type']) {
-		head[2]['content-type'] = (typeof body == 'string') ? 'text/plain' : 'application/json';
+	if (typeof body != 'undefined' && !res.headers['content-type']) {
+		res.setHeader('content-type', (typeof body == 'string') ? 'text/plain' : 'application/json');
 	}
 
 	// Write response
 	if (!res.status) {
-		res.writeHead.apply(res, head);
+		res.writeHead.apply(res);
 	}
 	res.end(body);
 }
