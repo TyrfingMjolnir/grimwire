@@ -4,7 +4,7 @@
 var common = require('./common');
 
 // constants
-var default_script_src = "importScripts('/js/local.js');\nimportScripts('/js/servware.js');\n\nvar server = servware();\nlocal.worker.setServer(server);\n\nserver.route('/', function(link, method) {\n    link({ href: '/', rel: 'self via service', title: 'Hello World Worker' });\n\n    method('GET', function(req, res) {\n        return [200, 'Hello, world!'];\n    });\n});";
+var default_script_src = "importScripts('/js/local.js');\nimportScripts('/js/servware.js');\n\nvar server = servware();\nlocal.worker.setServer(server);\n\nserver.route('/', function(link, method) {\n    link({ href: '/', rel: 'self via service', title: 'Hello World Worker' });\n\n    method('GET', function(req, res) {\n        return [200, 'Hello, world!'];\n    });\n});\n/**\n * Be sure to open the tutorials.\n * in the Worker dropdown.\n* (top left!)\n */\n";
 var whitelist = [ // a list of global objects which are allowed in the worker
 	'null', 'self', 'console', 'atob', 'btoa',
 	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
