@@ -34,10 +34,11 @@ local.setDispatchWrapper(function(req, res, dispatch) {
 });
 
 // Servers
+var workers_server = require('./workers');
 // local.addServer('href', require('./href'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
-local.addServer('workers', require('./workers'));
+local.addServer('workers', workers_server);
 local.addServer(window.location.host, function(req, res) {
 	var req2 = new local.Request({
 		method: req.method,
@@ -111,7 +112,6 @@ relay.setServer(function(req, res, peer) {
 			});
 			headers.link = local.httpHeaders.deserialize('link', links);
 		}
-		console.log(headers);
 		return headers;
 	});
 	req.on('data', function(chunk) { req2.write(chunk); });
@@ -348,6 +348,11 @@ function renderLinkRow(link) {
 function renderLinks(userId) {
 	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
 }
+function renderWorkerLinks(userId) {
+	return Object.keys(workers_server.active_workers).map(function(domain) {
+		return renderLinkRow({ href: 'httpl://'+domain, title: domain });
+	}).join('');
+}
 
 // Update connections view
 function renderUserConnections() {
@@ -383,7 +388,7 @@ function renderAll() {
 
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+'</table>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+renderWorkerLinks()+'</table>';
 
 		// Other users
 		for (var id in _users) {

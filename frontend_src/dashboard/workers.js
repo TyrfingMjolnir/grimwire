@@ -9,11 +9,34 @@ var whitelist = [ // a list of global objects which are allowed in the worker
 	'null', 'self', 'console', 'atob', 'btoa',
 	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
 	'Proxy',
-	'importScripts',
+	'importScripts', 'navigator',
 	'postMessage', 'addEventListener', 'removeEventListener',
 	'onmessage', 'onerror'
 ];
-var bootstrap_src = "(function(){ var nulleds=[]; var whitelist = ['"+whitelist.join("', '")+"']; for (var k in self) { if (whitelist.indexOf(k) === -1) { Object.defineProperty(self, k, { value: null, configurable: false, writable: false }); nulleds.push(k); }} console.log('Nullified: '+nulleds.join(', ')); })();\n";
+var whitelistAPIs_src = [ // nullifies all toplevel variables except those listed above in `whitelist`
+	'(function() {',
+		'var nulleds=[];',
+		'var whitelist = ["'+whitelist.join('", "')+'"];',
+		'for (var k in self) {',
+			'if (whitelist.indexOf(k) === -1) {',
+				'Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
+				'nulleds.push(k);',
+			'}',
+		'}',
+		'console.log("Nullified: "+nulleds.join(", "));',
+	'})();\n'
+].join('');
+var importScriptsPatch_src = [ // patches importScripts() to allow relative paths
+	'(function() {',
+		'var orgImportScripts = importScripts;',
+		'importScripts = function() {',
+			'return orgImportScripts.apply(null, Array.prototype.map.call(arguments, function(v, i) {',
+				'return (v.charAt(0) == \'/\') ? (\''+window.location.origin+'\'+v) : v;',
+			'}));',
+		'};',
+	'})();\n'
+].join('');
+var bootstrap_src = whitelistAPIs_src + importScriptsPatch_src;
 
 // state
 var installed_workers;// = [/* string* */] loaded from local storage
@@ -46,6 +69,7 @@ renderEditorChrome();
 // -
 var app_local_server = servware();
 module.exports = app_local_server;
+module.exports.active_workers = active_workers;
 
 // root
 app_local_server.route('/', function(link, method) {
@@ -134,6 +158,7 @@ app_local_server.route('/ed', function(link, method) {
 				ace_editor.getSession().setMode("ace/mode/javascript");
 
 				// Store
+				url = 'httpl://'+req.host+'/w/'+name; // now store locally
 				active_editors[the_active_editor] = {
 					name: name,
 					url: url,

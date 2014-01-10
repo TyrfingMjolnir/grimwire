@@ -702,10 +702,11 @@ local.setDispatchWrapper(function(req, res, dispatch) {
 });
 
 // Servers
+var workers_server = require('./workers');
 // local.addServer('href', require('./href'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
-local.addServer('workers', require('./workers'));
+local.addServer('workers', workers_server);
 local.addServer(window.location.host, function(req, res) {
 	var req2 = new local.Request({
 		method: req.method,
@@ -779,7 +780,6 @@ relay.setServer(function(req, res, peer) {
 			});
 			headers.link = local.httpHeaders.deserialize('link', links);
 		}
-		console.log(headers);
 		return headers;
 	});
 	req.on('data', function(chunk) { req2.write(chunk); });
@@ -1016,6 +1016,11 @@ function renderLinkRow(link) {
 function renderLinks(userId) {
 	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
 }
+function renderWorkerLinks(userId) {
+	return Object.keys(workers_server.active_workers).map(function(domain) {
+		return renderLinkRow({ href: 'httpl://'+domain, title: domain });
+	}).join('');
+}
 
 // Update connections view
 function renderUserConnections() {
@@ -1051,7 +1056,7 @@ function renderAll() {
 
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+'</table>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+renderWorkerLinks()+'</table>';
 
 		// Other users
 		for (var id in _users) {
@@ -1087,11 +1092,34 @@ var whitelist = [ // a list of global objects which are allowed in the worker
 	'null', 'self', 'console', 'atob', 'btoa',
 	'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
 	'Proxy',
-	'importScripts',
+	'importScripts', 'navigator',
 	'postMessage', 'addEventListener', 'removeEventListener',
 	'onmessage', 'onerror'
 ];
-var bootstrap_src = "(function(){ var nulleds=[]; var whitelist = ['"+whitelist.join("', '")+"']; for (var k in self) { if (whitelist.indexOf(k) === -1) { Object.defineProperty(self, k, { value: null, configurable: false, writable: false }); nulleds.push(k); }} console.log('Nullified: '+nulleds.join(', ')); })();\n";
+var whitelistAPIs_src = [ // nullifies all toplevel variables except those listed above in `whitelist`
+	'(function() {',
+		'var nulleds=[];',
+		'var whitelist = ["'+whitelist.join('", "')+'"];',
+		'for (var k in self) {',
+			'if (whitelist.indexOf(k) === -1) {',
+				'Object.defineProperty(self, k, { value: null, configurable: false, writable: false });',
+				'nulleds.push(k);',
+			'}',
+		'}',
+		'console.log("Nullified: "+nulleds.join(", "));',
+	'})();\n'
+].join('');
+var importScriptsPatch_src = [ // patches importScripts() to allow relative paths
+	'(function() {',
+		'var orgImportScripts = importScripts;',
+		'importScripts = function() {',
+			'return orgImportScripts.apply(null, Array.prototype.map.call(arguments, function(v, i) {',
+				'return (v.charAt(0) == \'/\') ? (\''+window.location.origin+'\'+v) : v;',
+			'}));',
+		'};',
+	'})();\n'
+].join('');
+var bootstrap_src = whitelistAPIs_src + importScriptsPatch_src;
 
 // state
 var installed_workers;// = [/* string* */] loaded from local storage
@@ -1124,6 +1152,7 @@ renderEditorChrome();
 // -
 var app_local_server = servware();
 module.exports = app_local_server;
+module.exports.active_workers = active_workers;
 
 // root
 app_local_server.route('/', function(link, method) {
@@ -1212,6 +1241,7 @@ app_local_server.route('/ed', function(link, method) {
 				ace_editor.getSession().setMode("ace/mode/javascript");
 
 				// Store
+				url = 'httpl://'+req.host+'/w/'+name; // now store locally
 				active_editors[the_active_editor] = {
 					name: name,
 					url: url,
