@@ -388,20 +388,20 @@ function renderAll() {
 		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+renderWorkerLinks()+'</table>';
 
 		// Other users
+		var html2 = '';
 		for (var id in _users) {
 			var user = _users[id];
 			if (user.id == _session.user_id) { continue; }
-			html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id;
-			if (!user.online) {
-				html += ' <small>offline</small></h4>';
-			} else {
-				html += '</h4>';
+			if (user.online) {
+				html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id+'</h4>';
 				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
+			} else {
+				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+user.avatar+'" /> '+user.id+' offline</small></p>';
 			}
 		}
 
 		// Render
-		$active_links.html(html);
+		$active_links.html(html+html2);
 	} else {
 		$active_links.html('');
 	}
