@@ -161,7 +161,7 @@ server.route('/intro', function(link, method) {
 					'<ul>',
 						'<li><a href="http://www.webrtc.org/" target="_blank">WebRTC</a> for networking.</li>',
 						'<li><a href="https://grimwire.com/local" target="_blank">HTTPLocal</a>, a client-side implementation of HTTP, to communicate.</li>',
-						'<li><a href="http://en.wikipedia.org/wiki/Server-sent_events"target="_blank">Server-Sent Events</a> from <a href="https://grimwire.com/download" target="_blank">central server</a> to relay signals.</li>',
+						'<li><a href="http://en.wikipedia.org/wiki/Server-sent_events"target="_blank">Server-Sent Events</a> from a <a href="https://grimwire.com/download" target="_blank">central server</a> to relay signals.</li>',
 						'<li><a href="http://tools.ietf.org/html/rfc5988" target="_blank">Link headers</a> to exchange directories.</li>',
 						'<li><a href="https://developer.mozilla.org/en-US/docs/Web/Guide/Performance/Using_web_workers" target="_blank">Web Workers</a> to host user servers.</li>',
 						'<li><a href="https://developer.mozilla.org/en-US/docs/Security/CSP/Introducing_Content_Security_Policy" target="_blank">Content Security Policy</a> to restrict what the page will include.</li>',

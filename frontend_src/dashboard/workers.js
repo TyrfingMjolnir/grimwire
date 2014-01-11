@@ -429,6 +429,9 @@ function renderEditorChrome() {
 		}
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
 	}
+	if (active_editors[the_active_editor]) {
+		$('#worker-inst-link').attr('href', 'httpl://'+active_editors[the_active_editor].name);
+	}
 	$('#worker-open-dropdown').html([
 		'<li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>',
 		installed_workers.map(function(name) {
