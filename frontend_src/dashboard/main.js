@@ -66,58 +66,6 @@ document.body.addEventListener('request', function(e) {
 
 // Network relay
 var relay = local.joinRelay(serviceURL);
-relay.setServer(function(req, res, peer) {
-	// Build link header
-	var links = [{ href: '/', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
-	if (relay.registeredLinks) {
-		links = links.concat(relay.registeredLinks);
-	}
-	res.setHeader('link', links);
-
-	// Home resource
-	if (req.path == '/') {
-		res.headers.link[0].rel += ' self';
-		return res.writeHead(204, 'OK, No Content').end();
-	}
-	res.headers.link[0].rel += ' via';
-
-	// Parse path
-	var path_parts = req.path.split('/');
-	var hostname = path_parts[1];
-	var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
-
-	// Only allow for published servers
-	var server = local.getServer(hostname);
-	if (!server) return res.writeHead(404, 'Not Found').end();
-	if (!server.context || !server.context.config || !server.context.config.on_network)
-		return res.writeHead(404, 'Not Found').end();
-
-	// Pass the request through
-	var req2 = new local.Request({
-		method: req.method,
-		url: url,
-		query: local.util.deepClone(req.query),
-		headers: local.util.deepClone(req.headers),
-		stream: true
-	});
-	req2.headers['From'] = peer.config.domain;
-	local.pipe(res, local.dispatch(req2), function(headers) {
-		// Update links
-		if (headers.link) {
-			var links = local.httpHeaders.deserialize('link', headers.link);
-			links.forEach(function(link) {
-				if (!local.isAbsUri(link.href)) {
-					link.href = local.joinUri(hostname, link.href);
-				}
-				link.href = '/'+link.href;
-			});
-			headers.link = local.httpHeaders.deserialize('link', links);
-		}
-		return headers;
-	});
-	req.on('data', function(chunk) { req2.write(chunk); });
-	req.on('end', function() { req2.end(); });
-});
 common.setupRelay(relay);
 
 

@@ -5,8 +5,31 @@ var network_sid = localStorage.getItem('network_sid');
 var is_first_session = network_sid === null;
 if (is_first_session) network_sid = genDeviceSid();
 
-// App Setup
-// =========
+// Network Setup
+// =============
+
+// Add via header parsing
+/*var viaregex = /([\d\.]+) ([A-z:\d]*)(?: \((.+)\))?/g;
+local.httpHeaders.register('via',
+	function (obj) {
+		return obj.map(function(via) {
+			var str = via.version+' '+via.hostname;
+			if (via.desc) {
+				str += ' ('+via.desc+')';
+			}
+			return str;
+		}).join(', ');
+	},
+	function (str) {
+		var vias = [], match;
+		while ((match = viaregex.exec(str))) {
+			var via = { version: match[1], hostname: match[2] };
+			if (match[3]) via.desc = match[3];
+			vias.push(via);
+		}
+		return vias;
+	}
+);*/
 
 // Loadtime p2p setup
 common.setupRelay = function(relay) {
@@ -15,6 +38,65 @@ common.setupRelay = function(relay) {
 	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
 	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
 	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
+	relay.setServer(function(req, res, peer) {
+		// Build link header
+		var links = [{ href: '/', rel: 'service', title: relay.getUserId() }];
+		if (relay.registeredLinks) {
+			links = links.concat(relay.registeredLinks);
+		}
+		res.setHeader('link', links);
+
+		// Home resource
+		if (req.path == '/') {
+			res.headers.link[0].rel += ' self';
+			return res.writeHead(204, 'OK, No Content').end();
+		}
+		res.headers.link[0].rel += ' via';
+
+		// Parse path
+		var path_parts = req.path.split('/');
+		var hostname = path_parts[1];
+		var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
+
+		// Only allow for published servers
+		var server = local.getServer(hostname);
+		if (!server) return res.writeHead(404, 'Not Found').end();
+		if (!server.context || !server.context.config || !server.context.config.on_network)
+			return res.writeHead(404, 'Not Found').end();
+
+		// Pass the request through
+		var req2 = new local.Request({
+			method: req.method,
+			url: url,
+			query: local.util.deepClone(req.query),
+			headers: local.util.deepClone(req.headers),
+			stream: true
+		});
+		req2.headers['From'] = peer.config.domain;
+		req2.headers['X-Public-Host'] = req.host;
+		var res2_ = local.dispatch(req2);
+		res2_.always(function(res2) {
+			// Update links
+			if (res2.headers.link) {
+				var links = local.httpHeaders.deserialize('link', res2.headers.link);
+				links.forEach(function(link) {
+					if (!local.isAbsUri(link.href)) {
+						link.href = local.joinUri(hostname, link.href);
+					}
+					link.href = '/'+link.href;
+				});
+				res2.headers.link = local.httpHeaders.deserialize('link', links);
+			}
+
+			// Pipe back
+			res.writeHead(res2.status, res2.reason, res2.headers);
+			res2.on('data', function(chunk) { res.write(chunk); });
+			res2.on('end', function() { res.end(); });
+			res2.on('close', function() { res.close(); });
+		});
+		req.on('data', function(chunk) { req2.write(chunk); });
+		req.on('end', function() { req2.end(); });
+	});
 	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
 	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
 	relay.on('accessGranted', function() {
@@ -104,7 +186,7 @@ common.setupChromeUI = function() {
 };
 
 // Collapsible panels
-common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true });
 
 // Iframe Behaviors
 var $iframe = $('main iframe');
@@ -738,58 +820,6 @@ document.body.addEventListener('request', function(e) {
 
 // Network relay
 var relay = local.joinRelay(serviceURL);
-relay.setServer(function(req, res, peer) {
-	// Build link header
-	var links = [{ href: '/', rel: 'service', title: relay.getUserId()+' @'+relay.getProvider() }];
-	if (relay.registeredLinks) {
-		links = links.concat(relay.registeredLinks);
-	}
-	res.setHeader('link', links);
-
-	// Home resource
-	if (req.path == '/') {
-		res.headers.link[0].rel += ' self';
-		return res.writeHead(204, 'OK, No Content').end();
-	}
-	res.headers.link[0].rel += ' via';
-
-	// Parse path
-	var path_parts = req.path.split('/');
-	var hostname = path_parts[1];
-	var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
-
-	// Only allow for published servers
-	var server = local.getServer(hostname);
-	if (!server) return res.writeHead(404, 'Not Found').end();
-	if (!server.context || !server.context.config || !server.context.config.on_network)
-		return res.writeHead(404, 'Not Found').end();
-
-	// Pass the request through
-	var req2 = new local.Request({
-		method: req.method,
-		url: url,
-		query: local.util.deepClone(req.query),
-		headers: local.util.deepClone(req.headers),
-		stream: true
-	});
-	req2.headers['From'] = peer.config.domain;
-	local.pipe(res, local.dispatch(req2), function(headers) {
-		// Update links
-		if (headers.link) {
-			var links = local.httpHeaders.deserialize('link', headers.link);
-			links.forEach(function(link) {
-				if (!local.isAbsUri(link.href)) {
-					link.href = local.joinUri(hostname, link.href);
-				}
-				link.href = '/'+link.href;
-			});
-			headers.link = local.httpHeaders.deserialize('link', links);
-		}
-		return headers;
-	});
-	req.on('data', function(chunk) { req2.write(chunk); });
-	req.on('end', function() { req2.end(); });
-});
 common.setupRelay(relay);
 
 
