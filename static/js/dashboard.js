@@ -691,7 +691,7 @@ common.feedUA = local.agent('httpl://feed');
 
 common.feedUA.POST('Welcome to Grimwire v0.6 unstable build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
-common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> You should <a href="httpl://explorer" target="_content">explore</a> and <a href="httpl://explorer/intro" target="_content">read the intro</a>.</div>', { Content_Type: 'text/html' });
+common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> Click the gray bar on left to <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit your workers</a>. Click the bar on right to see who is online. You can also <a href="httpl://explorer" target="_content">explore</a> and <a href="httpl://explorer/intro" target="_content">read the intro</a>.</div>', { Content_Type: 'text/html' });
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
@@ -1345,6 +1345,9 @@ app_local_server.route('/ed/:id', function(link, method) {
 		the_active_editor = +id;
 		active_editors[the_active_editor].$div.show();
 		renderEditorChrome();
+		if (req.query.steal_focus) {
+			common.layout.open('west');
+		}
 		return 204;
 	});
 });
