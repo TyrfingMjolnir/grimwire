@@ -262,7 +262,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 		active_editors[the_active_editor].$div.show();
 		renderEditorChrome();
 		if (req.query.steal_focus) {
-			common.layout.open('west');
+			common.layout.toggle('west');
 		}
 		return 204;
 	});

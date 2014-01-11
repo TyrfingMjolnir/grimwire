@@ -133,92 +133,83 @@ function render_explorer(ctx) {
 	].join('');
 }
 
+server.route('/online', function(link, method) {
+	method('SHOW', function(req, res) {
+		// :DEBUG: temporary helper
+		common.layout.toggle('east');
+		return 204;
+	});
+});
+
 server.route('/intro', function(link, method) {
 	link({ href: '/', rel: 'up service', id: 'explorer', title: 'Explorer' });
 	link({ href: '/intro', rel: 'self service gwr.io/page', id: 'intro', title: 'About' });
 
 	method('GET', function(req, res) {
 		req.assert({ accept: 'text/html' });
-		if (!req.query.page || req.query.page == '1') {
-			var pfraze_href = 'nav:||contacts|gwr.io/contact/user=pfraze@grimwire.net';
-			var pfraze_icon = 'https://grimwire.net/img/avatars/user_astronaut.png'; // :TODO:
-			return [200, [
-				'<div style="max-width: 600px">',
+		return [200, [
+			'<div class="row">',
+				'<div class="col-xs-8">',
 					'<h1>About</h1>',
 					'<p>',
-						'Have fun but beware, hacker, for these are the days of chaos, the <strong class="text-danger">Age of Fire and Unfinished Security Models</strong>.',
-						'Trolls inhabit these roadless hill-sides, and <strong class="text-muted">the great fog of unproven ideas</strong> still blankets the virtual Earth.',
-						'Tread lightly and craft tools to defend thyselves.',
+						'Grimwire is a <a href="http://gwr.io/" target="_blank">typed-link-driven</a> server platform for WebRTC.',
+						'In addition to hosting user programs, it provides tools to <a href="httpl://explorer/online?steal_focus=1" method="SHOW">find peers</a>, <a href="httpl://explorer" target="_content">navigate interfaces</a>, and <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit code</a>.',
 					'</p>',
-					'<p><small class="text-muted">Let\'s try to make this fun for everybody!</small></p>',
-					'<hr>',
-					'<p><span class="text-muted">What is this?</span></p>',
-					'<p>',
-						'Grimwire is a live-editing environment for networked user software.',
-						'It connects user Web-servers that live in threads (Web Workers) and browsers (WebRTC) into a service-oriented architecture.',
-						'Use it to publish services, datasets, and interfaces to other users.',
-					'</p>',
-					'<hr>',
-					'<p><span class="text-muted">Getting Acquainted</span></p>',
+					'<br><hr><br>',
+					'<h3>How does it work?</h3>',
+					'<p>Grimwire uses...</p>',
 					'<ul>',
-						'<li>The updates feed is populated by your workers and peers.</li>',
-						'<li>The explorer page browses through the active Web interfaces.</li>',
-						'<li>See who\'s online by clicking the gray bar on the right edge.</li>',
-						'<li>Edit your Web Workers by clicking the gray bar on the left edge.</li>',
-						'<li>Try pressing <code>ctrl &larr;</code> and <code>ctrl &rarr;</code> on your keyboard.</li>',
-						'<li>Refer to the <a href="https://grimwire.com/local" title="local.js documentation" target="_blank">Local.js API docs</a> for dev help.</li>',
+						'<li><a href="http://www.webrtc.org/" target="_blank">WebRTC</a> for networking.</li>',
+						'<li><a href="https://grimwire.com/local" target="_blank">HTTPLocal</a>, a client-side implementation of HTTP, to communicate.</li>',
+						'<li><a href="http://en.wikipedia.org/wiki/Server-sent_events"target="_blank">Server-Sent Events</a> from <a href="https://grimwire.com/download" target="_blank">central server</a> to relay signals.</li>',
+						'<li><a href="http://tools.ietf.org/html/rfc5988" target="_blank">Link headers</a> to exchange directories.</li>',
+						'<li><a href="https://developer.mozilla.org/en-US/docs/Web/Guide/Performance/Using_web_workers" target="_blank">Web Workers</a> to host user servers.</li>',
+						'<li><a href="https://developer.mozilla.org/en-US/docs/Security/CSP/Introducing_Content_Security_Policy" target="_blank">Content Security Policy</a> to restrict what the page will include.</li>',
+						'<li>Iframes to sandbox styles.</li>',
 					'</ul>',
-					'<hr>',
-					'<p><span class="text-muted">Core Principles</span></p>',
+					'<br><hr><br>',
+					'<h3>How finished is it?</h3>',
 					'<p>',
-						'All software in Grimwire is a Web service, and so all of the interfaces are linkable.',
-						'Links can be assigned "relation-types" and other semantic meta-data like "title" and "author".',
-						'They are exported in the \'Link\' headers of responses, and can be queried and navigated with client-side APIs.',
-						'Those link directories are what the <a href="httpl://explorer" target="_content">explorer</a> reveals, and should be used to drive integration between apps (rather than hard-coded URIs).',
+						'Just enough to be <strong class="text-danger">dangerous</strong>!',
+						'While the code is marked unstable (which it is now) some security policies will be left undeployed.',
+						'Please be kind to each other!',
 					'</p>',
-					'<hr>',
-					// '<p><span class="text-muted">Where does data live?</span></p>',
-					// '<p>',
-					// 	'Your links &amp; data can host from your browser, or go onto the network\'s central (public) routing service.',
-					// 	'Anything on the network service is available when you go offline, but it can also be accessed by network moderators without your permission.',
-					// 	'Therefore, you should consider using browser-hosting for more&nbsp;<a href="http://imgur.com/YLwRjM3" target="_blank">sensitive&nbsp;information</a>.',
-					// '</p>',
-					// '<hr>',
-					// '<p><span class="text-muted">How do I control my data?</span></p>',
-					// '<p>',
-					// 	'For security, the browser separates your local storage by domain.',
-					// 	'The Grimwire app is run on multiple subdomains so that you can take advantage&nbsp;of&nbsp;this.',
-					// '</p>',
-					// '<p>',
-					// 	'Use a new subdomain when you want to try something and don\'t want to risk corrupting or leaking existing data.',
-					// 	'You can copy data between the subdomains by opening both at once and using the&nbsp;Dataset&nbsp;panel.',
-					// '</p>',
-					// '<p>',
-					// 	'You can also use Dataset to copy between browsers&nbsp;&amp;&nbsp;devices.',
-					// '</p>',
-					// '<hr>',
-					// '<p><span class="text-muted">What is "bouncing?"</span></p>',
-					// '<p>',
-					// 	'Sometimes, peer-to-peer connections fail to establish.',
-					// 	'The system can be set up to automatically bounce your messages through the network service (peer to network to peer) in that situation.',
-					// 	'You can choose to enable this for a contact or set of contacts when convenient, but be sure to remember which subdomain&nbsp;you&nbsp;have&nbsp;open!',
-					// '</p>',
-					// '<hr>',
-					'<p><a href="https://twitter.com/pfrazee" target="_blank">Paul Frazee</a>.</p>',
-					'<p><small class="text-muted">Those who control the semantics, control the system.</small></p>',
-				'</div>'
-			].join(' '), { 'content-type': 'text/html' }];
-		} else if (req.query.page == '2') {
-			return [200, [
-				'<p>Interfaces accumulate in stacks as you navigate.</p>',
-				'<p><a href="httpl://explorer/intro?page=3" target="_card_self">Sometimes cards will change in place too.</a></p>'
-			].join(''), { 'content-type': 'text/html' }];
-		} else if (req.query.page == '3') {
-			return [200, [
-				'<p></p>'
-			].join(''), { 'content-type': 'text/html' }];
-		} else {
-			throw 404;
-		}
+					'<br><hr><br>',
+					'<h3>How do I use it?</h3>',
+					'<p>Here are some quick getting started tips:</p>',
+					'<br><div style="padding: 10px 20px">',
+						'<h4 style="margin-top:0">Editing Workers</h4>',
+						'<p>Open the workers editor by clicking the gray bar on the far left or by pressing <code>ctrl &larr;</code>.</p>',
+						'<div class="thumbnail">',
+							'<img src="/img/help_open_worker_panel.png"/>',
+						'</div>',
+						'<br><hr>',
+					'</div>',
+					'<br><div style="padding: 10px 20px">',
+						'<h4 style="margin-top:0">See Who is Online</h4>',
+						'<p>Open the users panel by clicking the gray bar on the far right or by pressing <code>ctrl &rarr;</code>.</p>',
+						'<div class="thumbnail">',
+							'<img src="/img/help_open_users_panel.png"/>',
+						'</div>',
+						'<br><hr>',
+					'</div>',
+					'<br><div style="padding: 10px 20px">',
+						'<h4 style="margin-top:0">Publish a Server</h4>',
+						'<p>Run a worker locally by pressing the green triangle. Publish it to the entire network by pressing the globe.</p>',
+						'<div class="thumbnail">',
+							'<img src="/img/help_publish_server.png"/>',
+						'</div>',
+					'</div>',
+					'<br><hr><br>',
+					'<h3>Who made Grimwire?</h3>',
+					'<p>',
+						'<a href="https://twitter.com/pfrazee" target="_blank">Paul Frazee</a>.',//' is an Austin-based developer with over fifteen years of development experience.',
+					'</p>',
+					'<br><br><br>',
+				'</div>',
+				'<div class="col-xs-4">',
+				'</div>',
+			'</div>'
+		].join(' '), { 'content-type': 'text/html' }];
 	});
 });
