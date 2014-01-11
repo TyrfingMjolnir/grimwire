@@ -167,6 +167,9 @@ app_local_server.route('/ed', function(link, method) {
 					ace_editor: ace_editor
 				};
 				renderEditorChrome();
+				if (req.query.steal_focus) {
+					common.layout.open('west');
+				}
 				return 204;
 			})
 			.fail(function(res) {
@@ -391,7 +394,13 @@ var worker_remote_server = function(req, res, worker) {
 		stream: true
 	});
 	req2.headers['From'] = worker.config.domain;
-	local.pipe(res, local.dispatch(req2));
+	var res2_ = local.dispatch(req2)
+	res2_.always(function(res2) {
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(chunk) { res.write(chunk); });
+		res2.on('end', function() { res.end(); });
+		res2.on('close', function() { res.close(); });
+	});
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 };

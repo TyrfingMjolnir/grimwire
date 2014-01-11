@@ -196,11 +196,6 @@ var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html(
 $('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
 $('body').on('click', function() { $('.dropdown').removeClass('open'); });
 
-// Collapsible panels
-$(document).ready(function () {
-	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
-});
-
 // Change email link
 $('#change-email').on('click', function() {
 	if (!_session_user) return false;

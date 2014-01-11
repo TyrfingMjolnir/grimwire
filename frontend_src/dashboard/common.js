@@ -102,6 +102,9 @@ common.setupChromeUI = function() {
 	});
 };
 
+// Collapsible panels
+common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+
 // Iframe Behaviors
 var $iframe = $('main iframe');
 local.bindRequestEvents($iframe.contents()[0].body);
@@ -109,6 +112,7 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 	common.dispatchRequest(e.detail, e.target);
 });
 
+// Page dispatch behavior
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
 	// :TODO:

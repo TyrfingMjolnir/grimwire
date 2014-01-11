@@ -103,6 +103,9 @@ common.setupChromeUI = function() {
 	});
 };
 
+// Collapsible panels
+common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
+
 // Iframe Behaviors
 var $iframe = $('main iframe');
 local.bindRequestEvents($iframe.contents()[0].body);
@@ -110,6 +113,7 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 	common.dispatchRequest(e.detail, e.target);
 });
 
+// Page dispatch behavior
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
 	// :TODO:
@@ -864,11 +868,6 @@ var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html(
 $('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
 $('body').on('click', function() { $('.dropdown').removeClass('open'); });
 
-// Collapsible panels
-$(document).ready(function () {
-	$('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true,  });
-});
-
 // Change email link
 $('#change-email').on('click', function() {
 	if (!_session_user) return false;
@@ -1252,6 +1251,9 @@ app_local_server.route('/ed', function(link, method) {
 					ace_editor: ace_editor
 				};
 				renderEditorChrome();
+				if (req.query.steal_focus) {
+					common.layout.open('west');
+				}
 				return 204;
 			})
 			.fail(function(res) {
@@ -1476,7 +1478,13 @@ var worker_remote_server = function(req, res, worker) {
 		stream: true
 	});
 	req2.headers['From'] = worker.config.domain;
-	local.pipe(res, local.dispatch(req2));
+	var res2_ = local.dispatch(req2)
+	res2_.always(function(res2) {
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(chunk) { res.write(chunk); });
+		res2.on('end', function() { res.end(); });
+		res2.on('close', function() { res.close(); });
+	});
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 };
