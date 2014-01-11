@@ -565,7 +565,7 @@ server.route('/intro', function(link, method) {
 						'Grimwire is a <a href="http://gwr.io/" target="_blank">typed-link-driven</a> server platform for WebRTC.',
 						'In addition to hosting user programs, it provides tools to <a href="httpl://explorer/online?steal_focus=1" method="SHOW">find peers</a>, <a href="httpl://explorer" target="_content">navigate interfaces</a>, and <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit code</a>.',
 					'</p>',
-					'<br><hr><br>',
+					'<br><br>',
 					'<h3>How does it work?</h3>',
 					'<p>Grimwire uses...</p>',
 					'<ul>',
@@ -577,14 +577,14 @@ server.route('/intro', function(link, method) {
 						'<li><a href="https://developer.mozilla.org/en-US/docs/Security/CSP/Introducing_Content_Security_Policy" target="_blank">Content Security Policy</a> to restrict what the page will include.</li>',
 						'<li>Iframes to sandbox styles.</li>',
 					'</ul>',
-					'<br><hr><br>',
+					'<br><br>',
 					'<h3>How finished is it?</h3>',
 					'<p>',
 						'Just enough to be <strong class="text-danger">dangerous</strong>!',
 						'While the code is marked unstable (which it is now) some security policies will be left undeployed.',
 						'Please be kind to each other!',
 					'</p>',
-					'<br><hr><br>',
+					'<br><br>',
 					'<h3>How do I use it?</h3>',
 					'<p>Here are some quick getting started tips:</p>',
 					'<br><div style="padding: 10px 20px">',
@@ -610,7 +610,7 @@ server.route('/intro', function(link, method) {
 							'<img src="/img/help_publish_server.png"/>',
 						'</div>',
 					'</div>',
-					'<br><hr><br>',
+					'<br><br>',
 					'<h3>Who made Grimwire?</h3>',
 					'<p>',
 						'<a href="https://twitter.com/pfrazee" target="_blank">Paul Frazee</a>.',//' is an Austin-based developer with over fifteen years of development experience.',
@@ -764,7 +764,7 @@ common.feedUA = local.agent('httpl://feed');
 
 common.feedUA.POST('Welcome to Grimwire v0.6 unstable build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
-common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> Click the gray bar on left to <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit your workers</a>. Click the bar on right to see who is online. You can also <a href="httpl://explorer" target="_content">explore</a> and <a href="httpl://explorer/intro" target="_content">read the intro</a>.</div>', { Content_Type: 'text/html' });
+common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro" target="_content">Start here</a>.</div>', { Content_Type: 'text/html' });
 common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'feed', target: '_content' });
 
 // So PouchDB can target locals
