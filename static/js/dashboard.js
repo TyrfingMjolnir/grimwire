@@ -925,6 +925,12 @@ $('#change-email').on('click', function() {
 	return false;
 });
 
+// :DEBUG:
+// Show online button
+$('.show-online').on('click', function() {
+	common.layout.toggle('east');
+});
+
 // Change password link
 $('#change-pw').on('click', function() {
 	if (!_session_user) return false;
