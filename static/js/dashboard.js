@@ -220,6 +220,9 @@ common.dispatchRequest = function(req, origin, opts) {
 				console.error('Redirect response is missing its location header');
 			}*/
 
+			// Extract headers
+			var x_origin = res.headers['x-origin'];
+
 			// Generate final html
 			var html;
 			if (res.body && typeof res.body == 'string') {
@@ -238,11 +241,23 @@ common.dispatchRequest = function(req, origin, opts) {
 				// Just update HTML in cache
 				chrome_history[chrome_history_position].html = html;
 			} else {
+				// Expand/reduce the history to include 1 open slot
 				if (chrome_history.length > (chrome_history_position+1)) {
 					chrome_history.length = chrome_history_position+1;
 				}
+
+				// Set origin
+				// - if the x_origin is under the same authority, it will be used
 				var urld = local.parseUri(req);
-				chrome_history.push({ url: req.url, html: html, origin: (urld.protocol || 'httpl')+'://'+urld.authority  });
+				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+				if (x_origin) {
+					if (x_origin.indexOf(origin) === 0) {
+						origin = x_origin;
+					} else {
+						console.warn('Invalid X-Origin header value', x_origin, 'Must be under the authority of', origin);
+					}
+				}
+				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;
 
 				// Reset view
@@ -1544,34 +1559,6 @@ local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, respon
 		request.headers['X-Public-Host'] = local.joinUri(request.headers['X-Public-Host'], request.host);
 	}
 	local.BridgeServer.prototype.handleLocalRequest.call(this, request, response);
-	// Build message
-	/*var sid = this.sidCounter++;
-	var msg = {
-		sid: sid,
-		mid: (this.isReorderingMessages) ? 1 : undefined,
-		method: request.method,
-		path: request.path,
-		host: request.host,
-		query: request.query,
-		headers: request.headers
-	};
-
-	// Hold onto streams
-	this.outgoingStreams[msg.sid] = request;
-	this.incomingStreams[-msg.sid] = response; // store response stream in anticipation of the response messages
-
-	// Send over the channel
-	this.channelSendMsgWhenReady(JSON.stringify(msg));
-
-	// Wire up request stream events
-	var this2 = this;
-	var midCounter = msg.mid;
-	request.on('data',  function(data) { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, body: data })); });
-	request.on('end', function()       { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, end: true })); });
-	request.on('close', function()     {
-		this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, close: true }));
-		delete this2.outgoingStreams[msg.sid];
-	});*/
 };
 
 // Helpers

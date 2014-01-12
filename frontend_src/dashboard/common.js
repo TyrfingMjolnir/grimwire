@@ -219,6 +219,9 @@ common.dispatchRequest = function(req, origin, opts) {
 				console.error('Redirect response is missing its location header');
 			}*/
 
+			// Extract headers
+			var x_origin = res.headers['x-origin'];
+
 			// Generate final html
 			var html;
 			if (res.body && typeof res.body == 'string') {
@@ -237,11 +240,23 @@ common.dispatchRequest = function(req, origin, opts) {
 				// Just update HTML in cache
 				chrome_history[chrome_history_position].html = html;
 			} else {
+				// Expand/reduce the history to include 1 open slot
 				if (chrome_history.length > (chrome_history_position+1)) {
 					chrome_history.length = chrome_history_position+1;
 				}
+
+				// Set origin
+				// - if the x_origin is under the same authority, it will be used
 				var urld = local.parseUri(req);
-				chrome_history.push({ url: req.url, html: html, origin: (urld.protocol || 'httpl')+'://'+urld.authority  });
+				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+				if (x_origin) {
+					if (x_origin.indexOf(origin) === 0) {
+						origin = x_origin;
+					} else {
+						console.warn('Invalid X-Origin header value', x_origin, 'Must be under the authority of', origin);
+					}
+				}
+				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;
 
 				// Reset view
