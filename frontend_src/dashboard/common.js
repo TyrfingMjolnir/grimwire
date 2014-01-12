@@ -141,7 +141,6 @@ function goBack() {
 		chrome_history_position = 0;
 		return false;
 	}
-	window.location.hash = chrome_history_position;
 }
 
 function goForward() {
@@ -150,18 +149,22 @@ function goForward() {
 		chrome_history_position = chrome_history.length - 1;
 		return false;
 	}
-	window.location.hash = chrome_history_position;
 }
 
 function renderFromCache(pos) {
 	pos = (typeof pos == 'undefined') ? chrome_history_position : pos;
 	var history = chrome_history[pos];
+
+	// Update nav state
 	$chrome_url.val(history.url);
+	window.location.hash = chrome_history[chrome_history_position].url;
+	current_content_origin = history.origin;
+	console.debug('new origin', current_content_origin);
+
+	// Render HTML
 	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
 	var $iframe = $('main iframe');
 	$iframe.contents().find('body').html(common.sanitizeHtml(html));
-	current_content_origin = history.origin;
-	console.debug('new origin', current_content_origin);
 	// $('main').html(history.html);
 }
 
@@ -177,7 +180,7 @@ common.setupChromeUI = function() {
 		return false;
 	});
 	$chrome_refresh.on('click', function() {
-		common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+		common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' }, null, { is_refresh: true });
 		return false;
 	});
 	$chrome_url.on('keydown', function(e) {
@@ -198,7 +201,8 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 });
 
 // Page dispatch behavior
-common.dispatchRequest = function(req, origin) {
+common.dispatchRequest = function(req, origin, opts) {
+	opts = opts || {};
 	// Relative link? Use context to make absolute
 	if (!local.isAbsUri(req.url)) {
 		req.url = local.joinUri(current_content_origin, req.url);
@@ -229,17 +233,21 @@ common.dispatchRequest = function(req, origin) {
 
 			// Update history
 			$('#chrome-url').val(decodeURIComponent(req.url));
-			if (chrome_history.length > (chrome_history_position+1)) {
-				chrome_history.length = chrome_history_position+1;
-			}
-			var urld = local.parseUri(req);
-			chrome_history.push({ url: req.url, html: html, origin: (urld.protocol || 'httpl')+'://'+urld.authority  });
-			chrome_history_position++;
-			window.location.hash = chrome_history_position;
+			if (opts.is_refresh && chrome_history[chrome_history_position] && chrome_history[chrome_history_position].url == req.url) {
+				// Just update HTML in cache
+				chrome_history[chrome_history_position].html = html;
+			} else {
+				if (chrome_history.length > (chrome_history_position+1)) {
+					chrome_history.length = chrome_history_position+1;
+				}
+				var urld = local.parseUri(req);
+				chrome_history.push({ url: req.url, html: html, origin: (urld.protocol || 'httpl')+'://'+urld.authority  });
+				chrome_history_position++;
 
-			// Reset view
-			if (res.status == 205) {
-				goBack();
+				// Reset view
+				if (res.status == 205) {
+					goBack();
+				}
 			}
 
 			// Render
@@ -267,10 +275,18 @@ common.dispatchRequest = function(req, origin) {
 };
 
 window.onhashchange = function() {
-	var new_pos = (+window.location.hash.slice(1)) || 0;
-	if (new_pos == chrome_history_position) return;
-	chrome_history_position = new_pos;
-	renderFromCache();
+	// Try to find this URI in proximate history
+	var hashurl = window.location.hash.slice(1) || 'httpl://feed';
+	for (var pos = chrome_history_position-1; pos < (chrome_history_position+1); pos++) {
+		if (chrome_history[pos] && chrome_history[pos].url === hashurl) {
+			if (chrome_history_position == pos) return;
+			chrome_history_position = pos;
+			renderFromCache();
+			return;
+		}
+	}
+	// Not in history, new request
+	common.dispatchRequest(hashurl);
 };
 
 // P2P Utilities
