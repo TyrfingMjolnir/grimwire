@@ -47,11 +47,12 @@ var the_active_editor = 0;
 var $ace_editor_el = $('#ace');
 
 // load editor
-$(window).resize(function () {
+function resizeEditors() {
 	for (var k in active_editors) {
 		active_editors[k].$div.height($(window).height() - active_editors[k].$div.offset().top);
 	}
-});
+}
+$(window).resize(resizeEditors);
 
 // load workers
 try { installed_workers = JSON.parse(localStorage.getItem('workers')) || []; }
@@ -261,6 +262,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 		the_active_editor = +id;
 		active_editors[the_active_editor].$div.show();
 		renderEditorChrome();
+		resizeEditors();
 		if (req.query.steal_focus) {
 			common.layout.toggle('west');
 		}
