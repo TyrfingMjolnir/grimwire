@@ -52,7 +52,7 @@ server.route('/', function(link, method) {
 		res.setHeader('Content-Type', 'text/html');
 
 		// Respond 200 OK with the following content
-		return [200, 'Hello, world!<br><a href="/complete" target="_content">click this to complete tutorial 1.</a>'];
+		return [200, '<h1>Tutorial 1 <small>Hello World</small></h1>Hello, world!<br><a href="/complete" target="_content">click this to complete tutorial 1.</a>'];
 		/**
 		 * Link HREFs
 		 * - We use a relative path (/complete) for the link again.
@@ -101,7 +101,7 @@ server.route('/complete', function(link, method) {
 		res.setHeader('Content-Type', 'text/html');
 
 		// Respond 200 OK with the following content
-		return [200, '<strong>Well done!</strong> You have completed tutorial 1.<br>Be sure to find this program in the explorer. Doing so will help you understand how the links are used.'];
+		return [200, '<h1>Tutorial 1 <small>Completed</small></h1><strong>Well done!</strong> You have completed tutorial 1.<br>Be sure to find this program in the explorer. Doing so will help you understand how the links are used.'];
 	});
 });
 

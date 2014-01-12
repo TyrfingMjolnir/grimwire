@@ -27,6 +27,7 @@ server.route('/', function(link, method) {
 		if (type == 'text/html') {
 			res.setHeader('Content-Type', 'text/html');
 			return [200, [
+                '<h1>Tutorial 2 <small>Content Types</small></h1>',
                 '<a href="httpl://tut02.js/" type="application/json" target="_content">Get as JSON.</a>',
                 '<a href="httpl://tut02.js/decorated" target="_content">Decorate the JSON.</a>'
             ].join('<br>')];
@@ -63,7 +64,10 @@ server.route('/decorated', function(link, method) {
         return local.GET({ url: 'httpl://self/', Accept: 'application/json' })
             .then(function(res2) {
                 res.setHeader('Content-Type', 'text/html');
-                return [200, 'Hey: <strong>'+res2.body.hey+'</strong>'];
+                return [200, [
+                    '<h1>Tutorial 2 <small>Fetched and Decorated JSON</small></h1>',
+                    '<p>Hey: <strong>'+res2.body.hey+'</strong></p>'
+                ].join('')];
             });
         /**
          * Using the httpl://self host.
