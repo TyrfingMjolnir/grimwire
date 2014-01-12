@@ -124,9 +124,10 @@ common.setupRelay = function(relay) {
 };
 
 
-// App Behavior
-// ============
+// Navigation Behavior
+// ===================
 
+var current_content_origin = null;
 var $chrome_url = $('#chrome-url');
 var $chrome_back = $('#chrome-back');
 var $chrome_forward = $('#chrome-forward');
@@ -159,6 +160,8 @@ function renderFromCache(pos) {
 	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
 	var $iframe = $('main iframe');
 	$iframe.contents().find('body').html(common.sanitizeHtml(html));
+	current_content_origin = history.origin;
+	console.debug('new origin', current_content_origin);
 	// $('main').html(history.html);
 }
 
@@ -197,7 +200,9 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 // Page dispatch behavior
 common.dispatchRequest = function(req, origin) {
 	// Relative link? Use context to make absolute
-	// :TODO:
+	if (!local.isAbsUri(req.url)) {
+		req.url = local.joinUri(current_content_origin, req.url);
+	}
 
 	// Content target? Update page
 	if (req.target == '_content' || req.target == '_card_group' || req.target == '_card_self') {
@@ -227,7 +232,8 @@ common.dispatchRequest = function(req, origin) {
 			if (chrome_history.length > (chrome_history_position+1)) {
 				chrome_history.length = chrome_history_position+1;
 			}
-			chrome_history.push({ url: req.url, html: html });
+			var urld = local.parseUri(req);
+			chrome_history.push({ url: req.url, html: html, origin: (urld.protocol || 'httpl')+'://'+urld.authority  });
 			chrome_history_position++;
 			window.location.hash = chrome_history_position;
 

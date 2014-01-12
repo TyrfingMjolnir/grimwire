@@ -28,8 +28,8 @@ server.route('/', function(link, method) {
 			res.setHeader('Content-Type', 'text/html');
 			return [200, [
                 '<h1>Tutorial 2 <small>Content Types</small></h1>',
-                '<a href="httpl://tut02.js/" type="application/json" target="_content">Get as JSON.</a>',
-                '<a href="httpl://tut02.js/decorated" target="_content">Decorate the JSON.</a>'
+                '<a href="/" type="application/json" target="_content">Get as JSON.</a>',
+                '<a href="/decorated" target="_content">Decorate the JSON.</a>'
             ].join('<br>')];
 		}
 		/**

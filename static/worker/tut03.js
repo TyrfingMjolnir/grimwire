@@ -55,8 +55,8 @@ server.route('/', function(link, method) {
                 '<p>Self: <a href="'+self.href+'" target="_content">'+self.title+'</a> <code>'+self.rel+'</code></p>',
                 '<p>Test Page: <a href="'+test_page.href+'" target="_content">'+test_page.title+'</a> <code>'+test_page.rel+'</code></p>',
             ].join(' ');
-            // Replace all "self" links with "tut03.js"
-            html = html.replace(/httpl:\/\/self/g, 'httpl://tut03.js');
+            // Make all the self links relative
+            html = html.replace(/httpl:\/\/self/g, ''); // eg httpl://self/some-item -> /some-item
             return [200, html, {'Content-Type': 'text/html'}];
             /**
              * Returning headers
