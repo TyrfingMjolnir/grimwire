@@ -3,21 +3,7 @@
  * ==========
  * "Hello World"
  *
- * Welcome to Grimwire!
- *
- * You've embarked on a harrowing adventure, hacker.
- * There will be *bugs*, mysterious ~API decisions~, and _poor documentation_.
- *
- * But!
- * Whence you walk forth from this winding path, you shall be armed with =skillz=.
- * And those skillz will command the realm.
- *
- * So tread forth!
- * Be honest, true, curious, and caffeinated.
- * And beware the *bugs*.
- * For they await us all.
- *
- * ~pfraze
+ * How to serve an interface.
  */
 
 // Import: the HTTPL interface
@@ -72,7 +58,7 @@ server.route('/', function(link, method) {
 		 * - We use a relative path (/complete) for the link again.
 		 *   - This is because the host page transforms HTML and Link-header paths into absolute URLs.
 		 *
-		 * (For advanced users) the global hostname is used for the transformation if the response was retrieved globally.
+		 * (Advanced) the global hostname is used for the transformation if the response was retrieved globally.
 		 * - If the request was to httpl://tut01_helloworld.js...
 		 *   it would transform to httpl://tut01_helloworld.js/complete
 		 * - If the request was to httpl://bob@grimwire.net!grimwire.net!123/tut01_helloworld.js...
@@ -94,17 +80,17 @@ server.route('/complete', function(link, method) {
 		rel: 'up service',
 		title: 'Tutorial 1: Hello World Worker'
 	});
-	/**
-	 * Up reltypes
-	 * - Signifies a hierarchy which usually terminates at the root program.
-	 * - Similar to the ".." path in a file system.
-	 */
 	link({
 		href: '/complete',
 		rel: 'self item',
 		id: 'complete',
 		title: 'Completion Page'
 	});
+	/**
+	 * Up reltypes
+	 * - Signifies a hierarchy which usually terminates at the root program.
+	 * - Similar to the ".." path in a file system.
+	 */
 
 	// Add GET to '/complete'
 	method('GET', function(req, res) {

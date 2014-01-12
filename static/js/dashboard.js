@@ -578,7 +578,7 @@ server.route('/intro', function(link, method) {
 						'<li>Iframes to sandbox styles.</li>',
 					'</ul>',
 					'<br><br>',
-					'<h3>This is an <strong class="text-danger">unstable</strong> build!</h3>',
+					'<h3>This is an <strong class="text-danger">unstable</strong> build.</h3>',
 					'<p>',
 						'Some security policies have not been deployed.',
 						'Please be kind to each other!',
