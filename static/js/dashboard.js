@@ -1537,6 +1537,43 @@ var worker_remote_server = function(req, res, worker) {
 };
 
 
+// Worker Local Request Patch
+// - modifies requests sent to the workers
+local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, response) {
+	if (request.headers['X-Public-Host']) {
+		request.headers['X-Public-Host'] = local.joinUri(request.headers['X-Public-Host'], request.host);
+	}
+	local.BridgeServer.prototype.handleLocalRequest.call(this, request, response);
+	// Build message
+	/*var sid = this.sidCounter++;
+	var msg = {
+		sid: sid,
+		mid: (this.isReorderingMessages) ? 1 : undefined,
+		method: request.method,
+		path: request.path,
+		host: request.host,
+		query: request.query,
+		headers: request.headers
+	};
+
+	// Hold onto streams
+	this.outgoingStreams[msg.sid] = request;
+	this.incomingStreams[-msg.sid] = response; // store response stream in anticipation of the response messages
+
+	// Send over the channel
+	this.channelSendMsgWhenReady(JSON.stringify(msg));
+
+	// Wire up request stream events
+	var this2 = this;
+	var midCounter = msg.mid;
+	request.on('data',  function(data) { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, body: data })); });
+	request.on('end', function()       { this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, end: true })); });
+	request.on('close', function()     {
+		this2.channelSendMsgWhenReady(JSON.stringify({ sid: sid, mid: (midCounter) ? ++midCounter : undefined, close: true }));
+		delete this2.outgoingStreams[msg.sid];
+	});*/
+};
+
 // Helpers
 // -
 
