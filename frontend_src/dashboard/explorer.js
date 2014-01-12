@@ -152,7 +152,7 @@ server.route('/intro', function(link, method) {
 				'<div class="col-xs-8">',
 					'<h1>About</h1>',
 					'<p>',
-						'Grimwire is a <a href="http://gwr.io/" target="_blank">typed-link-driven</a> server platform for WebRTC.',
+						'Grimwire is a <a href="http://gwr.io/" target="_blank">link-driven</a> server platform for WebRTC.',
 						'In addition to hosting user programs, it provides tools to <a href="httpl://explorer/online?steal_focus=1" method="SHOW">find peers</a>, <a href="httpl://explorer" target="_content">navigate interfaces</a>, and <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit code</a>.',
 					'</p>',
 					'<br><br>',
