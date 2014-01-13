@@ -1203,7 +1203,7 @@ var bootstrap_src = whitelistAPIs_src + importScriptsPatch_src;
 // state
 var installed_workers;// = [/* string* */] loaded from local storage
 var active_workers = {/* name -> WorkerServer */};
-var active_editors = {/* name -> data */};
+var active_editors = {/* ed_id -> data */};
 var editor_id_counter = 0;
 var the_active_editor = 0;
 var $ace_editor_el = $('#ace');
@@ -1219,13 +1219,24 @@ $(window).resize(resizeEditors);
 // load workers
 try { installed_workers = JSON.parse(localStorage.getItem('workers')) || []; }
 catch(e) {}
-installed_workers.forEach(function(name) {
-	local.dispatch({ method: 'OPEN', url: 'httpl://workers/ed?name='+name });
-});
-if (installed_workers.length === 0) {
-	local.dispatch({ method: 'NEW', url: 'httpl://workers/ed' });
-}
+try {
+	var editor_state = JSON.parse(localStorage.getItem('workers_editor_state')) || {};
+	editor_state.editing.forEach(function(name) {
+		local.dispatch({ method: 'OPEN', url: 'httpl://workers/ed?name='+name });
+	});
+	editor_state.running.forEach(function(name) {
+		var query = { network: (editor_state.networked.indexOf(name) !== -1) ? 1 : 0 };
+		local.dispatch({ method: 'START', url: 'httpl://workers/w/'+name, query: query });
+	});
+} catch(e) {}
 renderEditorChrome();
+function saveEditorState() {
+	localStorage.setItem('workers_editor_state', JSON.stringify({
+		editing: Object.keys(active_editors).map(function(id) { return active_editors[id].name; }),
+		running: Object.keys(active_workers),
+		networked: Object.keys(active_workers).filter(function(name) { return active_workers[name].config.on_network; })
+	}));
+}
 
 
 // App Local Server
@@ -1338,6 +1349,7 @@ app_local_server.route('/ed', function(link, method) {
 					$div: $ace_editor_subdiv,
 					ace_editor: ace_editor
 				};
+				saveEditorState();
 				renderEditorChrome();
 				if (req.query.steal_focus) {
 					common.layout.open('west');
@@ -1385,6 +1397,7 @@ app_local_server.route('/ed', function(link, method) {
 		active_editors[the_active_editor].ace_editor.destroy();
 		active_editors[the_active_editor].$div.remove();
 		delete active_editors[the_active_editor];
+		saveEditorState();
 
 		new_active_editor = Object.keys(active_editors).slice(-1)[0];
 		if (new_active_editor)
@@ -1536,6 +1549,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
 		common.publishNetworkLinks();
+		saveEditorState();
 
 		return 204;
 	});
@@ -1550,6 +1564,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		}
 		delete active_workers[name];
 		common.publishNetworkLinks();
+		saveEditorState();
 
 		return 204;
 	});
