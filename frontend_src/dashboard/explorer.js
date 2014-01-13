@@ -13,12 +13,20 @@ module.exports = server;
 
 var show_hidden = false;
 
+function forbidPeers(req, res) {
+	// :DEBUG: temp security policy - no peer users
+	if (req.headers['x-public-host'])
+		throw 403;
+	return true;
+}
+
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service', id: 'explorer', title: 'Explorer' });
 	link({ href: '/intro', rel: 'service gwr.io/page', id: 'intro', title: 'About' });
 
-	method('GET', function(req, res) {
+	method('HEAD', forbidPeers, function() { return 204; });
+	method('GET', forbidPeers, function(req, res) {
 		if (typeof req.query.show_hidden != 'undefined')
 			show_hidden = (req.query.show_hidden == 1);
 		var uri = req.query.uri || 'httpl://hosts';
@@ -134,7 +142,8 @@ function render_explorer(ctx) {
 }
 
 server.route('/online', function(link, method) {
-	method('SHOW', function(req, res) {
+	method('HEAD', forbidPeers, function() { return 204; });
+	method('SHOW', forbidPeers, function(req, res) {
 		// :DEBUG: temporary helper
 		common.layout.toggle('east');
 		return 204;
@@ -145,7 +154,8 @@ server.route('/intro', function(link, method) {
 	link({ href: '/', rel: 'up service', id: 'explorer', title: 'Explorer' });
 	link({ href: '/intro', rel: 'self service gwr.io/page', id: 'intro', title: 'About' });
 
-	method('GET', function(req, res) {
+	method('HEAD', forbidPeers, function() { return 204; });
+	method('GET', forbidPeers, function(req, res) {
 		req.assert({ accept: 'text/html' });
 		return [200, [
 			'<div class="row">',

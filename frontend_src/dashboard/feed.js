@@ -23,12 +23,21 @@ function render_updates() {
 	}).join('');
 }
 
+function forbidPeers(req, res) {
+	// :DEBUG: temp security policy - no peer users
+	if (req.headers['x-public-host'])
+		throw 403;
+	return true;
+}
+
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
 	link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
 
-	method('GET', function(req, res) {
+	method('HEAD', forbidPeers, function() { return 204; });
+
+	method('GET', forbidPeers, function(req, res) {
 		var originUntrusted = false; //:TODO:
 
 		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
@@ -44,7 +53,7 @@ server.route('/', function(link, method) {
 		return [200, html, {'content-type': 'text/html'}];
 	});
 
-	method('POST', function(req, res) {
+	method('POST', forbidPeers, function(req, res) {
 		req.assert({ type: 'text/html' });
 		var origin_untrusted = false; // :TODO:
 
@@ -73,7 +82,9 @@ server.route('/:id', function(link, method) {
 	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'Updates Feed' });
 	link({ href: '/:id', rel: 'self item', id: ':id', title: 'Update :id' });
 
-	method('GET', function(req, res) {
+	method('HEAD', forbidPeers, function() { return 204; });
+
+	method('GET', forbidPeers, function(req, res) {
 		var update = _updates[req.pathArgs.id];
 		if (!update) throw 404;
 
@@ -85,7 +96,7 @@ server.route('/:id', function(link, method) {
 		throw 406;
 	});
 
-	method('PUT', function(req, res) {
+	method('PUT', forbidPeers, function(req, res) {
 		req.assert({ type: 'text/html' });
 		var origin_untrusted = false; // :TODO:
 
@@ -108,7 +119,7 @@ server.route('/:id', function(link, method) {
 		return 204;
 	});
 
-	method('DELETE', function(req, res) {
+	method('DELETE', forbidPeers, function(req, res) {
 		var update = _updates[req.pathArgs.id];
 		if (!update) throw 404;
 

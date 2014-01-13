@@ -72,13 +72,22 @@ var app_local_server = servware();
 module.exports = app_local_server;
 module.exports.active_workers = active_workers;
 
+function forbidPeers(req, res) {
+	// :DEBUG: temp security policy - no peer users
+	if (req.headers['x-public-host'])
+		throw 403;
+	return true;
+}
+
 // root
 app_local_server.route('/', function(link, method) {
 	link({ href: '/', rel: 'self service', id: 'workers', title: 'Worker Programs' });
 	link({ href: '/w', rel: 'collection', id: 'w', title: 'Installed' });
 	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors', hidden: true });
 
-	method('GET', function() {
+	method('HEAD', forbidPeers, function() { return 204; });
+
+	method('GET', forbidPeers, function() {
 		return 204;
 	});
 });
@@ -89,7 +98,7 @@ app_local_server.route('/ed', function(link, method) {
 	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
 	link({ href: '/ed/{id}', rel: 'item', title: 'Lookup by ID' });
 
-	method('HEAD', function(req, res) {
+	method('HEAD', forbidPeers, function(req, res) {
 		for (var k in active_editors) {
 			res.link({ href: '/ed/'+k, rel: 'item', id: k, title: 'Editor '+k });
 		}
@@ -98,7 +107,7 @@ app_local_server.route('/ed', function(link, method) {
 
 	// ui methods
 
-	method('NEW', function(req, res) {
+	method('NEW', forbidPeers, function(req, res) {
 		// Hide current editor
 		if (active_editors[the_active_editor]) {
 			active_editors[the_active_editor].$div.hide();
@@ -129,7 +138,7 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('OPEN', function(req, res) {
+	method('OPEN', forbidPeers, function(req, res) {
 		var url = req.query.url, name = req.query.name;
 		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
 		if (!url) url = prompt('Enter the URL of the script');
@@ -180,7 +189,7 @@ app_local_server.route('/ed', function(link, method) {
 			});
 	});
 
-	method('SAVE', function(req, res) {
+	method('SAVE', forbidPeers, function(req, res) {
 		var ed = active_editors[the_active_editor];
 		if (!ed) { throw 404; }
 
@@ -209,19 +218,22 @@ app_local_server.route('/ed', function(link, method) {
 			});
 	});
 
-	method('CLOSE', function(req, res) {
+	method('CLOSE', forbidPeers, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		active_editors[the_active_editor].ace_editor.destroy();
 		active_editors[the_active_editor].$div.remove();
 		delete active_editors[the_active_editor];
 
 		new_active_editor = Object.keys(active_editors).slice(-1)[0];
-		local.dispatch({ method: 'SHOW', url: 'httpl://'+req.host+'/ed/'+new_active_editor });
+		if (new_active_editor)
+			local.dispatch({ method: 'SHOW', url: 'httpl://'+req.host+'/ed/'+new_active_editor });
+		else
+			renderEditorChrome();
 
 		return 204;
 	});
 
-	method('DELETE', function(req, res) {
+	method('DELETE', forbidPeers, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		if (!confirm('Delete '+active_editors[the_active_editor].name+'. Are you sure?')) throw 400;
 		active_editors[the_active_editor].ua.DELETE();
@@ -230,7 +242,7 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('START', function(req, res) {
+	method('START', forbidPeers, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
 			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START', query: { network: req.query.network } }); })
@@ -238,7 +250,7 @@ app_local_server.route('/ed', function(link, method) {
 			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
 	});
 
-	method('STOP', function(req, res) {
+	method('STOP', forbidPeers, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return active_editors[the_active_editor].ua.dispatch({ method: 'STOP' })
 			.then(function(res) { renderEditorChrome(); return 204; })
@@ -252,9 +264,11 @@ app_local_server.route('/ed/:id', function(link, method) {
 	link({ href: '/ed', rel: 'up collection', id: 'ed', title: 'Editors' });
 	link({ href: '/ed/:id', rel: 'self item', id: ':id', title: 'Editor :id' }); // :TODO: uri templates
 
+	method('HEAD', forbidPeers, function() { return 204; });
+
 	// UI methods
 
-	method('SHOW', function(req, res) {
+	method('SHOW', forbidPeers, function(req, res) {
 		var id = req.pathArgs.id;
 		if (!active_editors[id]) { throw 404; }
 		if (active_editors[the_active_editor])
@@ -276,7 +290,7 @@ app_local_server.route('/w', function(link, method) {
 	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
 	link({ href: '/w/{id}', rel: 'item', title: 'Lookup by Name' });
 
-	method('HEAD', function(req, res) {
+	method('HEAD', forbidPeers, function(req, res) {
 		installed_workers.forEach(function(name) {
 			res.link({ href: '/w/'+name, rel: 'item', id: name, title: name });
 		});
@@ -292,13 +306,13 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// CRUD methods
 
-	method('HEAD', function(req, res) {
+	method('HEAD', forbidPeers, function(req, res) {
 		var js = localStorage.getItem('worker_'+req.pathArgs.id);
 		if (!js) throw 404;
 		return 204;
 	});
 
-	method('GET', function(req, res) {
+	method('GET', forbidPeers, function(req, res) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
 		var js = localStorage.getItem('worker_'+req.pathArgs.id);
 		if (!js) throw 404;
@@ -306,7 +320,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		return [200,  js];
 	});
 
-	method('PUT', function(req, res) {
+	method('PUT', forbidPeers, function(req, res) {
 		var name = req.pathArgs.id;
 		req.assert({ type: ['application/javascript', 'text/javascript', 'text/plain'] });
 		localStorage.setItem('worker_'+name, req.body || '');
@@ -317,7 +331,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		return 204;
 	});
 
-	method('DELETE', function(req, res) {
+	method('DELETE', forbidPeers, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// stop worker
@@ -338,7 +352,7 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// Worker control methods
 
-	method('START', function(req, res) {
+	method('START', forbidPeers, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// Unload script if active
@@ -364,7 +378,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		return 204;
 	});
 
-	method('STOP', function(req, res) {
+	method('STOP', forbidPeers, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// Unload script if active
@@ -399,7 +413,7 @@ var worker_remote_server = function(req, res, worker) {
 		stream: true
 	});
 	req2.headers['From'] = worker.config.domain;
-	var res2_ = local.dispatch(req2)
+	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
 		res.writeHead(res2.status, res2.reason, res2.headers);
 		res2.on('data', function(chunk) { res.write(chunk); });
