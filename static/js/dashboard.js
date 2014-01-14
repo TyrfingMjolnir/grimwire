@@ -1556,7 +1556,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		var name = req.pathArgs.id;
 
 		// stop worker
-		local.dispatch({ method: 'STOP', url: 'programs/w/'+name });
+		local.dispatch({ method: 'STOP', url: 'httpl://'+req.host+'/w/'+name });
 
 		// update listing
 		var name_index = installed_workers.indexOf(name);
