@@ -1700,7 +1700,14 @@ function renderEditorChrome() {
 	$('#worker-open-dropdown').html([
 		'<li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>',
 		installed_workers.map(function(name) {
-			return '<li><a method="OPEN" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+common.escape(name)+'</a></li>';
+			var glyph = '';
+			if (active_workers[name]) {
+				glyph = '<b class="glyphicon glyphicon-play"></b> ';
+				if (active_workers[name].config.on_network) {
+					glyph += '<b class="glyphicon glyphicon-globe"></b> ';
+				}
+			}
+			return '<li><a method="OPEN" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+glyph+common.escape(name)+'</a></li>';
 		}).join('')
 	].join(''));
     $('#worker-editor > .nav-tabs').html(html);
