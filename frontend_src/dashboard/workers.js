@@ -85,7 +85,7 @@ module.exports.active_workers = active_workers;
 
 function forbidPeers(req, res) {
 	// :DEBUG: temp security policy - no peer users
-	if (req.headers['x-public-host'])
+	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
@@ -149,7 +149,9 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('OPEN', forbidPeers, function(req, res) {
+	// :DEBUG: :TODO: the one function that's available for peers FOR NOW
+	// - not super safe
+	method('OPEN', function(req, res) {
 		var url = req.query.url, name = req.query.name;
 		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
 		if (!url) url = prompt('Enter the URL of the script');

@@ -32,8 +32,6 @@ grim: editor
  - opening a new worker with an existing worker's name should result in a trailing # increment (.2.js)
  - star next to name should indicate unsaved (currently just indicates new)
 grim: security
- - absolute URIs in link headers are mis-calculated, though the origin is correct (an issue with local)
-   - solveable with an on() eventemitter registration that went to the start of the handler list
  - local URIs (myworker.js, explorer) should only be allowed from local origins*
  - complete access control review
  - escaping strategy

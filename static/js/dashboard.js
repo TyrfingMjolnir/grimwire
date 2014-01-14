@@ -203,18 +203,11 @@ common.setupChromeUI = function() {
 common.prepIframeRequest = function (req) {
 	if (current_content_origin) {
 		// Clear the headers we're going to set
-		delete req.headers['X-Public-Host'];
-		delete req.headers['x-public-host'];
 		delete req.headers['From'];
 		delete req.headers['from'];
 
-		// Put origin and public name into the headers
+		// Put origin into the headers
 		req.headers['From'] = current_content_origin;
-		if (current_content_origin.indexOf('@') !== -1) {
-			// WebRTC origin (public host)
-			req.headers['X-Public-Host'] = req.host;
-
-		}
 	}
 };
 
@@ -510,7 +503,7 @@ var show_hidden = false;
 
 function forbidPeers(req, res) {
 	// :DEBUG: temp security policy - no peer users
-	if (req.headers['x-public-host'])
+	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
@@ -745,7 +738,7 @@ function render_updates() {
 
 function forbidPeers(req, res) {
 	// :DEBUG: temp security policy - no peer users
-	if (req.headers['x-public-host'])
+	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
@@ -1298,7 +1291,7 @@ module.exports.active_workers = active_workers;
 
 function forbidPeers(req, res) {
 	// :DEBUG: temp security policy - no peer users
-	if (req.headers['x-public-host'])
+	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
@@ -1362,7 +1355,9 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('OPEN', forbidPeers, function(req, res) {
+	// :DEBUG: :TODO: the one function that's available for peers FOR NOW
+	// - not super safe
+	method('OPEN', function(req, res) {
 		var url = req.query.url, name = req.query.name;
 		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
 		if (!url) url = prompt('Enter the URL of the script');

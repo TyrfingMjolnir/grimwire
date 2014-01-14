@@ -202,18 +202,11 @@ common.setupChromeUI = function() {
 common.prepIframeRequest = function (req) {
 	if (current_content_origin) {
 		// Clear the headers we're going to set
-		delete req.headers['X-Public-Host'];
-		delete req.headers['x-public-host'];
 		delete req.headers['From'];
 		delete req.headers['from'];
 
-		// Put origin and public name into the headers
+		// Put origin into the headers
 		req.headers['From'] = current_content_origin;
-		if (current_content_origin.indexOf('@') !== -1) {
-			// WebRTC origin (public host)
-			req.headers['X-Public-Host'] = req.host;
-
-		}
 	}
 };
 

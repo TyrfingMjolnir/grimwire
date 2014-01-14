@@ -25,7 +25,7 @@ function render_updates() {
 
 function forbidPeers(req, res) {
 	// :DEBUG: temp security policy - no peer users
-	if (req.headers['x-public-host'])
+	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
