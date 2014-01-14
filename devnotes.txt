@@ -27,12 +27,12 @@ grim: ensure that data is properly separated so that 2 sessions cant issue confl
 grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
 
 grim: editor
- - workers should show they're running in the Open menu
- - workers should STOP on delete
- - opening a new worker with an existing worker's name should result in a trailing # increment (.2.js)
+ - workers should show they're running in the Open menu*
+ - workers should STOP on delete*
+ - opening a new worker with an existing worker's name should result in a trailing # increment (.2.js)*
  - star next to name should indicate unsaved (currently just indicates new)
 grim: security
- - local URIs (myworker.js, explorer) should only be allowed from local origins*
+ - disallow iframe content from accessing local hosts if from a global interface*
  - complete access control review
  - escaping strategy
  - make sure CSP comes from headers

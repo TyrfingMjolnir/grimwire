@@ -336,7 +336,7 @@ function renderAll() {
 
 		// Session user
 		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)+renderWorkerLinks()+'</table>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)/*+renderWorkerLinks()*/+'</table>';
 
 		// Other users
 		var html2 = '';
