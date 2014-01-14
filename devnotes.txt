@@ -1,0 +1,119 @@
+TODO
+
+local: move request .host to headers
+local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely
+local: add support for local.POST({}, 'httpl://nquery')
+local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly)
+local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link')
+local: data-local-alias sucks, replace with something more obvious
+local: hosts is kinda easy to infinitely loop
+local: add host.page to workers
+local: add functions to queryLinks
+local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
+local: s/link query failed to match/Link Query Failed/
+local:
+"warning| Page content which was undergoing approval was found to contain live directives without a warning label."
+"warning|  - this indicates some piece of software, either maliciously or unintentionally, let the directives through"
+"warning|  - the address it came from was foobar.com"
+"warning|  - [> Request] [> Response]"
+"warning|  - the line in question [> { line: '<script>alert(window.location);</script><p>...' }]"
+local: document relay.isListening
+local: document local.* sugars
+
+grim: finish r2r
+grim: change grimwidget not to get links before render()
+grim: ensure that data is properly separated so that 2 sessions cant issue conflicting updates
+grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
+
+grim: editor
+ - closing a worker tab should close the program*
+ - opening a new worker with an existing worker's name does not result in an increment
+ - star next to name should indicate unsaved (current just indicates new)
+grim: security
+ - HTML requests need to pull origin from HTML origin*
+  - local URIs (myworker.js, explorer) should only be allowed from local origins*
+ - replace x-origin response header with smarter origin calculation in common.dispatchRequest()*
+ - workers should not accept network requests unless they are on the network***
+ - need restrictions on who can do what
+  - populate the from header from the origin
+ - escaping strategy
+ - make sure CSP comes from headers
+grim: workers
+ - simple data storage
+ - better-functioning proxy service (HEAD request, etc)
+grim: replace hosts
+grim: tutorials
+ - Hello World
+ - Content Types
+ - Forms and Anchors
+ - Link Directories
+ - Public Hosting (X-Origin and X-Public-Host, The From Header)
+ - Constructing URLs (URI templates and path tokens)?
+ - User Agents?
+ - Request targets?
+ - Middleware?
+
+servware: mechanism to update existing links
+servware: regex methodname
+servware: change pathArgs to params
+servware: methodNames arent cumulative yet
+
+
+
+---
+
+RESEARCH
+
+http://williamcotton.com/another-way-to-publish-code
+WinFS http://www.youtube.com/watch?v=UhWCH8ebShY
+Zoomable Information Seeking http://www.youtube.com/watch?v=SSVeT5ipvvk
+Early ZUI http://www.youtube.com/watch?v=5JzaEUJ7IbE
+
+---
+
+SCRATCHPAD
+
+"Whats New"
+ - "Syncing with Alice @ Grimwire.net..."
+ - "10 new messages, 18 new photos"
+ - "Alice, Some of these are new, some are not."
+ - "Bob, Good shots of vacation 2014. (reference: photoset for family)"
+ - "Alice, agreed"
+"Mail"
+"Chat Rooms"
+how far could data-uris go in a dynamic interface?
+
+syncmail: contacts
+ - viewing a contact
+  - local cache of canonical
+  - canonical can be a local file
+  - fetch canonical
+   - gwr.io/cached=<canonical uri>
+  - edit canonical? a link which canonical must give
+syncmail: mail program
+ - inbox = nav:||files|gwr.io/message+gwr.io/shared,shared_users(has)pfraze@grimwire.net
+ - outbox = nav:||files|gwr.io/message+gwr.io/shared,message_author=pfraze@grimwire.net
+ - drafts = nav:||files|gwr.io/message,rel(hasnt)gwr.io/shared
+syncmail: permissioning
+ - permissions = who can have what link
+ - user flow: create capability link, tell security "is for X Y Z reltypes"
+ - on request: security looks up origin as href, sees capability links for given types
+syncmail: rewrite and merge into grimwire dashboard
+syncmail: relay databases
+
+gwr.io/shared,shared_users(has)pfraze@grimwire.net
+gwr.io/shared,shared_groups(has)friends
+gwr.io/shared,shared_apps(has)foo.com
+gwr.io/shared,shared_networks(has)grimwire.net
+
+
+gwr.io/shared,shared_networks(not)grimwire.net
+gwr.io/shared,shared_networks(has)grimwire.com(hasnt)grimwire.net
+
+nav:||gwr.io=grimwire.net|gwr.io/user=pfraze
+nav:|gwr.io/contact,user=pfraze,network=grimwire.net
+nav:|gwr.io/contact,group=admins
+
+nav:|gwr.io/contact/rtcuser=pfraze@grimwire.net
+nav:|gwr.io/contact/email=pfraze@grimwire.net
+nav:|gwr.io/contact/group=admins
