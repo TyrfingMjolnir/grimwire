@@ -38,6 +38,7 @@ local.setDispatchWrapper(function(req, res, dispatch) {
 // Servers
 var workers_server = require('./workers');
 // local.addServer('href', require('./href'));
+local.addServer('storage', require('./storage'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
 local.addServer('workers', workers_server);

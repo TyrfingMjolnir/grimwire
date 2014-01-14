@@ -42,7 +42,7 @@ server.route('/', function(link, method) {
 			}
 		});
 		uri = uritmpl.expand(ctx);
-		local.HEAD(uri).always(function(res2) {
+		local.HEAD({ url: uri, From: 'explorer' }).always(function(res2) {
 			// Build explore interface
 			var links = (res2.parsedHeaders.link) ? res2.parsedHeaders.link : [];
 			var viaLink = local.queryLinks(links, { rel: 'via !up !self' })[0];

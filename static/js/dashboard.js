@@ -530,7 +530,7 @@ server.route('/', function(link, method) {
 			}
 		});
 		uri = uritmpl.expand(ctx);
-		local.HEAD(uri).always(function(res2) {
+		local.HEAD({ url: uri, From: 'explorer' }).always(function(res2) {
 			// Build explore interface
 			var links = (res2.parsedHeaders.link) ? res2.parsedHeaders.link : [];
 			var viaLink = local.queryLinks(links, { rel: 'via !up !self' })[0];
@@ -881,6 +881,7 @@ local.setDispatchWrapper(function(req, res, dispatch) {
 // Servers
 var workers_server = require('./workers');
 // local.addServer('href', require('./href'));
+local.addServer('storage', require('./storage'));
 local.addServer('explorer', require('./explorer'));
 local.addServer('feed', require('./feed'));
 local.addServer('workers', workers_server);
@@ -1203,7 +1204,75 @@ function renderAll() {
 	renderUserConnections();
 }
 renderAll();
-},{"./common":1,"./explorer":2,"./feed":3,"./workers":5}],5:[function(require,module,exports){
+},{"./common":1,"./explorer":2,"./feed":3,"./storage":5,"./workers":6}],5:[function(require,module,exports){
+/*
+httpl://storage
+
+Simple local/session storage server
+*/
+
+var server = servware();
+module.exports = server;
+
+function checkPerms(req, res) {
+	var from = req.headers['From'] || req.headers.from; // :TODO: temporary situation
+	// No peer users
+	if (from && from.indexOf('@') !== -1)
+		throw 403;
+	// Buckets are currently only allowed for the domain of the same name
+	if (req.pathArgs.bucket && req.pathArgs.bucket != from)
+		throw 403;
+	return true;
+}
+
+server.route('/', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
+
+	method('HEAD', checkPerms, function() { return 204; });
+});
+
+server.route('/:storage/:bucket/:id', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/:storage/:bucket/:id', rel: 'self item', storage: ':storage', bucket: ':bucket', id: ':id', title: 'KV' });
+
+	function getStorage(req, res) {
+		switch (req.pathArgs.storage) {
+			case 'session': req.storage = sessionStorage; break;
+			case 'local': req.storage = localStorage; break;
+			default: throw 404;
+		}
+		req.key = 'storage_'+req.pathArgs.bucket+':'+req.pathArgs.id;
+		return true;
+	}
+
+	method('HEAD', checkPerms, getStorage, function(req, res) {
+		if (!req.storage.getItem(req.key))
+			return 404;
+		return 204;
+	});
+
+	method('GET', checkPerms, getStorage, function(req, res) {
+		var value = req.storage.getItem(req.key);
+		if (!value)
+			throw 404;
+		return [200, value];
+	});
+
+	method('PUT', checkPerms, getStorage, function(req, res) {
+		req.assert({ type: 'text/plain' });
+		req.storage.setItem(req.key, req.body);
+		return 204;
+	});
+
+	method('DELETE', checkPerms, getStorage, function(req, res) {
+		req.storage.removeItem(req.key);
+		return 204;
+	});
+});
+},{}],6:[function(require,module,exports){
 // workers
 // =======
 
@@ -1266,9 +1335,11 @@ catch(e) {}
 try {
 	var editor_state = JSON.parse(localStorage.getItem('workers_editor_state')) || {};
 	editor_state.editing.forEach(function(name) {
+		if (installed_workers.indexOf(name) === -1) return;
 		local.dispatch({ method: 'OPEN', url: 'httpl://workers/ed?name='+name });
 	});
 	editor_state.running.forEach(function(name) {
+		if (installed_workers.indexOf(name) === -1) return;
 		var query = { network: (editor_state.networked.indexOf(name) !== -1) ? 1 : 0 };
 		local.dispatch({ method: 'START', url: 'httpl://workers/w/'+name, query: query });
 	});
