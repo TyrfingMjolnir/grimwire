@@ -28,7 +28,8 @@ common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || 
 
 // Traffic logging
 local.setDispatchWrapper(function(req, res, dispatch) {
-	dispatch(req, res).then(
+	var res_ = dispatch(req, res);
+	res_.then(
 		function() { console.log(req, res); },
 		function() { console.error(req, res); }
 	);
@@ -61,7 +62,9 @@ local.addServer(window.location.host, function(req, res) {
 // Request events
 local.bindRequestEvents(document.body);
 document.body.addEventListener('request', function(e) {
-	common.dispatchRequest(e.detail, e.target);
+	var req = e.detail;
+	// common.prepDocumentRequest(req); :NOTE: do NOT do this. common.prepDocumentRequest assumes the origin of the main iframe; these request events come from the shell
+	common.dispatchRequest(req, e.target);
 });
 
 // Network relay

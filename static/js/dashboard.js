@@ -72,12 +72,21 @@ common.setupRelay = function(relay) {
 			headers: local.util.deepClone(req.headers),
 			stream: true
 		});
+
+		// Clear the headers we're going to set
+		delete req2.headers['X-Public-Host'];
+		delete req2.headers['x-public-host'];
+		delete req2.headers['From'];
+		delete req2.headers['from'];
+
+		// Put origin and public name into the headers
 		req2.headers['From'] = peer.config.domain;
 		req2.headers['X-Public-Host'] = req.host;
+
 		var res2_ = local.dispatch(req2);
 		res2_.always(function(res2) {
-			// Update links
-			if (res2.headers.link) {
+			// Update the Link header
+			/*if (res2.headers.link) {
 				var links = local.httpHeaders.deserialize('link', res2.headers.link);
 				links.forEach(function(link) {
 					if (!local.isAbsUri(link.href)) {
@@ -86,7 +95,7 @@ common.setupRelay = function(relay) {
 					link.href = '/'+link.href;
 				});
 				res2.headers.link = local.httpHeaders.deserialize('link', links);
-			}
+			}*/
 
 			// Pipe back
 			res.writeHead(res2.status, res2.reason, res2.headers);
@@ -191,6 +200,24 @@ common.setupChromeUI = function() {
 	});
 };
 
+common.prepDocumentRequest = function (req) {
+	if (current_content_origin) {
+		// Clear the headers we're going to set
+		delete req.headers['X-Public-Host'];
+		delete req.headers['x-public-host'];
+		delete req.headers['From'];
+		delete req.headers['from'];
+
+		// Put origin and public name into the headers
+		req.headers['From'] = current_content_origin;
+		if (current_content_origin.indexOf('@') !== -1) {
+			// WebRTC origin (public host)
+			req.headers['X-Public-Host'] = req.host;
+
+		}
+	}
+};
+
 // Collapsible panels
 common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true });
 
@@ -198,7 +225,9 @@ common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east
 var $iframe = $('main iframe');
 local.bindRequestEvents($iframe.contents()[0].body);
 $iframe.contents()[0].body.addEventListener('request', function(e) {
-	common.dispatchRequest(e.detail, e.target);
+	var req = e.detail;
+	common.prepDocumentRequest(req);
+	common.dispatchRequest(req, e.target);
 });
 
 // Page dispatch behavior
@@ -219,9 +248,6 @@ common.dispatchRequest = function(req, origin, opts) {
 				}
 				console.error('Redirect response is missing its location header');
 			}*/
-
-			// Extract headers
-			var x_origin = res.headers['x-origin'];
 
 			// Generate final html
 			var html;
@@ -247,15 +273,13 @@ common.dispatchRequest = function(req, origin, opts) {
 				}
 
 				// Set origin
-				// - if the x_origin is under the same authority, it will be used
 				var urld = local.parseUri(req);
 				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
-				if (x_origin) {
-					if (x_origin.indexOf(origin) === 0) {
-						origin = x_origin;
-					} else {
-						console.warn('Invalid X-Origin header value', x_origin, 'Must be under the authority of', origin);
-					}
+				// If the request was to a global URI, include the local hostname in the origin
+				if (origin.indexOf('@') !== -1) {
+					var path_parts = urld.path.split('/');
+					var hostname = path_parts[1];
+					origin = local.joinUri(origin, hostname);
 				}
 				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;
@@ -830,7 +854,8 @@ common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || 
 
 // Traffic logging
 local.setDispatchWrapper(function(req, res, dispatch) {
-	dispatch(req, res).then(
+	var res_ = dispatch(req, res);
+	res_.then(
 		function() { console.log(req, res); },
 		function() { console.error(req, res); }
 	);
@@ -863,7 +888,9 @@ local.addServer(window.location.host, function(req, res) {
 // Request events
 local.bindRequestEvents(document.body);
 document.body.addEventListener('request', function(e) {
-	common.dispatchRequest(e.detail, e.target);
+	var req = e.detail;
+	// common.prepDocumentRequest(req); :NOTE: do NOT do this. common.prepDocumentRequest assumes the origin of the main iframe; these request events come from the shell
+	common.dispatchRequest(req, e.target);
 });
 
 // Network relay
@@ -1589,7 +1616,16 @@ var worker_remote_server = function(req, res, worker) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
+
+	// Clear the headers we're going to set
+	delete req2.headers['X-Public-Host'];
+	delete req2.headers['x-public-host'];
+	delete req2.headers['From'];
+	delete req2.headers['from'];
+
+	// Set origin
 	req2.headers['From'] = worker.config.domain;
+
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
 		res.writeHead(res2.status, res2.reason, res2.headers);

@@ -7,6 +7,7 @@ local: link header relative → abs is fucking up data uris (not recognizing the
 local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link')
 local: data-local-alias sucks, replace with something more obvious
 local: hosts is kinda easy to infinitely loop
+local: add timeout to hosts
 local: add host.page to workers
 local: add functions to queryLinks
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
@@ -26,16 +27,15 @@ grim: ensure that data is properly separated so that 2 sessions cant issue confl
 grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
 
 grim: editor
- - closing a worker tab should close the program*
- - opening a new worker with an existing worker's name does not result in an increment
- - star next to name should indicate unsaved (current just indicates new)
+ - workers should show they're running in the Open menu
+ - workers should STOP on delete
+ - opening a new worker with an existing worker's name should result in a trailing # increment (.2.js)
+ - star next to name should indicate unsaved (currently just indicates new)
 grim: security
  - HTML requests need to pull origin from HTML origin*
   - local URIs (myworker.js, explorer) should only be allowed from local origins*
  - replace x-origin response header with smarter origin calculation in common.dispatchRequest()*
- - workers should not accept network requests unless they are on the network***
- - need restrictions on who can do what
-  - populate the from header from the origin
+ - complete access controls
  - escaping strategy
  - make sure CSP comes from headers
 grim: workers
@@ -46,8 +46,7 @@ grim: tutorials
  - Hello World
  - Content Types
  - Forms and Anchors
- - Link Directories
- - Public Hosting (X-Origin and X-Public-Host, The From Header)
+ - Link Directoriess
  - Constructing URLs (URI templates and path tokens)?
  - User Agents?
  - Request targets?

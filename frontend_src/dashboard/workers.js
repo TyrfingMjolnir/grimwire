@@ -427,7 +427,16 @@ var worker_remote_server = function(req, res, worker) {
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
+
+	// Clear the headers we're going to set
+	delete req2.headers['X-Public-Host'];
+	delete req2.headers['x-public-host'];
+	delete req2.headers['From'];
+	delete req2.headers['from'];
+
+	// Set origin
 	req2.headers['From'] = worker.config.domain;
+
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
 		res.writeHead(res2.status, res2.reason, res2.headers);
