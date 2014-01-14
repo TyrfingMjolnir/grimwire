@@ -199,7 +199,7 @@ common.setupChromeUI = function() {
 	});
 };
 
-common.prepDocumentRequest = function (req) {
+common.prepIframeRequest = function (req) {
 	if (current_content_origin) {
 		// Clear the headers we're going to set
 		delete req.headers['X-Public-Host'];
@@ -225,9 +225,36 @@ var $iframe = $('main iframe');
 local.bindRequestEvents($iframe.contents()[0].body);
 $iframe.contents()[0].body.addEventListener('request', function(e) {
 	var req = e.detail;
-	common.prepDocumentRequest(req);
+	common.prepIframeRequest(req);
 	common.dispatchRequest(req, e.target);
 });
+
+// Response header processing
+(function() {
+	var origfn = local.Response.prototype.processHeaders;
+	local.Response.prototype.processHeaders = function(req) {
+		if (!req.urld) { req.urld = local.parseUri(req); }
+
+		// X-Origin header
+		if (this.headers['x-origin']) {
+			var x_origin = this.headers['x-origin'];
+			var base_origin = req.urld.protocol + '://' + req.urld.authority;
+			// Does X-Origin have the same scheme+authority as the request's original URI?
+			if (x_origin.indexOf(base_origin) === 0) {
+				// origfn() uses req.urld.authority to transform relative links to absolute
+				var x_origin_authority = x_origin.split('://')[1];
+				req.urld.authority = x_origin_authority; // change it so that the links it produces are correct
+			} else {
+				console.warn('Invalid X-Origin header:', x_origin, 'Not within authority of URL it came from:', base_origin);
+				delete this.headers['X-Origin'];
+				delete this.headers['x-origin'];
+			}
+		}
+
+		origfn.call(this, req);
+	};
+})();
+
 
 // Page dispatch behavior
 common.dispatchRequest = function(req, origin, opts) {
@@ -274,11 +301,8 @@ common.dispatchRequest = function(req, origin, opts) {
 				// Set origin
 				var urld = local.parseUri(req);
 				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
-				// If the request was to a global URI, include the local hostname in the origin
-				if (origin.indexOf('@') !== -1) {
-					var path_parts = urld.path.split('/');
-					var hostname = path_parts[1];
-					origin = local.joinUri(origin, hostname);
+				if (res.headers['x-origin']) { // verified in response.processHeaders()
+					origin = res.headers['x-origin'];
 				}
 				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;
