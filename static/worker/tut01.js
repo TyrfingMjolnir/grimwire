@@ -15,36 +15,16 @@ importScripts('/js/servware.js'); // docs @ https://github.com/pfraze/servware
 // Create `server`
 var server = servware();
 local.worker.setServer(server);
+/**
+ * This server will handle requests from the page to the worker.
+ */
 
 // Define the Root Path
 server.route('/', function(link, method) {
 
-	// Add a link to all '/' responses
-	link({
-		href: '/',
-		rel: 'self service',
-		title: 'Tutorial 1: Hello World Worker'
-	});
-	/**
-	 * About this command
-	 * - `href` is the URL. We give our '/' path here.
-	 *   - The page will transform paths into full URIs for links in the Link header and in the HTML.
-	 * - `rel` contains the relation types. It describes what this resource is.
-	 *   - 'self' says the link points to the same place the response came from.
-	 *   - 'service' is a generic description of what we are.
-	 *   - Other common generic labels: 'collection', 'item'
-	 */
-
-	// Also add this link
-	link({
-		href: '/complete',
-		rel: 'item',
-		id: 'complete',
-		title: 'Completion Page'
-	});
-
 	// Add GET to '/'
 	method('GET', function(req, res) {
+
 		// Respond 406 Not Acceptable if the GET request doesn't accept HTML
 		req.assert({ accept: 'text/html' });
 
@@ -52,21 +32,23 @@ server.route('/', function(link, method) {
 		res.setHeader('Content-Type', 'text/html');
 
 		// Respond 200 OK with the following content
-		return [200, '<h1>Tutorial 1 <small>Hello World</small></h1>Hello, world!<br><a href="/complete" target="_content">click this to complete tutorial 1.</a>'];
+		var html = [
+			'<h1>Tutorial 1 <small>Hello World</small></h1>',
+			'Hello, world!<br>',
+			'<a href="/complete" target="_content">click this to complete tutorial 1.</a>'
+		].join('');
+		return [200, html];
 		/**
-		 * Link HREFs
-		 * - We use a relative path (/complete) for the link again.
-		 *   - This is because the host page transforms HTML and Link-header paths into absolute URLs.
-		 *
-		 * (Advanced) the global hostname is used for the transformation if the response was retrieved globally.
-		 * - If the request was to httpl://tut01_helloworld.js...
-		 *   it would transform to httpl://tut01_helloworld.js/complete
-		 * - If the request was to httpl://bob@grimwire.net!grimwire.net!123/tut01_helloworld.js...
-		 *   it would transform to httpl://bob@grimwire.net!grimwire.net!123/tut01_helloworld.js/complete
-		 * - ~That global URI is pretty clunky right now. Two grimwire.nets?~
-		 *   - Please excuse the mess.
-		 *   - This is kind of like typing http://foobar.com:80/
-		 *   - It will be able to condense all the way down to httpl://bob@grimwire.net/ in future releases.
+		 * Servware allows its method handlers to return a description of the response.
+		 * - You can also return a promise or throw an exception.
+		 *   - (Exceptions are for the 4xx/5xx range of responses.)
+		 * - There are lots of possible return values:
+		 *   - return 200; // just the status number, the body is empty and some default headers (and the reason "OK") are used
+		 *   - return [200, body]; // the status and the body of the response
+		 *   - return [200, body, { 'Content-Type': 'text/html' }]; // the status, the body, and an object of headers
+		 *   - return { status: 200, reason: 'Is OK', headers: { ... }, body: body }; // a full response object
+		 *   - throw { status: 403, reason: 'forbidden' }; // example of throwing
+		 *   - my_promise.fulfill([200, body]); // example of fulfilling a promise (which was previously returned)
 		 */
 	});
 });
@@ -74,26 +56,9 @@ server.route('/', function(link, method) {
 // Define a Subpath
 server.route('/complete', function(link, method) {
 
-	// Add the same two links as at the root path
-	link({
-		href: '/',
-		rel: 'up service',
-		title: 'Tutorial 1: Hello World Worker'
-	});
-	link({
-		href: '/complete',
-		rel: 'self item',
-		id: 'complete',
-		title: 'Completion Page'
-	});
-	/**
-	 * Up reltypes
-	 * - Signifies a hierarchy which usually terminates at the root program.
-	 * - Similar to the ".." path in a file system.
-	 */
-
 	// Add GET to '/complete'
 	method('GET', function(req, res) {
+
 		// Respond 406 Not Acceptable if the GET request doesn't accept HTML
 		req.assert({ accept: 'text/html' });
 
@@ -101,7 +66,12 @@ server.route('/complete', function(link, method) {
 		res.setHeader('Content-Type', 'text/html');
 
 		// Respond 200 OK with the following content
-		return [200, '<h1>Tutorial 1 <small>Completed</small></h1><strong>Well done!</strong> You have completed tutorial 1.<br>Be sure to find this program in the explorer. Doing so will help you understand how the links are used.'];
+		var html = [
+			'<h1>Tutorial 1 <small>Completed</small></h1>',
+			'<strong>Well done!</strong> You have completed tutorial 1.<br>',
+			'Be sure to find this program in the explorer. Doing so will help you understand how the links are used.'
+		].join('');
+		return [200, html];
 	});
 });
 
