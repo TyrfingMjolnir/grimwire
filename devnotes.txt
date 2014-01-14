@@ -15,17 +15,14 @@ local: s/link query failed to match/Link Query Failed/
 local: document relay.isListening
 local: document local.* sugars
 
-grim: editor
- - star next to name should indicate unsaved (currently just indicates new)
 grim: security
- - disallow iframe content from accessing local hosts if from a global interface*
- - complete access control review
- - escaping strategy
- - make sure CSP comes from headers
+ - complete access control review *2
+ - escaping strategy *2
+ - make sure CSP comes from headers *2
 grim: workers
- - simple data storage
- - better-functioning proxy service (HEAD request, etc)
-grim: replace hosts
+ - better-functioning proxy service (HEAD request, etc) *1
+   - tutorial *1
+grim: replace hosts *1
 
 servware: mechanism to update existing links
 servware: regex methodname

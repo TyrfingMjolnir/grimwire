@@ -1314,9 +1314,10 @@ var importScriptsPatch_src = [ // patches importScripts() to allow relative path
 var bootstrap_src = whitelistAPIs_src + importScriptsPatch_src;
 
 // state
-var installed_workers;// = [/* string* */] loaded from local storage
+var installed_workers;// = [/* string */] loaded from local storage
 var active_workers = {/* name -> WorkerServer */};
 var active_editors = {/* ed_id -> data */};
+var altered_workers = {/* name -> bool */};
 var editor_id_counter = 0;
 var the_active_editor = 0;
 var $ace_editor_el = $('#ace');
@@ -1472,6 +1473,7 @@ app_local_server.route('/ed', function(link, method) {
 				var ace_editor = ace.edit('ace-'+the_active_editor);
 				ace_editor.setTheme("ace/theme/textmate");
 				ace_editor.getSession().setMode("ace/mode/javascript");
+				ace_editor.on('change', makeChangeHandler(name));
 
 				// Add to chrome
 				url = 'httpl://'+req.host+'/w/'+name;
@@ -1518,7 +1520,11 @@ app_local_server.route('/ed', function(link, method) {
 		}
 
 		return ed.ua.PUT(ed.ace_editor.getValue()||'', { Content_Type: 'application/javascript' })
-			.then(function(res) { renderEditorChrome(); return 204; })
+			.then(function(res) {
+				altered_workers[ed.name] = false;
+				renderEditorChrome();
+				return 204;
+			})
 			.fail(function(res) {
 				console.error('Failed to store script', res);
 				throw 502;
@@ -1764,6 +1770,17 @@ local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, respon
 // Helpers
 // -
 
+function makeChangeHandler(name) {
+	return function() {
+		if (!altered_workers[name]) {
+			altered_workers[name] = true;
+			renderEditorChrome();
+		} else {
+			altered_workers[name] = true;
+		}
+	};
+}
+
 function renderEditorChrome() {
 	var html = '';
 	for (var k in active_editors) {
@@ -1776,7 +1793,7 @@ function renderEditorChrome() {
 				glyph += '<b class="glyphicon glyphicon-globe"></b> ';
 			}
 		}
-		if (installed_workers.indexOf(name) === -1) {
+		if (installed_workers.indexOf(name) === -1 || altered_workers[name]) {
 			name += '*'; // unsaved
 		}
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
