@@ -1,7 +1,7 @@
-TODO
+0.6.0
 
 local: move request .host to headers
-local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely
+local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely (may be fixed)
 local: add support for local.POST({}, 'httpl://nquery')
 local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly)
 local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link')
@@ -12,22 +12,10 @@ local: add host.page to workers
 local: add functions to queryLinks
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
 local: s/link query failed to match/Link Query Failed/
-local:
-"warning| Page content which was undergoing approval was found to contain live directives without a warning label."
-"warning|  - this indicates some piece of software, either maliciously or unintentionally, let the directives through"
-"warning|  - the address it came from was foobar.com"
-"warning|  - [> Request] [> Response]"
-"warning|  - the line in question [> { line: '<script>alert(window.location);</script><p>...' }]"
 local: document relay.isListening
 local: document local.* sugars
 
-grim: finish r2r
-grim: change grimwidget not to get links before render()
-grim: ensure that data is properly separated so that 2 sessions cant issue conflicting updates
-grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
-
 grim: editor
- - opening a new worker with an existing worker's name should result in a trailing # increment (.2.js)*
  - star next to name should indicate unsaved (currently just indicates new)
 grim: security
  - disallow iframe content from accessing local hosts if from a global interface*
@@ -39,6 +27,56 @@ grim: workers
  - better-functioning proxy service (HEAD request, etc)
 grim: replace hosts
 
+servware: mechanism to update existing links
+servware: regex methodname
+servware: change pathArgs to params
+servware: methodNames arent cumulative yet
+servware: document api
+
+OTHER
+
+
+local:
+"warning| Page content which was undergoing approval was found to contain live directives without a warning label."
+"warning|  - this indicates some piece of software, either maliciously or unintentionally, let the directives through"
+"warning|  - the address it came from was foobar.com"
+"warning|  - [> Request] [> Response]"
+"warning|  - the line in question [> { line: '<script>alert(window.location);</script><p>...' }]"
+
+
+
+grim: finish r2r
+grim: change grimwidget not to get links before render()
+grim: ensure that data is properly separated so that 2 sessions cant issue conflicting updates
+grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
+
+grim: KV storage
+  - only uses text/plain
+  - httpl://storage/local and httpl://storage/session
+  - httpl://storage/local/my_worker.js/foo -> storage_my_worker.js:foo '{"foo":"bar"}'
+
+grim: access control service
+  - accepts requests describing attempted effects
+    - eg [Storage, "Wants to store {>Object} in your browser."]
+    - eg [Worker Editor, "Wants to open httpl://bob@grimwire.net/foo.js/foo.js."]
+  - user choice creates a security profile for the origin
+    - prompts if no previous choice is in effect
+    - choice is included in the response to the program
+  - detected changes trigger security profile resets
+    - "my_worker.js has changed since its last run"
+    - "devmode" disables the trigger
+  - prompt options
+    - I'm developing it: Ignore changes [until I disable devmode | for 5 minutes | for 15 minutes | for 30 minutes | for 1 hr | for 2 hrs | for 3 hrs | for 4 hrs...]
+    - Allow.
+    - Allow, but ask again.
+    - Deny, but ask again.
+  - the uri path identifies effect type
+    - eg /store-object
+    - eg /users-patch
+    - the effect types namespace is only populated with paths used by the same origin
+    - subsequent requests of the same effect type will update the prompt, then all receive the same decision
+
+
 grim: tutorials
  - Hello World
  - Content Types
@@ -48,11 +86,6 @@ grim: tutorials
  - User Agents?
  - Request targets?
  - Middleware?
-
-servware: mechanism to update existing links
-servware: regex methodname
-servware: change pathArgs to params
-servware: methodNames arent cumulative yet
 
 
 

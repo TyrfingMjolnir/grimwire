@@ -60,9 +60,11 @@ catch(e) {}
 try {
 	var editor_state = JSON.parse(localStorage.getItem('workers_editor_state')) || {};
 	editor_state.editing.forEach(function(name) {
+		if (installed_workers.indexOf(name) === -1) return;
 		local.dispatch({ method: 'OPEN', url: 'httpl://workers/ed?name='+name });
 	});
 	editor_state.running.forEach(function(name) {
+		if (installed_workers.indexOf(name) === -1) return;
 		var query = { network: (editor_state.networked.indexOf(name) !== -1) ? 1 : 0 };
 		local.dispatch({ method: 'START', url: 'httpl://workers/w/'+name, query: query });
 	});
@@ -150,14 +152,30 @@ app_local_server.route('/ed', function(link, method) {
 	});
 
 	// :DEBUG: :TODO: the one function that's available for peers FOR NOW
-	// - not super safe
+	// - not super safe to do that tho
+	var namenum_regex = /.*([0-9]+)\.js$/;
 	method('OPEN', function(req, res) {
 		var url = req.query.url, name = req.query.name;
+		var is_from_local = !url;
 		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
 		if (!url) url = prompt('Enter the URL of the script');
 		if (!url) throw 404;
 		if (!name) name = url.split('/').slice(-1)[0];
 		if (name.slice(-3) != '.js') name = name + '.js';
+
+		if (!is_from_local) {
+			// New script, make sure the name is unique
+			while (installed_workers.indexOf(name) !== -1) {
+				var match = namenum_regex.exec(name);
+				if (!match) {
+					name = name.slice(0, -3) + '.2.js'; // foo.js -> foo.2.js
+				} else {
+					var num = match[1];
+					var endlen = ('.'+num+'.js').length;
+					name = name.slice(0, -endlen) + '.' + (+num+1) + '.js'; // foo.2.js -> foo.3.js
+				}
+			}
+		}
 
 		return local.GET({ url: url, Accept: 'application/javascript' })
 			.then(function(res) {
@@ -180,8 +198,8 @@ app_local_server.route('/ed', function(link, method) {
 				ace_editor.setTheme("ace/theme/textmate");
 				ace_editor.getSession().setMode("ace/mode/javascript");
 
-				// Store
-				url = 'httpl://'+req.host+'/w/'+name; // now store locally
+				// Add to chrome
+				url = 'httpl://'+req.host+'/w/'+name;
 				active_editors[the_active_editor] = {
 					name: name,
 					url: url,
