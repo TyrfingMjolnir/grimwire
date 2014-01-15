@@ -1473,7 +1473,7 @@ app_local_server.route('/ed', function(link, method) {
 				var ace_editor = ace.edit('ace-'+the_active_editor);
 				ace_editor.setTheme("ace/theme/textmate");
 				ace_editor.getSession().setMode("ace/mode/javascript");
-				ace_editor.on('change', makeChangeHandler(name));
+				ace_editor.on('change', makeChangeHandler(name, ace_editor));
 
 				// Add to chrome
 				url = 'httpl://'+req.host+'/w/'+name;
@@ -1521,7 +1521,7 @@ app_local_server.route('/ed', function(link, method) {
 
 		return ed.ua.PUT(ed.ace_editor.getValue()||'', { Content_Type: 'application/javascript' })
 			.then(function(res) {
-				altered_workers[ed.name] = false;
+				altered_workers[ed.name] = undefined; // no history
 				renderEditorChrome();
 				return 204;
 			})
@@ -1770,13 +1770,20 @@ local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, respon
 // Helpers
 // -
 
-function makeChangeHandler(name) {
+function makeChangeHandler(name, editor) {
 	return function() {
-		if (!altered_workers[name]) {
-			altered_workers[name] = true;
+		// has undos?
+		var is_altered = editor.getSession().getUndoManager().hasUndo();
+		// Ace editor gives false from hasUndo() on both first change and on the final undos
+		if (!is_altered && editor.curOp.command.name != 'undo')
+			is_altered = true; // must be the first change
+
+		// update and render on change
+		if (altered_workers[name] != is_altered) {
+			altered_workers[name] = is_altered;
 			renderEditorChrome();
 		} else {
-			altered_workers[name] = true;
+			altered_workers[name] = is_altered;
 		}
 	};
 }
