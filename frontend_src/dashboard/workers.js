@@ -464,7 +464,7 @@ var worker_remote_server = function(req, res, worker) {
 	// Proxy the request through
 	var req2 = new local.Request({
 		method: req.method,
-		url: req.path.slice(1),
+		url: decodeURIComponent(req.path.slice(1)),
 		query: local.util.deepClone(req.query),
 		headers: local.util.deepClone(req.headers),
 		stream: true

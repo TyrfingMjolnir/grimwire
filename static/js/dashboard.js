@@ -17,21 +17,19 @@ common.setupRelay = function(relay) {
 	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
 	relay.setServer(function(req, res, peer) {
 		var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
-
-		// Build link header
 		var links = [{ href: '/', rel: 'service', title: relay.getUserId() }];
-		if (relay.registeredLinks) {
-			links = links.concat(relay.registeredLinks);
-		}
 		res.setHeader('Via', via);
-		res.setHeader('Link', links);
 
 		// Home resource
 		if (req.path == '/') {
-			res.headers.link[0].rel += ' self';
+			if (relay.registeredLinks) {
+				links = links.concat(relay.registeredLinks);
+			}
+			links.rel += ' self';
+			res.setHeader('Link', links);
 			return res.writeHead(204, 'OK, No Content').end();
 		}
-		res.headers.link[0].rel += ' via';
+		// links[0].rel += ' via';
 
 		// Parse path
 		var proxy_uri = decodeURIComponent(req.path.slice(1));
@@ -322,7 +320,7 @@ common.publishNetworkLinks = function() {
 				selfLink = { rel: 'service', id: domains[i] };
 			}
 			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
-			selfLink.href = '/'+domains[i]; // Overwrite href
+			selfLink.href = '/'+encodeURIComponent('httpl://'+domains[i]); // Overwrite href
 			return selfLink;
 		}));
 	});
@@ -1729,7 +1727,7 @@ var worker_remote_server = function(req, res, worker) {
 	// Proxy the request through
 	var req2 = new local.Request({
 		method: req.method,
-		url: req.path.slice(1),
+		url: decodeURIComponent(req.path.slice(1)),
 		query: local.util.deepClone(req.query),
 		headers: local.util.deepClone(req.headers),
 		stream: true
