@@ -20,7 +20,7 @@ function checkPerms(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore', hidden: true });
 	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
 
 	method('HEAD', checkPerms, function() { return 204; });

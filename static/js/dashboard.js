@@ -902,6 +902,43 @@ local.addServer(window.location.host, function(req, res) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 });
+local.removeServer('hosts'); // replace hosts service
+local.addServer('hosts', function(req, res) {
+	var localHosts = local.getServers();
+
+	if (!(req.method == 'HEAD' || req.method == 'GET'))
+		return res.writeHead(405, 'bad method').end();
+
+	if (req.method == 'GET' && !local.preferredType(req, 'application/json'))
+		return res.writeHead(406, 'bad accept - only provides application/json').end();
+
+	var responses_ = [];
+	var domains = [], links = [];
+	links.push({ href: '/', rel: 'self service via', id: 'hosts', title: 'Page Hosts' });
+	for (var domain in localHosts) {
+		if (domain == 'hosts' || domain.indexOf('@') !== -1)
+			continue;
+		domains.push(domain);
+		responses_.push(local.dispatch({ method: 'HEAD', url: 'httpl://'+domain, timeout: 500 }));
+	}
+
+	local.promise.bundle(responses_).then(function(ress) {
+		ress.forEach(function(res, i) {
+			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!selfLink) {
+				selfLink = { rel: 'service', id: domains[i], href: 'httpl://'+domains[i] };
+			}
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
+			links.push(selfLink);
+		});
+
+		res.setHeader('link', links);
+		if (req.method == 'HEAD')
+			return res.writeHead(204, 'ok, no content').end();
+		res.writeHead(200, 'ok', { 'content-type': 'application/json' });
+		res.end({ host_names: domains });
+	});
+});
 
 // Request events
 local.bindRequestEvents(document.body);
@@ -1227,7 +1264,7 @@ function checkPerms(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore', hidden: true });
 	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
 
 	method('HEAD', checkPerms, function() { return 204; });

@@ -22,7 +22,6 @@ grim: security
 grim: workers
  - better-functioning proxy service (HEAD request, etc) *1
    - tutorial *1
-grim: replace hosts *1
 
 servware: mechanism to update existing links
 servware: regex methodname
