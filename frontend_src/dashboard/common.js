@@ -64,14 +64,8 @@ common.setupRelay = function(relay) {
 
 		var res2_ = local.dispatch(req2);
 		res2_.always(function(res2) {
-			// Convert URIs to our proxy format
-			var links = res2.parsedHeaders.link || [];
-			links.forEach(function(link) {
-				link.href = '/'+encodeURIComponent(link.href);
-			});
-
 			// Set headers
-			res2.headers.link = res2.parsedHeaders.link;
+			res2.headers.link = res2.parsedHeaders.link; // use parsed headers, since they'll all be absolute now
 			res2.headers.via = via.concat(req.parsedHeaders.via||[]);
 
 			// Pipe back

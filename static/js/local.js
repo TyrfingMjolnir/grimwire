@@ -835,6 +835,8 @@ local.queryLinks = function queryLinks(links, query) {
 //   - rel: can take multiple values, space-separated, which are ANDed logically
 //   - rel: will ignore the preceding scheme and trailing slash on URI values
 //   - rel: items preceded by an exclamation-point (!) will invert (logical NOT)
+var uriTokenStart = '\\{[\\+\\#\\.\\/\\;\\?\\&]?';
+var uriTokenEnd = '(\\,|\\})';
 local.queryLink = function queryLink(link, query) {
 	for (var attr in query) {
 		if (attr == 'rel') {
@@ -852,7 +854,7 @@ local.queryLink = function queryLink(link, query) {
 		else {
 			if (typeof link[attr] == 'undefined') {
 				// Attribute not explicitly set -- is it present in the href as a URI token?
-				if (RegExp('\\{[^\\}]*'+attr+'[^\\{]*\\}','i').test(link.href) === true)
+				if (RegExp(uriTokenStart+attr+uriTokenEnd,'i').test(link.href) === true)
 					continue;
 				// Is the test value not falsey?
 				if (!!query[attr])
@@ -1133,24 +1135,35 @@ local.makePeerDomain = function makePeerDomain(user, relay, app, sid) {
 };
 
 // EXPORTED
-// constructs a base proxy URL from a via header
-local.viaToUri = function(via) {
-	var uri = '';
-	if (via && via.length) {
-		// Add a helper that encodes the parts progressively more frequently
-		// - 0 the first time, once the second, twice the third...
-		var enc_iters = 0;
-		var encode = function(str) {
-			for (var i = 0; i < enc_iters; i++)
-				str = encodeURIComponent(str);
-			enc_iters++;
-			return str;
-		};
+// breaks a proxy URI into the different parts
+// eg 'httpl://0.page/httpl%3A%2F%2Ffoo%2Fhttpl%253A%252F%252Fmy_worker.js%252F'
+// -> ['httpl://0.page/', 'httpl://foo/', 'httpl://my_worker.js/']
+local.parseProxyUri = function(uri) {
+	var parts = [];
+	var re = /^http(l|s)?/;
+	while (re.exec(uri)) {
+		var end = uri.indexOf('http', 8); // skip 8 to skip 'http(l|s)://'. If just http://, will skip 1 too many, but that shouldnt matter
+		if (end == -1)
+			break;
+		parts.push(uri.slice(0, end));
+		uri = decodeURIComponent(uri.slice(end));
+	}
+	parts.push(uri);
+	return parts;
+};
 
-		// Create the URI
-		uri = via.map(function(proxy) {
-			return encode((proxy.proto.name||'http').toLowerCase() + '://' + proxy.hostname);
-		}).join('/');
+// EXPORTED
+// builds a proxy URI out of an array of parts
+// eg ['httpl://0.page/', 'httpl://foo/', 'httpl://my_worker.js/']
+// -> 'httpl://0.page/httpl%3A%2F%2Ffoo%2Fhttpl%253A%252F%252Fmy_worker.js%252F'
+local.makeProxyUri = function(parts) {
+	var uri = 0;
+	for (var i=parts.length-1; i >= 0; i--) {
+		var part = parts[i];
+		if (part.hostname && part.proto) // parsed via header
+			part = part.proto.name.toLowerCase() + '://' + part.hostname;
+		if (!uri) uri = part;
+		else uri = local.joinUri(part, encodeURIComponent(uri));
 	}
 	return uri;
 };
@@ -1694,7 +1707,7 @@ local.httpHeaders.register('via',
 	function (str) {
 		var vias = [], match;
 		while ((match = viaregex.exec(str))) {
-			var via = { proto: { name: match[1], version: match[2] }, hostname: match[3], comment: match[4] };
+			var via = { proto: { name: (match[1]||'http'), version: match[2] }, hostname: match[3], comment: match[4] };
 			vias.push(via);
 		}
 		return vias;
@@ -1984,17 +1997,6 @@ Response.prototype.deserializeHeaders = function() {
 Response.prototype.processHeaders = function(request) {
 	var self = this;
 
-	// Construct the base URLd out of the via headers
-	var via = self.parsedHeaders.via;
-	var host_proxy = local.viaToUri(via);
-
-	// Helper function to percent-decode the number of times necesssary
-	var decodeSubURI = function(str) {
-		//
-		for (var i=0; i < via.length; i++)
-			str = decodeURIComponent(str);
-		return str;
-	};
 
 	// Update the link headers
 	if (self.parsedHeaders.link) {
@@ -2003,27 +2005,8 @@ Response.prototype.processHeaders = function(request) {
 			if (!local.isAbsUri(link.href))
 				link.href = local.joinRelPath(request.urld, link.href);
 
-			// Extract host domain
-			var host_domain = null;
-			if (host_proxy && link.href.indexOf(host_proxy) === 0) {
-				// A suburi of the proxy? See if its an abs uri
-				var suburi = decodeSubURI(link.href.slice(host_proxy.length));
-				if (suburi == '/') {
-					// No subpath? Must be the terminal proxy
-					host_domain = via[via.length - 1].hostname;
-				} else {
-					suburi = suburi.slice(1); // trim preceding slash
-					if (/^http(s|l)?:\/\//.test(suburi)) {
-						host_domain = local.parseUri(suburi).authority;
-					}
-				}
-			}
-			if (!host_domain) {
-				// Not a proxied request, handle as is
-				host_domain = local.parseUri(link.href).authority;
-			}
-
-			// Set host data
+			// Extract host data
+			var host_domain = local.parseUri(link.href).authority;
 			Object.defineProperty(link, 'host_domain', { enumerable: false, configurable: true, writable: true, value: host_domain });
 			var peerd = local.parsePeerDomain(link.host_domain);
 			if (peerd) {
@@ -2036,13 +2019,6 @@ Response.prototype.processHeaders = function(request) {
 				delete link.host_relay;
 				delete link.host_app;
 				delete link.host_sid;
-			}
-
-			// Add proxy
-			if (host_proxy) {
-				Object.defineProperty(link, 'host_proxy', { enumerable: false, configurable: true, writable: true, value: host_proxy });
-			} else {
-				delete link.host_proxy;
 			}
 		});
 	}
@@ -5235,6 +5211,7 @@ function Agent(context, parentAgent) {
 	this.context         = context         || null;
 	this.parentAgent = parentAgent || null;
 	this.links           = null;
+	this.via             = null;
 	this.requestDefaults = null;
 }
 local.Agent = Agent;
@@ -5295,6 +5272,7 @@ Agent.prototype.dispatch = function(req) {
 			self.context.setResolved();
 			if (res.parsedHeaders.link) self.links = res.parsedHeaders.link;
 			else self.links = self.links || []; // cache an empty link list so we dont keep trying during resolution
+			self.via = (res.parsedHeaders.via || null);
 			return res;
 		})
 		.fail(function(res) {
@@ -5359,6 +5337,7 @@ Agent.prototype.follow = function(query) {
 Agent.prototype.unresolve = function() {
 	this.context.resetResolvedState();
 	this.links = null;
+	this.via = null;
 	return this;
 };
 
@@ -5456,8 +5435,12 @@ Agent.prototype.lookupLink = function(context) {
 		if (typeof context.query == 'object') {
 			// Try to find a link that matches
 			var link = local.queryLinks(this.links, context.query)[0];
-			if (link)
-				return local.UriTemplate.parse(link.href).expand(context.query);
+			if (link) {
+				var uri = local.UriTemplate.parse(link.href).expand(context.query);
+				if (this.via)
+					uri = local.makeProxyUri(this.via.concat(uri));
+				return uri;
+			}
 		}
 		else if (typeof context.query == 'string') {
 			// A URL

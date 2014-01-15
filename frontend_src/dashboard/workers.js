@@ -444,11 +444,6 @@ var worker_remote_server = function(req, res, worker) {
 		local.HEAD({ url: 'httpl://hosts', Via: (req.parsedHeaders.via||[]).concat(via) }).always(function(res2) {
 			var links = local.queryLinks(res2, { rel: '!self !up !via' });
 
-			// Convert URIs to our proxy format
-			links.forEach(function(link) {
-				link.href = '/'+encodeURIComponent(link.href);
-			});
-
 			// Add our own links
 			links.unshift({ href: '/', rel: 'self service via', title: 'Host Page' });
 			links.push({ href: '/{uri}', rel: 'service' });
@@ -484,14 +479,8 @@ var worker_remote_server = function(req, res, worker) {
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
-		// Convert URIs to our proxy format
-		var links = res2.parsedHeaders.link || [];
-		links.forEach(function(link) {
-			link.href = '/'+encodeURIComponent(link.href);
-		});
-
 		// Set headers
-		res2.headers.link = res2.parsedHeaders.link;
+		res2.headers.link = res2.parsedHeaders.link; // use parsed headers, since they'll all be absolute now
 		res2.headers.via = via.concat(res2.parsedHeaders.via||[]);
 
 		// Pipe back

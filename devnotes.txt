@@ -1,27 +1,27 @@
-0.6.0
+TODO
 
+local: add support for local.POST({}, 'httpl://nquery') *0
+local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly) *0
+local: add timeout to hosts *0
+local: add host.page to workers *0
 local: move request .host to headers
 local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely (may be fixed)
-local: add support for local.POST({}, 'httpl://nquery')
-local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly)
 local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link')
 local: data-local-alias sucks, replace with something more obvious
-local: hosts is kinda easy to infinitely loop
-local: add timeout to hosts
-local: add host.page to workers
 local: add functions to queryLinks
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
 local: s/link query failed to match/Link Query Failed/
 local: document relay.isListening
 local: document local.* sugars
+local: document local.parseProxyUri and local.makeProxyUri
 
 grim: security
- - complete access control review *2
- - escaping strategy *2
- - make sure CSP comes from headers *2
-grim: workers
- - better-functioning proxy service (HEAD request, etc) *1
-   - tutorial *1
+ - complete access control review *1
+ - escaping strategy *1
+ - make sure CSP comes from headers *1
+grim: fix the issue with percent encoding and URI templates *0
+grim: see if X-Origin can be completely replaced with Via *0
+grim: restructure *0
 
 servware: mechanism to update existing links
 servware: regex methodname
@@ -29,7 +29,9 @@ servware: change pathArgs to params
 servware: methodNames arent cumulative yet
 servware: document api
 
-OTHER
+---
+
+TOLATER
 
 
 local:
@@ -39,17 +41,16 @@ local:
 "warning|  - [> Request] [> Response]"
 "warning|  - the line in question [> { line: '<script>alert(window.location);</script><p>...' }]"
 
-
-
 grim: finish r2r
 grim: change grimwidget not to get links before render()
 grim: ensure that data is properly separated so that 2 sessions cant issue conflicting updates
 grim: check request pipeline so that 1 session cant have its state corrupted by multiple requests
 
-grim: KV storage
-  - only uses text/plain
-  - httpl://storage/local and httpl://storage/session
-  - httpl://storage/local/my_worker.js/foo -> storage_my_worker.js:foo '{"foo":"bar"}'
+grim: tutorials
+ - Constructing URLs (URI templates and path tokens)?
+ - User Agents?
+ - Request targets?
+ - Middleware?
 
 grim: access control service
   - accepts requests describing attempted effects
@@ -71,18 +72,6 @@ grim: access control service
     - eg /users-patch
     - the effect types namespace is only populated with paths used by the same origin
     - subsequent requests of the same effect type will update the prompt, then all receive the same decision
-
-
-grim: tutorials
- - Hello World
- - Content Types
- - Forms and Anchors
- - Link Directoriess
- - Constructing URLs (URI templates and path tokens)?
- - User Agents?
- - Request targets?
- - Middleware?
-
 
 
 ---
