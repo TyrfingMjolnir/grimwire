@@ -8,29 +8,6 @@ if (is_first_session) network_sid = genDeviceSid();
 // Network Setup
 // =============
 
-// Add via header parsing
-/*var viaregex = /([\d\.]+) ([A-z:\d]*)(?: \((.+)\))?/g;
-local.httpHeaders.register('via',
-	function (obj) {
-		return obj.map(function(via) {
-			var str = via.version+' '+via.hostname;
-			if (via.desc) {
-				str += ' ('+via.desc+')';
-			}
-			return str;
-		}).join(', ');
-	},
-	function (str) {
-		var vias = [], match;
-		while ((match = viaregex.exec(str))) {
-			var via = { version: match[1], hostname: match[2] };
-			if (match[3]) via.desc = match[3];
-			vias.push(via);
-		}
-		return vias;
-	}
-);*/
-
 // Loadtime p2p setup
 common.setupRelay = function(relay) {
 	common.relay = relay;
@@ -39,12 +16,15 @@ common.setupRelay = function(relay) {
 	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
 	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
 	relay.setServer(function(req, res, peer) {
+		var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+
 		// Build link header
 		var links = [{ href: '/', rel: 'service', title: relay.getUserId() }];
 		if (relay.registeredLinks) {
 			links = links.concat(relay.registeredLinks);
 		}
-		res.setHeader('link', links);
+		res.setHeader('Via', via);
+		res.setHeader('Link', links);
 
 		// Home resource
 		if (req.path == '/') {
@@ -54,12 +34,11 @@ common.setupRelay = function(relay) {
 		res.headers.link[0].rel += ' via';
 
 		// Parse path
-		var path_parts = req.path.split('/');
-		var hostname = path_parts[1];
-		var url = 'httpl://'+hostname+'/'+path_parts.slice(2).join('/');
+		var proxy_uri = decodeURIComponent(req.path.slice(1));
+		var proxy_urid = local.parseUri(proxy_uri);
 
 		// Only allow for published servers
-		var server = local.getServer(hostname);
+		var server = local.getServer(proxy_urid.authority);
 		if (!server) return res.writeHead(404, 'Not Found').end();
 		if (!server.context || !server.context.config || !server.context.config.on_network)
 			return res.writeHead(404, 'Not Found').end();
@@ -67,7 +46,7 @@ common.setupRelay = function(relay) {
 		// Pass the request through
 		var req2 = new local.Request({
 			method: req.method,
-			url: url,
+			url: proxy_uri,
 			query: local.util.deepClone(req.query),
 			headers: local.util.deepClone(req.headers),
 			stream: true
@@ -78,24 +57,25 @@ common.setupRelay = function(relay) {
 		delete req2.headers['x-public-host'];
 		delete req2.headers['From'];
 		delete req2.headers['from'];
+		delete req2.headers['Via'];
+		delete req2.headers['via'];
 
 		// Put origin and public name into the headers
 		req2.headers['From'] = peer.config.domain;
 		req2.headers['X-Public-Host'] = req.host;
+		req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
 
 		var res2_ = local.dispatch(req2);
 		res2_.always(function(res2) {
-			// Update the Link header
-			/*if (res2.headers.link) {
-				var links = local.httpHeaders.deserialize('link', res2.headers.link);
-				links.forEach(function(link) {
-					if (!local.isAbsUri(link.href)) {
-						link.href = local.joinUri(hostname, link.href);
-					}
-					link.href = '/'+link.href;
-				});
-				res2.headers.link = local.httpHeaders.deserialize('link', links);
-			}*/
+			// Convert URIs to our proxy format
+			var links = res2.parsedHeaders.link || [];
+			links.forEach(function(link) {
+				link.href = '/'+encodeURIComponent(link.href);
+			});
+
+			// Set headers
+			res2.headers.link = res2.parsedHeaders.link;
+			res2.headers.via = via.concat(req.parsedHeaders.via||[]);
 
 			// Pipe back
 			res.writeHead(res2.status, res2.reason, res2.headers);
@@ -222,33 +202,6 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 	common.prepIframeRequest(req);
 	common.dispatchRequest(req, e.target);
 });
-
-// Response header processing
-(function() {
-	var origfn = local.Response.prototype.processHeaders;
-	local.Response.prototype.processHeaders = function(req) {
-		if (!req.urld) { req.urld = local.parseUri(req); }
-
-		// X-Origin header
-		if (this.headers['x-origin']) {
-			var x_origin = this.headers['x-origin'];
-			var base_origin = req.urld.protocol + '://' + req.urld.authority;
-			// Does X-Origin have the same scheme+authority as the request's original URI?
-			if (x_origin.indexOf(base_origin) === 0) {
-				// origfn() uses req.urld.authority to transform relative links to absolute
-				var x_origin_authority = x_origin.split('://')[1];
-				req.urld.authority = x_origin_authority; // change it so that the links it produces are correct
-			} else {
-				console.warn('Invalid X-Origin header:', x_origin, 'Not within authority of URL it came from:', base_origin);
-				delete this.headers['X-Origin'];
-				delete this.headers['x-origin'];
-			}
-		}
-
-		origfn.call(this, req);
-	};
-})();
-
 
 // Page dispatch behavior
 common.dispatchRequest = function(req, origin, opts) {
@@ -1264,7 +1217,7 @@ function checkPerms(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore', hidden: true });
+	link({ href: '/', rel: 'self service collection', id: 'storage', title: 'KVStore', hidden: true });
 	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
 
 	method('HEAD', checkPerms, function() { return 204; });
@@ -1272,7 +1225,7 @@ server.route('/', function(link, method) {
 
 server.route('/:storage/:bucket/:id', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/', rel: 'up service collection', id: 'storage', title: 'KVStore' });
 	link({ href: '/:storage/:bucket/:id', rel: 'self item', storage: ':storage', bucket: ':bucket', id: ':id', title: 'KV' });
 
 	function getStorage(req, res) {
@@ -1750,18 +1703,34 @@ app_local_server.route('/w/:id', function(link, method) {
 // Worker Remote Server
 // -
 var worker_remote_server = function(req, res, worker) {
-	if (!req.query.uri) {
-		res.setHeader('Link', [
-			{ href: '/{?uri}', rel: 'self service', title: 'Host Application' },
-			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
-		]);
-		return res.writeHead(204).end();
+	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	if (req.path == '/') {
+		// Fetch local hosts
+		local.HEAD({ url: 'httpl://hosts', Via: (req.parsedHeaders.via||[]).concat(via) }).always(function(res2) {
+			var links = local.queryLinks(res2, { rel: '!self !up !via' });
+
+			// Convert URIs to our proxy format
+			links.forEach(function(link) {
+				link.href = '/'+encodeURIComponent(link.href);
+			});
+
+			// Add our own links
+			links.unshift({ href: '/', rel: 'self service via', title: 'Host Page' });
+			links.push({ href: '/{uri}', rel: 'service' });
+
+			// Respond
+			res.setHeader('Link', links);
+			res.setHeader('Via', via);
+			res.writeHead(204).end();
+		});
+		return;
 	}
 
-	// :TODO: for now, simple pass-through proxy into the local namespace
+	// Proxy the request through
 	var req2 = new local.Request({
 		method: req.method,
-		url: req.query.uri,
+		url: req.path.slice(1),
+		query: local.util.deepClone(req.query),
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
@@ -1771,12 +1740,26 @@ var worker_remote_server = function(req, res, worker) {
 	delete req2.headers['x-public-host'];
 	delete req2.headers['From'];
 	delete req2.headers['from'];
+	delete req2.headers['Via'];
+	delete req2.headers['via'];
 
-	// Set origin
+	// Set headers
 	req2.headers['From'] = worker.config.domain;
+	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
+		// Convert URIs to our proxy format
+		var links = res2.parsedHeaders.link || [];
+		links.forEach(function(link) {
+			link.href = '/'+encodeURIComponent(link.href);
+		});
+
+		// Set headers
+		res2.headers.link = res2.parsedHeaders.link;
+		res2.headers.via = via.concat(res2.parsedHeaders.via||[]);
+
+		// Pipe back
 		res.writeHead(res2.status, res2.reason, res2.headers);
 		res2.on('data', function(chunk) { res.write(chunk); });
 		res2.on('end', function() { res.end(); });
@@ -1785,7 +1768,6 @@ var worker_remote_server = function(req, res, worker) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 };
-
 
 // Worker Local Request Patch
 // - modifies requests sent to the workers

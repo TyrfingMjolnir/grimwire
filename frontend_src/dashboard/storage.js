@@ -20,7 +20,7 @@ function checkPerms(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'KVStore', hidden: true });
+	link({ href: '/', rel: 'self service collection', id: 'storage', title: 'KVStore', hidden: true });
 	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
 
 	method('HEAD', checkPerms, function() { return 204; });
@@ -28,7 +28,7 @@ server.route('/', function(link, method) {
 
 server.route('/:storage/:bucket/:id', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'KVStore' });
+	link({ href: '/', rel: 'up service collection', id: 'storage', title: 'KVStore' });
 	link({ href: '/:storage/:bucket/:id', rel: 'self item', storage: ':storage', bucket: ':bucket', id: ':id', title: 'KV' });
 
 	function getStorage(req, res) {

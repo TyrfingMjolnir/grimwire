@@ -438,18 +438,34 @@ app_local_server.route('/w/:id', function(link, method) {
 // Worker Remote Server
 // -
 var worker_remote_server = function(req, res, worker) {
-	if (!req.query.uri) {
-		res.setHeader('Link', [
-			{ href: '/{?uri}', rel: 'self service', title: 'Host Application' },
-			{ href: '/?uri=httpl://hosts', rel: 'service', id: 'hosts', title: 'Page Hosts' }
-		]);
-		return res.writeHead(204).end();
+	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	if (req.path == '/') {
+		// Fetch local hosts
+		local.HEAD({ url: 'httpl://hosts', Via: (req.parsedHeaders.via||[]).concat(via) }).always(function(res2) {
+			var links = local.queryLinks(res2, { rel: '!self !up !via' });
+
+			// Convert URIs to our proxy format
+			links.forEach(function(link) {
+				link.href = '/'+encodeURIComponent(link.href);
+			});
+
+			// Add our own links
+			links.unshift({ href: '/', rel: 'self service via', title: 'Host Page' });
+			links.push({ href: '/{uri}', rel: 'service' });
+
+			// Respond
+			res.setHeader('Link', links);
+			res.setHeader('Via', via);
+			res.writeHead(204).end();
+		});
+		return;
 	}
 
-	// :TODO: for now, simple pass-through proxy into the local namespace
+	// Proxy the request through
 	var req2 = new local.Request({
 		method: req.method,
-		url: req.query.uri,
+		url: req.path.slice(1),
+		query: local.util.deepClone(req.query),
 		headers: local.util.deepClone(req.headers),
 		stream: true
 	});
@@ -459,12 +475,26 @@ var worker_remote_server = function(req, res, worker) {
 	delete req2.headers['x-public-host'];
 	delete req2.headers['From'];
 	delete req2.headers['from'];
+	delete req2.headers['Via'];
+	delete req2.headers['via'];
 
-	// Set origin
+	// Set headers
 	req2.headers['From'] = worker.config.domain;
+	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
+		// Convert URIs to our proxy format
+		var links = res2.parsedHeaders.link || [];
+		links.forEach(function(link) {
+			link.href = '/'+encodeURIComponent(link.href);
+		});
+
+		// Set headers
+		res2.headers.link = res2.parsedHeaders.link;
+		res2.headers.via = via.concat(res2.parsedHeaders.via||[]);
+
+		// Pipe back
 		res.writeHead(res2.status, res2.reason, res2.headers);
 		res2.on('data', function(chunk) { res.write(chunk); });
 		res2.on('end', function() { res.end(); });
@@ -473,7 +503,6 @@ var worker_remote_server = function(req, res, worker) {
 	req.on('data', function(chunk) { req2.write(chunk); });
 	req.on('end', function() { req2.end(); });
 };
-
 
 // Worker Local Request Patch
 // - modifies requests sent to the workers
