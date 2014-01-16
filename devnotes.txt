@@ -1,12 +1,7 @@
 TODO
 
-local: add support for local.POST({}, 'httpl://nquery') *0
-local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly) *0
-local: add timeout to hosts *0
-local: add host.page to workers *0
-local: s/link query failed to match/Link Query Failed/ *0
-local: move request .host to headers *1
-local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link') *1
+local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link') *0
+
 local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely (may be fixed)
 local: data-local-alias sucks, replace with something more obvious
 local: add functions to queryLinks
@@ -15,9 +10,7 @@ local: document relay.isListening
 local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
-grim: security
- - make sure CSP comes from headers *0
-
+grim: need to wait for connections (workers, relay) to be setup before initial request
 
 servware: mechanism to update existing links
 servware: regex methodname

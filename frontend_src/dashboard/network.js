@@ -46,7 +46,7 @@ network.setupRelay = function(serviceURL, relay) {
 
 // Handles requests from oeers
 function peerProxy(req, res, peer) {
-	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.headers.host}];
 	var links = [{ href: '/', rel: 'service', title: network.relay.getUserId() }];
 	res.setHeader('Via', via);
 
@@ -90,7 +90,7 @@ function peerProxy(req, res, peer) {
 
 	// Put origin and public name into the headers
 	req2.headers['From'] = peer.config.domain;
-	req2.headers['X-Public-Host'] = req.host;
+	req2.headers['X-Public-Host'] = req.headers.host;
 	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
 
 	var res2_ = local.dispatch(req2);

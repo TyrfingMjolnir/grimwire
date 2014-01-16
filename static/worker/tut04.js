@@ -78,7 +78,7 @@ server.route('/', function(link, method) {
 			 */
 
 			// Generate the interface
-			var explorer_uri = 'httpl://explorer?uri='+encodeURIComponent('httpl://'+req.host);
+			var explorer_uri = 'httpl://explorer?uri='+encodeURIComponent('httpl://'+req.headers.host);
 			var html = [
 				'<h1>Tutorial 4 <small>Link Directories</small></h1>',
 				'<p>All links:</p>',

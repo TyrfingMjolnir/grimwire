@@ -887,7 +887,7 @@ server.route('/', function(link, method) {
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
-		res.setHeader('location', 'httpl://'+req.host+'/'+id);
+		res.setHeader('location', 'httpl://'+req.headers.host+'/'+id);
 		return 201;
 	});
 });
@@ -1079,7 +1079,7 @@ network.setupRelay = function(serviceURL, relay) {
 
 // Handles requests from oeers
 function peerProxy(req, res, peer) {
-	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.headers.host}];
 	var links = [{ href: '/', rel: 'service', title: network.relay.getUserId() }];
 	res.setHeader('Via', via);
 
@@ -1123,7 +1123,7 @@ function peerProxy(req, res, peer) {
 
 	// Put origin and public name into the headers
 	req2.headers['From'] = peer.config.domain;
-	req2.headers['X-Public-Host'] = req.host;
+	req2.headers['X-Public-Host'] = req.headers.host;
 	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
 
 	var res2_ = local.dispatch(req2);
@@ -1453,7 +1453,7 @@ app_local_server.route('/ed', function(link, method) {
 	method('OPEN',  access_allowall, function(req, res) {
 		var url = req.query.url, name = req.query.name;
 		var is_from_local = !url;
-		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
+		if (!url && name) url = 'httpl://'+req.headers.host+'/w/'+req.query.name;
 		if (!url) url = prompt('Enter the URL of the script');
 		if (!url) throw 404;
 		if (!name) name = url.split('/').slice(-1)[0];
@@ -1499,7 +1499,7 @@ app_local_server.route('/ed', function(link, method) {
 				ace_editor.on('change', makeChangeHandler(name, ace_editor));
 
 				// Add to chrome
-				url = 'httpl://'+req.host+'/w/'+name;
+				url = 'httpl://'+req.headers.host+'/w/'+name;
 				active_editors[the_active_editor] = {
 					name: name,
 					url: url,
@@ -1538,7 +1538,7 @@ app_local_server.route('/ed', function(link, method) {
 					break; // a good name
 			}
 			ed.name = common.escape(newname);
-			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(ed.name);
+			ed.url = 'httpl://'+req.headers.host+'/w/'+encodeURIComponent(ed.name);
 			ed.ua = local.agent(ed.url);
 		}
 
@@ -1563,7 +1563,7 @@ app_local_server.route('/ed', function(link, method) {
 
 		new_active_editor = Object.keys(active_editors).slice(-1)[0];
 		if (new_active_editor)
-			local.dispatch({ method: 'SHOW', url: 'httpl://'+req.host+'/ed/'+new_active_editor });
+			local.dispatch({ method: 'SHOW', url: 'httpl://'+req.headers.host+'/ed/'+new_active_editor });
 		else
 			renderEditorChrome();
 
@@ -1574,14 +1574,14 @@ app_local_server.route('/ed', function(link, method) {
 		if (!active_editors[the_active_editor]) throw 404;
 		if (!confirm('Delete '+active_editors[the_active_editor].name+'. Are you sure?')) throw 400;
 		active_editors[the_active_editor].ua.DELETE();
-		local.dispatch({ method: 'CLOSE', url: 'httpl://'+req.host+'/ed' });
+		local.dispatch({ method: 'CLOSE', url: 'httpl://'+req.headers.host+'/ed' });
 
 		return 204;
 	});
 
 	method('START', access_default, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
-		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
+		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.headers.host+'/ed' })
 			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START', query: { network: req.query.network } }); })
 			.then(function() { renderEditorChrome(); return 204; })
 			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
@@ -1678,7 +1678,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		var name = req.pathArgs.id;
 
 		// stop worker
-		local.dispatch({ method: 'STOP', url: 'httpl://'+req.host+'/w/'+name });
+		local.dispatch({ method: 'STOP', url: 'httpl://'+req.headers.host+'/w/'+name });
 
 		// update listing
 		var name_index = installed_workers.indexOf(name);
@@ -1742,7 +1742,7 @@ app_local_server.route('/w/:id', function(link, method) {
 // Worker Remote Server
 // -
 var worker_remote_server = function(req, res, worker) {
-	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.headers.host}];
 	if (req.path == '/') {
 		// Fetch local hosts
 		local.HEAD({ url: 'httpl://hosts', Via: (req.parsedHeaders.via||[]).concat(via) }).always(function(res2) {
@@ -1802,7 +1802,7 @@ var worker_remote_server = function(req, res, worker) {
 local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, response) {
 	// If we have a public host (set by the RTC proxy) update it to include our hostname
 	if (request.headers['X-Public-Host']) {
-		request.headers['X-Public-Host'] = local.joinUri(request.headers['X-Public-Host'], request.host);
+		request.headers['X-Public-Host'] = local.joinUri(request.headers['X-Public-Host'], request.headers.host);
 	}
 	var orgfn = response.processHeaders;
 	response.processHeaders = function(req) {

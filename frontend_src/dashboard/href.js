@@ -121,9 +121,9 @@ server.route('/edit', function(link, method) {
 			res.end([
 				'<p class="title"><span class="glyphicon glyphicon-bookmark"></span> Semantic Links</p>',
 				'<p>'+links.rows.map(function(item) {
-					return '<a href="httpl://'+req.host+'/edit/'+item.value._id+'" target="_content">'+item.value.rel+'</a>';
+					return '<a href="httpl://'+req.headers.host+'/edit/'+item.value._id+'" target="_content">'+item.value.rel+'</a>';
 				}).join(', ')+'</p>',
-				'<p><a class="btn btn-sm btn-default action glyphbg glyphicon-plus" href="httpl://'+req.host+'/edit/new?href='+encodeURIComponent(req.query.href)+'" target="_card_group">add relationship</a></p>',
+				'<p><a class="btn btn-sm btn-default action glyphbg glyphicon-plus" href="httpl://'+req.headers.host+'/edit/new?href='+encodeURIComponent(req.query.href)+'" target="_card_group">add relationship</a></p>',
 			].join(''));
 		});
 	});
@@ -159,7 +159,7 @@ server.route('/edit/:id', function(link, method) {
 						if (!selfLink) selfLink = { title: domains[i] };
 						html += '<p class="title">'+selfLink.title + '</p>';
 						relLinks.forEach(function(link) {
-							var uri = 'httpl://'+req.host+'/edit/new'+
+							var uri = 'httpl://'+req.headers.host+'/edit/new'+
 								'?rel='+encodeURIComponent(link.href)+
 								'&rel_title='+encodeURIComponent(link.title)+
 								'&href='+encodeURIComponent(req.query.href);
@@ -170,7 +170,7 @@ server.route('/edit/:id', function(link, method) {
 					res.end(html);
 				});
 			} else if (req.query.for === 0) {
-				var uri = 'httpl://'+req.host+'/edit/new'+
+				var uri = 'httpl://'+req.headers.host+'/edit/new'+
 					'?rel='+encodeURIComponent(req.query.rel)+
 					'&rel_title='+encodeURIComponent(req.query.rel_title)+
 					'&href='+encodeURIComponent(req.query.href);
@@ -187,7 +187,7 @@ server.route('/edit/:id', function(link, method) {
 					var selfLink = local.queryLinks(res2, { rel: 'self' })[0];
 					if (!selfLink) selfLink = { href: req.query.href, title: req.query.href };
 					res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
-					var uri = 'httpl://'+req.host+'/edit/new'+
+					var uri = 'httpl://'+req.headers.host+'/edit/new'+
 						'?rel='+encodeURIComponent(req.query.rel)+
 						'&rel_title='+encodeURIComponent(relTitle)+
 						'&href='+encodeURIComponent(selfLink.href);
@@ -200,7 +200,7 @@ server.route('/edit/:id', function(link, method) {
 				});
 			}
 		} else {
-			var uri = 'httpl://'+req.host+'/edit/'+id;
+			var uri = 'httpl://'+req.headers.host+'/edit/'+id;
 			if (req.query.prompt == 'delete') {
 				res.writeHead(200, 'Ok', { 'content-type': 'text/html' });
 				res.end([

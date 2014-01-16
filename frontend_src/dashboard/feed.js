@@ -69,7 +69,7 @@ server.route('/', function(link, method) {
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
-		res.setHeader('location', 'httpl://'+req.host+'/'+id);
+		res.setHeader('location', 'httpl://'+req.headers.host+'/'+id);
 		return 201;
 	});
 });
