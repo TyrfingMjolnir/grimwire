@@ -188,7 +188,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	}
 
 	// Content target? Update page
-	if (req.target == '_content' || req.target == '_card_group' || req.target == '_card_self') {
+	if (!req.target || req.target == '_content') {
 		if ((!req.headers || !req.headers.accept) && !req.Accept) { req.Accept = 'text/html, */*'; }
 		return local.dispatch(req).always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
@@ -254,10 +254,12 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 			}
 			throw res;
 		});*/
+	} else if (req.target == '_null') {
+		// Null target, simple dispatch
+		return local.dispatch(req);
+	} else {
+		console.error('Invalid request target', req.target, req, origin);
 	}
-
-	// No special target? Simple dispatch
-	return local.dispatch(req);
 };
 
 window.onhashchange = function() {
@@ -675,19 +677,19 @@ function render_explorer(ctx) {
 	var href = function(uri) { return 'httpl://explorer?uri='+encodeURIComponent(local.makeProxyUri(ctx.via.concat(uri))); };
 	return [
 		'<h1>Explorer</h1>',
-		// '<form action ="httpl://explorer" method="GET" target="_content">',
+		// '<form action ="httpl://explorer" method="GET">',
 		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
 		// '</form>',
 		'<ul class="list-inline" style="padding-top: 5px">',
 			[
 				((ctx.viaLink) ?
-					'<li><a href="'+href(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'" target="_content">'+title(ctx.viaLink)+'</a></li>'
+					'<li><a href="'+href(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'">'+title(ctx.viaLink)+'</a></li>'
 				: ''),
 				((ctx.upLink) ?
-					'<li><a href="'+href(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'" target="_content">'+title(ctx.upLink)+'</a></li>'
+					'<li><a href="'+href(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'">'+title(ctx.upLink)+'</a></li>'
 				: ''),
 				((ctx.selfLink) ?
-					'<li><a href="'+href(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'" target="_content">'+title(ctx.selfLink)+'</a></li>'
+					'<li><a href="'+href(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'">'+title(ctx.selfLink)+'</a></li>'
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
@@ -708,7 +710,7 @@ function render_explorer(ctx) {
 						return [
 							'<tr '+cls+'>',
 								'<td>'+icons(link)+'</td>',
-								'<td><a href="'+href(link.href)+'" target="_content">'+title(link)+'</a></td>',
+								'<td><a href="'+href(link.href)+'">'+title(link)+'</a></td>',
 								'<td class="text-muted">'+link.href+'</td>',
 							'</tr>',
 						].join('');
@@ -718,11 +720,11 @@ function render_explorer(ctx) {
 		'</div>',
 		((ctx.selfLink) ? [
 			'<hr>',
-			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)" target="_content">&raquo; '+title(ctx.selfLink)+'</a></small>',
+			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)">&raquo; '+title(ctx.selfLink)+'</a></small>',
 			'<br>',
 			((show_hidden) ?
-				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=0" title="Hide Hidden Links" target="_content">hide hidden</a></small>' :
-				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=1" title="Show Hidden Links" target="_content">show hidden</a></small>'
+				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a></small>' :
+				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=1" title="Show Hidden Links">show hidden</a></small>'
 			)
 		].join('') : ''),
 	].join('');
@@ -750,7 +752,7 @@ server.route('/intro', function(link, method) {
 					'<h1>About</h1>',
 					'<p>',
 						'Grimwire is a <a href="http://gwr.io/" target="_blank">link-driven</a> server platform for WebRTC.',
-						'In addition to hosting user programs, it provides tools to <a href="httpl://explorer/online?steal_focus=1" method="SHOW">find peers</a>, <a href="httpl://explorer" target="_content">navigate interfaces</a>, and <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW">edit code</a>.',
+						'In addition to hosting user programs, it provides tools to <a href="httpl://explorer/online?steal_focus=1" method="SHOW" target="_null">find peers</a>, <a href="httpl://explorer">navigate interfaces</a>, and <a href="httpl://workers/ed/0?steal_focus=1" method="SHOW" target="_null">edit code</a>.',
 					'</p>',
 					'<br><br>',
 					'<h3>How does it work?</h3>',
@@ -988,7 +990,7 @@ var dashboardGUI = require('./dashboard-gui');
 
 common.feedUA.POST('Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
-common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro" target="_content">Start here</a>.</div>', { Content_Type: 'text/html' });
+common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro">Start here</a>.</div>', { Content_Type: 'text/html' });
 contentFrame.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'httpl://feed', target: '_content' });
 
 // So PouchDB can target locals
@@ -1832,13 +1834,13 @@ function renderEditorChrome() {
 		if (installed_workers.indexOf(name) === -1 || altered_workers[name]) {
 			name += '*'; // unsaved
 		}
-		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
+		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'" target="_null">'+glyph+name+'</a></li>';
 	}
 	if (active_editors[the_active_editor]) {
 		$('#worker-inst-link').attr('href', 'httpl://'+active_editors[the_active_editor].name);
 	}
 	$('#worker-open-dropdown').html([
-		'<li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>',
+		'<li><a method="OPEN" href="httpl://workers/ed" target="_null">From URL</a></li>',
 		installed_workers.map(function(name) {
 			var glyph = '';
 			if (active_workers[name]) {
@@ -1847,7 +1849,7 @@ function renderEditorChrome() {
 					glyph += '<b class="glyphicon glyphicon-globe"></b> ';
 				}
 			}
-			return '<li><a method="OPEN" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+glyph+common.escape(name)+'</a></li>';
+			return '<li><a method="OPEN" target="_null" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+glyph+common.escape(name)+'</a></li>';
 		}).join('')
 	].join(''));
     $('#worker-editor > .nav-tabs').html(html);

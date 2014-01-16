@@ -38,8 +38,8 @@
           </div>
           <ul class="nav navbar-nav">
             <li><a href="httpl://feed" target="_content"><b class="glyphicon glyphicon-list"></b> <span>Updates</span></a></li>
-            <li><a method="SHOW" href="httpl://workers/ed/0?steal_focus=1" ><b class="glyphicon glyphicon-pencil"></b> <span>Workers</span></a></li>
-            <li><a href="httpl://explorer/online?steal_focus=1" method="SHOW"><b class="glyphicon glyphicon-globe"></b> <span>Online</span></a></li>
+            <li><a method="SHOW" href="httpl://workers/ed/0?steal_focus=1" target="_null"><b class="glyphicon glyphicon-pencil"></b> <span>Workers</span></a></li>
+            <li><a method="SHOW" href="httpl://explorer/online?steal_focus=1" target="_null"><b class="glyphicon glyphicon-globe"></b> <span>Online</span></a></li>
             <li><a href="httpl://explorer" target="_content"><b class="glyphicon glyphicon-folder-open"></b> <span>Explorer</span></a></li>
             <li><a href="httpl://explorer/intro" target="_content"><b class="glyphicon glyphicon-question-sign"></b> <span>About</span></a></li>
           </ul>
@@ -82,32 +82,32 @@
           <li class="dropdown">
             <a class="title" data-toggle="dropdown" href="#">Worker <b class="caret"></b></a>
             <ul class="dropdown-menu">
-              <li><a method="NEW" href="httpl://workers/ed">New</a></li>
+              <li><a method="NEW" href="httpl://workers/ed" target="_null">New</a></li>
               <li class="dropdown-submenu">
-                <a method="OPEN" href="httpl://workers/ed">Open</a>
+                <a method="OPEN" href="httpl://workers/ed" target="_null">Open</a>
                 <ul id="worker-open-dropdown" class="dropdown-menu">
-                  <li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>
+                  <li><a method="OPEN" href="httpl://workers/ed" target="_null">From URL</a></li>
                 </ul>
               </li>
-              <li><a method="SAVE" href="httpl://workers/ed">Save</a></li>
-              <li><a method="SAVE" href="httpl://workers/ed?rename=1">Save As...</a></li>
+              <li><a method="SAVE" href="httpl://workers/ed" target="_null">Save</a></li>
+              <li><a method="SAVE" href="httpl://workers/ed?rename=1" target="_null">Save As...</a></li>
               <li class="divider"></li>
               <li class="dropdown-submenu">
-                <a method="OPEN" href="httpl://workers/ed">Help</a>
+                <a method="OPEN" href="httpl://workers/ed" target="_null">Help</a>
                 <ul id="worker-open-dropdown" class="dropdown-menu">
-                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut01.js">Tuturial 1. Hello World</a></li>
-                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut02.js">Tuturial 2. Content Types</a></li>
-                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut03.js">Tuturial 3. Forms and Anchors</a></li>
-                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut04.js">Tuturial 4. Link Directories</a></li>
+                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut01.js" target="_null">Tuturial 1. Hello World</a></li>
+                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut02.js" target="_null">Tuturial 2. Content Types</a></li>
+                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut03.js" target="_null">Tuturial 3. Forms and Anchors</a></li>
+                  <li><a method="OPEN" href="httpl://workers/ed?url={HOSTDOMAIN}/worker/tut04.js" target="_null">Tuturial 4. Link Directories</a></li>
                   <li><a href="https://github.com/grimwire/grimwire/wiki" target="_blank">OS Reference Wiki</a></li>
                 </ul>
               </li>
               <li class="divider"></li>
               <!-- <li><a method="TODO" href="httpl://workers/ed">Export File</a></li> -->
-              <li><a method="DELETE" href="httpl://workers/ed">Delete</a></li>
-              <li><a method="CLOSE" href="httpl://workers/ed">Close</a></li>
+              <li><a method="DELETE" href="httpl://workers/ed" target="_null">Delete</a></li>
+              <li><a method="CLOSE" href="httpl://workers/ed" target="_null">Close</a></li>
             </ul>
-          </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop"></a></li><li><a method="START" href="httpl://workers/ed?network=1" class="glyphicon glyphicon-globe" title="Put Worker on your Network"></a></li><li><a id="worker-inst-link" title="Open Worker" target="_content">open</a></li>
+          </li><li><a method="SAVE" href="httpl://workers/ed" class="glyphicon glyphicon-floppy-disk" title="Save" target="_null"></a></li><li><a method="START" href="httpl://workers/ed" class="glyphicon glyphicon-play" title="Save and (re)Start" target="_null"></a></li><li><a method="STOP" href="httpl://workers/ed" class="glyphicon glyphicon-pause" title="Stop" target="_null"></a></li><li><a method="START" href="httpl://workers/ed?network=1" class="glyphicon glyphicon-globe" title="Put Worker on your Network" target="_null"></a></li><li><a id="worker-inst-link" title="Open Worker" target="_content">open</a></li>
         </ul>
 
         <ul class="nav nav-tabs"></ul>

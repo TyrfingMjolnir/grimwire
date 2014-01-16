@@ -547,13 +547,13 @@ function renderEditorChrome() {
 		if (installed_workers.indexOf(name) === -1 || altered_workers[name]) {
 			name += '*'; // unsaved
 		}
-		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'">'+glyph+name+'</a></li>';
+		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'" target="_null">'+glyph+name+'</a></li>';
 	}
 	if (active_editors[the_active_editor]) {
 		$('#worker-inst-link').attr('href', 'httpl://'+active_editors[the_active_editor].name);
 	}
 	$('#worker-open-dropdown').html([
-		'<li><a method="OPEN" href="httpl://workers/ed">From URL</a></li>',
+		'<li><a method="OPEN" href="httpl://workers/ed" target="_null">From URL</a></li>',
 		installed_workers.map(function(name) {
 			var glyph = '';
 			if (active_workers[name]) {
@@ -562,7 +562,7 @@ function renderEditorChrome() {
 					glyph += '<b class="glyphicon glyphicon-globe"></b> ';
 				}
 			}
-			return '<li><a method="OPEN" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+glyph+common.escape(name)+'</a></li>';
+			return '<li><a method="OPEN" target="_null" href="httpl://workers/ed?name='+common.escape(encodeURIComponent(name))+'">'+glyph+common.escape(name)+'</a></li>';
 		}).join('')
 	].join(''));
     $('#worker-editor > .nav-tabs').html(html);

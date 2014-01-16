@@ -22,8 +22,6 @@ grim: security
 grim: fix the issue with percent encoding and URI templates *0
 grim: see if X-Origin can be completely replaced with Via *0
 grim: fix page via link in explorer *0
-grim: fix the targets situation *0
- - maybe _null
 
 servware: mechanism to update existing links
 servware: regex methodname

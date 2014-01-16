@@ -95,7 +95,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	}
 
 	// Content target? Update page
-	if (req.target == '_content' || req.target == '_card_group' || req.target == '_card_self') {
+	if (!req.target || req.target == '_content') {
 		if ((!req.headers || !req.headers.accept) && !req.Accept) { req.Accept = 'text/html, */*'; }
 		return local.dispatch(req).always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
@@ -161,10 +161,12 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 			}
 			throw res;
 		});*/
+	} else if (req.target == '_null') {
+		// Null target, simple dispatch
+		return local.dispatch(req);
+	} else {
+		console.error('Invalid request target', req.target, req, origin);
 	}
-
-	// No special target? Simple dispatch
-	return local.dispatch(req);
 };
 
 window.onhashchange = function() {
