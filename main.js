@@ -112,7 +112,10 @@ server.get('/',
 	middleware.authenticate,
 	function(req, res, next) {
 		return res.format({
-			'text/html': function() { res.send(require('./lib/html.js').dashboard); },
+			'text/html': function() {
+				res.set('Content-Security-Policy', "default-src 'self'; img-src *; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; frame-src *; connect-src *");
+				res.send(require('./lib/html.js').dashboard);
+			},
 			'application/json': function() { res.json({ msg: 'hello' }); }
 		});
 	}
