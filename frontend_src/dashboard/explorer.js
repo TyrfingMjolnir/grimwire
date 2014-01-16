@@ -49,7 +49,7 @@ server.route('/', function(link, method) {
 			var upLink = local.queryLinks(links, { rel: 'up !self' })[0];
 			var selfLink = local.queryLinks(links, { rel: 'self' })[0];
 			if (!viaLink && (!selfLink || selfLink.host_domain != 'hosts')) {
-				viaLink = { href: 'httpl://hosts', rel: 'via', title: 'Page' };
+				viaLink = { href: 'httpl://hosts', rel: 'via', title: 'Page', __no_via: true };
 			}
 			var otherLinks = local.queryLinks(links, { rel: '!via !up !self' });
 			var niceuri = (uri.indexOf('httpl://') === 0) ? uri.slice(8) : uri;
@@ -90,7 +90,10 @@ function notmpl(uri) {
 }
 
 function render_explorer(ctx) {
-	var href = function(uri) { return 'httpl://explorer?uri='+encodeURIComponent(local.makeProxyUri(ctx.via.concat(uri))); };
+	var href = function(link) {
+		// __no_via is set by explorer, not expected on links
+		return 'httpl://explorer?uri='+encodeURIComponent(link.__no_via ? link.href : local.makeProxyUri(ctx.via.concat(link.href)));
+	};
 	return [
 		'<h1>Explorer</h1>',
 		// '<form action ="httpl://explorer" method="GET">',
@@ -99,13 +102,13 @@ function render_explorer(ctx) {
 		'<ul class="list-inline" style="padding-top: 5px">',
 			[
 				((ctx.viaLink) ?
-					'<li><a href="'+href(ctx.viaLink.href)+'" title="Via: '+title(ctx.viaLink)+'">'+title(ctx.viaLink)+'</a></li>'
+					'<li><a href="'+href(ctx.viaLink)+'" title="Via: '+title(ctx.viaLink)+'">'+title(ctx.viaLink)+'</a></li>'
 				: ''),
 				((ctx.upLink) ?
-					'<li><a href="'+href(ctx.upLink.href)+'" title="Up: '+title(ctx.upLink)+'">'+title(ctx.upLink)+'</a></li>'
+					'<li><a href="'+href(ctx.upLink)+'" title="Up: '+title(ctx.upLink)+'">'+title(ctx.upLink)+'</a></li>'
 				: ''),
 				((ctx.selfLink) ?
-					'<li><a href="'+href(ctx.selfLink.href)+'" title="Up: '+title(ctx.selfLink)+'">'+title(ctx.selfLink)+'</a></li>'
+					'<li><a href="'+href(ctx.selfLink)+'" title="Up: '+title(ctx.selfLink)+'">'+title(ctx.selfLink)+'</a></li>'
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
@@ -126,7 +129,7 @@ function render_explorer(ctx) {
 						return [
 							'<tr '+cls+'>',
 								'<td>'+icons(link)+'</td>',
-								'<td><a href="'+href(link.href)+'">'+title(link)+'</a></td>',
+								'<td><a href="'+href(link)+'">'+title(link)+'</a></td>',
 								'<td class="text-muted">'+link.href+'</td>',
 							'</tr>',
 						].join('');
@@ -139,8 +142,8 @@ function render_explorer(ctx) {
 			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)">&raquo; '+title(ctx.selfLink)+'</a></small>',
 			'<br>',
 			((show_hidden) ?
-				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a></small>' :
-				'<small><a href="'+href(ctx.selfLink.href)+'&show_hidden=1" title="Show Hidden Links">show hidden</a></small>'
+				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a></small>' :
+				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=1" title="Show Hidden Links">show hidden</a></small>'
 			)
 		].join('') : ''),
 	].join('');
