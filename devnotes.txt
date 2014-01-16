@@ -16,7 +16,6 @@ local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
 grim: security
- - escaping strategy *0
  - make sure CSP comes from headers *0
 
 

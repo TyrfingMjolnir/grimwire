@@ -225,7 +225,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 				var urld = local.parseUri(req);
 				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
 				if (res.headers['x-origin']) { // verified in response.processHeaders()
-					origin = res.headers['x-origin'];
+					origin = common.escape(res.headers['x-origin']);
 				}
 				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;
@@ -472,6 +472,7 @@ function updateGuestSlotsCB(d_streams) {
 	var nAvatars = _avatars.length;
 	$('.avatars').html(
 		_avatars.sort().map(function(avatar, i) {
+			avatar = common.escape(avatar);
 			// Add the avatar to the array
 			arr.push('<a href="javascript:void(0)" data-avatar="'+avatar+'"><img src="/img/avatars/'+avatar+'" title="'+avatar+'" /></a>');
 			// Flush the array on every 8th (or the last)
@@ -508,9 +509,9 @@ function renderLinkRow(link) {
 	var peerd = local.parsePeerDomain(urld.authority);
 	var appUrl = peerd ? peerd.app : urld.authority;
 
-	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
+	var html = '<tr><td data-local-alias="a" href="'+common.escape(link.href)+'" target="_content">'+common.escape(link.title||link.href);
 	if (appUrl != window.location.host) {
-		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+		html += '<a class="pull-right" href="http://'+common.escape(appUrl)+'" target="_blank">'+common.escape(appUrl)+'</a>';
 	}
 	return html+'</td></tr>';
 }
@@ -565,10 +566,10 @@ function renderAll() {
 			var user = _users[id];
 			if (user.id == _session.user_id) { continue; }
 			if (user.online) {
-				html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id+'</h4>';
-				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
+				html += '<h4><img src="/img/avatars/'+common.escape(user.avatar)+'" /> '+common.escape(user.id)+'</h4>';
+				html += '<table id="'+common.escape(user.id)+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
 			} else {
-				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+user.avatar+'" /> '+user.id+' offline</small></p>';
+				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+common.escape(user.avatar)+'" /> '+common.escape(user.id)+' offline</small></p>';
 			}
 		}
 
@@ -667,10 +668,10 @@ function icons(link) {
 }
 
 function title(link) {
-	return link.title || link.id || link.href;
+	return common.escape(link.title || link.id || link.href);
 }
 function notmpl(uri) {
-	return local.UriTemplate.parse(uri).expand({});
+	return common.escape(local.UriTemplate.parse(uri).expand({}));
 }
 
 function render_explorer(ctx) {
@@ -696,7 +697,7 @@ function render_explorer(ctx) {
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
-			'<li><small class="text-muted">'+ctx.status+'</small>',
+			'<li><small class="text-muted">'+common.escape(ctx.status)+'</small>',
         '</ul>',
 		'<div class="link-list-outer">',
 			'<table class="link-list">',
@@ -1472,6 +1473,9 @@ app_local_server.route('/ed', function(link, method) {
 			}
 		}
 
+		name = common.escape(name);
+		url = common.escape(url);
+
 		return local.GET({ url: url, Accept: 'application/javascript' })
 			.then(function(res) {
 				// Hide current editor
@@ -1533,8 +1537,8 @@ app_local_server.route('/ed', function(link, method) {
 				} else
 					break; // a good name
 			}
-			ed.name = newname;
-			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(common.escape(newname));
+			ed.name = common.escape(newname);
+			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(ed.name);
 			ed.ua = local.agent(ed.url);
 		}
 
@@ -1849,7 +1853,7 @@ function renderEditorChrome() {
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'" target="_null">'+glyph+name+'</a></li>';
 	}
 	if (active_editors[the_active_editor]) {
-		$('#worker-inst-link').attr('href', 'httpl://'+active_editors[the_active_editor].name);
+		$('#worker-inst-link').attr('href', 'httpl://'+common.escape(active_editors[the_active_editor].name));
 	}
 	$('#worker-open-dropdown').html([
 		'<li><a method="OPEN" href="httpl://workers/ed" target="_null">From URL</a></li>',

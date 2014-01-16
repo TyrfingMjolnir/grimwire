@@ -188,6 +188,9 @@ app_local_server.route('/ed', function(link, method) {
 			}
 		}
 
+		name = common.escape(name);
+		url = common.escape(url);
+
 		return local.GET({ url: url, Accept: 'application/javascript' })
 			.then(function(res) {
 				// Hide current editor
@@ -249,8 +252,8 @@ app_local_server.route('/ed', function(link, method) {
 				} else
 					break; // a good name
 			}
-			ed.name = newname;
-			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(common.escape(newname));
+			ed.name = common.escape(newname);
+			ed.url = 'httpl://'+req.host+'/w/'+encodeURIComponent(ed.name);
 			ed.ua = local.agent(ed.url);
 		}
 
@@ -565,7 +568,7 @@ function renderEditorChrome() {
 		html += '<li class="'+active+'"><a href="httpl://workers/ed/'+k+'" method="SHOW" title="'+name+'" target="_null">'+glyph+name+'</a></li>';
 	}
 	if (active_editors[the_active_editor]) {
-		$('#worker-inst-link').attr('href', 'httpl://'+active_editors[the_active_editor].name);
+		$('#worker-inst-link').attr('href', 'httpl://'+common.escape(active_editors[the_active_editor].name));
 	}
 	$('#worker-open-dropdown').html([
 		'<li><a method="OPEN" href="httpl://workers/ed" target="_null">From URL</a></li>',

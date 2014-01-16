@@ -132,7 +132,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 				var urld = local.parseUri(req);
 				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
 				if (res.headers['x-origin']) { // verified in response.processHeaders()
-					origin = res.headers['x-origin'];
+					origin = common.escape(res.headers['x-origin']);
 				}
 				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;

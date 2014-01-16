@@ -83,10 +83,10 @@ function icons(link) {
 }
 
 function title(link) {
-	return link.title || link.id || link.href;
+	return common.escape(link.title || link.id || link.href);
 }
 function notmpl(uri) {
-	return local.UriTemplate.parse(uri).expand({});
+	return common.escape(local.UriTemplate.parse(uri).expand({}));
 }
 
 function render_explorer(ctx) {
@@ -112,7 +112,7 @@ function render_explorer(ctx) {
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
 			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
-			'<li><small class="text-muted">'+ctx.status+'</small>',
+			'<li><small class="text-muted">'+common.escape(ctx.status)+'</small>',
         '</ul>',
 		'<div class="link-list-outer">',
 			'<table class="link-list">',

@@ -193,6 +193,7 @@ function updateGuestSlotsCB(d_streams) {
 	var nAvatars = _avatars.length;
 	$('.avatars').html(
 		_avatars.sort().map(function(avatar, i) {
+			avatar = common.escape(avatar);
 			// Add the avatar to the array
 			arr.push('<a href="javascript:void(0)" data-avatar="'+avatar+'"><img src="/img/avatars/'+avatar+'" title="'+avatar+'" /></a>');
 			// Flush the array on every 8th (or the last)
@@ -229,9 +230,9 @@ function renderLinkRow(link) {
 	var peerd = local.parsePeerDomain(urld.authority);
 	var appUrl = peerd ? peerd.app : urld.authority;
 
-	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
+	var html = '<tr><td data-local-alias="a" href="'+common.escape(link.href)+'" target="_content">'+common.escape(link.title||link.href);
 	if (appUrl != window.location.host) {
-		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+		html += '<a class="pull-right" href="http://'+common.escape(appUrl)+'" target="_blank">'+common.escape(appUrl)+'</a>';
 	}
 	return html+'</td></tr>';
 }
@@ -286,10 +287,10 @@ function renderAll() {
 			var user = _users[id];
 			if (user.id == _session.user_id) { continue; }
 			if (user.online) {
-				html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id+'</h4>';
-				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
+				html += '<h4><img src="/img/avatars/'+common.escape(user.avatar)+'" /> '+common.escape(user.id)+'</h4>';
+				html += '<table id="'+common.escape(user.id)+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
 			} else {
-				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+user.avatar+'" /> '+user.id+' offline</small></p>';
+				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+common.escape(user.avatar)+'" /> '+common.escape(user.id)+' offline</small></p>';
 			}
 		}
 
