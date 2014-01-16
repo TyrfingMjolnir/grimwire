@@ -87,12 +87,23 @@ var app_local_server = servware();
 module.exports = app_local_server;
 module.exports.active_workers = active_workers;
 
-function forbidPeers(req, res) {
-	// :DEBUG: temp security policy - no peer users
-	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
-		throw 403;
-	return true;
+function make_access_ctl(allow_peers, allow_workers) {
+	return function(req, res) {
+		var from = req.headers.from || req.headers.From; // :TODO: remove ||
+		if (from) {
+			var is_localuser = (from.indexOf('@') === -1);
+			if (!allow_peers && !is_localuser)
+				throw 403;
+			if (!allow_workers && is_localuser && from.indexOf('.js') !== -1)
+				throw 403;
+		}
+		return true;
+	};
 }
+var access_default = make_access_ctl(false, false);
+var access_allowpeers = make_access_ctl(true, false);
+var access_allowworkers = make_access_ctl(false, true);
+var access_allowall = make_access_ctl(true, true);
 
 // root
 app_local_server.route('/', function(link, method) {
@@ -100,9 +111,9 @@ app_local_server.route('/', function(link, method) {
 	link({ href: '/w', rel: 'collection', id: 'w', title: 'Installed' });
 	link({ href: '/ed', rel: 'collection', id: 'ed', title: 'Editors', hidden: true });
 
-	method('HEAD', forbidPeers, function() { return 204; });
+	method('HEAD', access_default, function() { return 204; });
 
-	method('GET', forbidPeers, function() {
+	method('GET', access_default, function() {
 		return 204;
 	});
 });
@@ -113,7 +124,7 @@ app_local_server.route('/ed', function(link, method) {
 	link({ href: '/ed', rel: 'self collection', id: 'ed', title: 'Editors' });
 	link({ href: '/ed/{id}', rel: 'item', title: 'Lookup by ID' });
 
-	method('HEAD', forbidPeers, function(req, res) {
+	method('HEAD', access_default, function(req, res) {
 		for (var k in active_editors) {
 			res.link({ href: '/ed/'+k, rel: 'item', id: k, title: 'Editor '+k });
 		}
@@ -122,7 +133,7 @@ app_local_server.route('/ed', function(link, method) {
 
 	// ui methods
 
-	method('NEW', forbidPeers, function(req, res) {
+	method('NEW', access_default, function(req, res) {
 		// Hide current editor
 		if (active_editors[the_active_editor]) {
 			active_editors[the_active_editor].$div.hide();
@@ -153,10 +164,8 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	// :DEBUG: :TODO: the one function that's available for peers FOR NOW
-	// - not super safe to do that tho
 	var namenum_regex = /.*([0-9]+)\.js$/;
-	method('OPEN', function(req, res) {
+	method('OPEN',  access_allowall, function(req, res) {
 		var url = req.query.url, name = req.query.name;
 		var is_from_local = !url;
 		if (!url && name) url = 'httpl://'+req.host+'/w/'+req.query.name;
@@ -224,7 +233,7 @@ app_local_server.route('/ed', function(link, method) {
 			});
 	});
 
-	method('SAVE', forbidPeers, function(req, res) {
+	method('SAVE', access_default, function(req, res) {
 		var ed = active_editors[the_active_editor];
 		if (!ed) { throw 404; }
 
@@ -257,7 +266,7 @@ app_local_server.route('/ed', function(link, method) {
 			});
 	});
 
-	method('CLOSE', forbidPeers, function(req, res) {
+	method('CLOSE', access_default, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		active_editors[the_active_editor].ace_editor.destroy();
 		active_editors[the_active_editor].$div.remove();
@@ -273,7 +282,7 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('DELETE', forbidPeers, function(req, res) {
+	method('DELETE', access_default, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		if (!confirm('Delete '+active_editors[the_active_editor].name+'. Are you sure?')) throw 400;
 		active_editors[the_active_editor].ua.DELETE();
@@ -282,7 +291,7 @@ app_local_server.route('/ed', function(link, method) {
 		return 204;
 	});
 
-	method('START', forbidPeers, function(req, res) {
+	method('START', access_default, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return local.dispatch({ method: 'SAVE', url: 'httpl://'+req.host+'/ed' })
 			.then(function() { return active_editors[the_active_editor].ua.dispatch({ method: 'START', query: { network: req.query.network } }); })
@@ -290,7 +299,7 @@ app_local_server.route('/ed', function(link, method) {
 			.fail(function(res) { console.error('Failed to start worker', req, res); throw 502; });
 	});
 
-	method('STOP', forbidPeers, function(req, res) {
+	method('STOP', access_default, function(req, res) {
 		if (!active_editors[the_active_editor]) throw 404;
 		return active_editors[the_active_editor].ua.dispatch({ method: 'STOP' })
 			.then(function(res) { renderEditorChrome(); return 204; })
@@ -304,11 +313,11 @@ app_local_server.route('/ed/:id', function(link, method) {
 	link({ href: '/ed', rel: 'up collection', id: 'ed', title: 'Editors' });
 	link({ href: '/ed/:id', rel: 'self item', id: ':id', title: 'Editor :id' }); // :TODO: uri templates
 
-	method('HEAD', forbidPeers, function() { return 204; });
+	method('HEAD', access_default, function() { return 204; });
 
 	// UI methods
 
-	method('SHOW', forbidPeers, function(req, res) {
+	method('SHOW', access_default, function(req, res) {
 		var id = req.pathArgs.id;
 		if (!active_editors[id]) { throw 404; }
 		if (active_editors[the_active_editor])
@@ -330,7 +339,7 @@ app_local_server.route('/w', function(link, method) {
 	link({ href: '/w', rel: 'self collection', id: 'w', title: 'Installed' });
 	link({ href: '/w/{id}', rel: 'item', title: 'Lookup by Name' });
 
-	method('HEAD', forbidPeers, function(req, res) {
+	method('HEAD', access_default, function(req, res) {
 		installed_workers.forEach(function(name) {
 			res.link({ href: '/w/'+name, rel: 'item', id: name, title: name });
 		});
@@ -346,21 +355,27 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// CRUD methods
 
-	method('HEAD', forbidPeers, function(req, res) {
+	method('HEAD', access_default, function(req, res) {
 		var js = localStorage.getItem('worker_'+req.pathArgs.id);
 		if (!js) throw 404;
 		return 204;
 	});
 
-	method('GET', forbidPeers, function(req, res) {
+	method('GET', access_allowworkers, function(req, res) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
+
+		var from = req.headers.from || req.headers.From; // :TODO: remove ||
+		if (from && from.indexOf('.js') !== -1 && req.pathArgs.id != from)
+			throw 403; // only allow workers to access their own code
+
 		var js = localStorage.getItem('worker_'+req.pathArgs.id);
 		if (!js) throw 404;
+
 		res.setHeader('Content-Type', 'application/javascript');
 		return [200,  js];
 	});
 
-	method('PUT', forbidPeers, function(req, res) {
+	method('PUT', access_default, function(req, res) {
 		var name = req.pathArgs.id;
 		req.assert({ type: ['application/javascript', 'text/javascript', 'text/plain'] });
 		localStorage.setItem('worker_'+name, req.body || '');
@@ -371,7 +386,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		return 204;
 	});
 
-	method('DELETE', forbidPeers, function(req, res) {
+	method('DELETE', access_default, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// stop worker
@@ -392,7 +407,7 @@ app_local_server.route('/w/:id', function(link, method) {
 
 	// Worker control methods
 
-	method('START', forbidPeers, function(req, res) {
+	method('START', access_default, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// Unload script if active
@@ -419,7 +434,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		return 204;
 	});
 
-	method('STOP', forbidPeers, function(req, res) {
+	method('STOP', access_default, function(req, res) {
 		var name = req.pathArgs.id;
 
 		// Unload script if active

@@ -16,9 +16,9 @@ local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
 grim: security
- - complete access control review *0
  - escaping strategy *0
  - make sure CSP comes from headers *0
+
 
 servware: mechanism to update existing links
 servware: regex methodname

@@ -4,6 +4,7 @@ httpl://feed
 System updates aggregator
 */
 
+var common = require('./common');
 var server = servware();
 module.exports = server;
 
@@ -24,8 +25,8 @@ function render_updates() {
 }
 
 function forbidPeers(req, res) {
-	// :DEBUG: temp security policy - no peer users
-	if (req.headers.from && req.headers.from.indexOf('@') !== -1)
+	var from = req.headers.from || req.headers.From; // :TODO: remove fallback
+	if (from && from.indexOf('@') !== -1)
 		throw 403;
 	return true;
 }
@@ -33,13 +34,11 @@ function forbidPeers(req, res) {
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
-	link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
+	// link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
 
 	method('HEAD', forbidPeers, function() { return 204; });
 
 	method('GET', forbidPeers, function(req, res) {
-		var originUntrusted = false; //:TODO:
-
 		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
 		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
@@ -54,20 +53,18 @@ server.route('/', function(link, method) {
 	});
 
 	method('POST', forbidPeers, function(req, res) {
-		req.assert({ type: 'text/html' });
-		var origin_untrusted = false; // :TODO:
+		req.assert({ type: ['text/html', 'text/plain'] });
+		var from = (req.headers.from || req.headers.From);
+		var origin_untrusted = !!from; // not from the page itself?
 
 		var html = req.body;
 		if (origin_untrusted) {
-			html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+update.html;
-			html = html.replace(/"/g, '&quot;');
-			html = '<iframe seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" srcdoc="'+html+'"></iframe>';
-		} else {
-			html = '<div>'+html+'</div>';
+			html = common.escape(html);
 		}
+		html = '<div>'+html+'</div>';
 
 		var id = _updates.length;
-		_updates.push({ id: id, html: html, created_at: Date.now() });
+		_updates.push({ id: id, from: from, html: html, created_at: Date.now() });
 
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
@@ -77,7 +74,7 @@ server.route('/', function(link, method) {
 	});
 });
 
-server.route('/:id', function(link, method) {
+/*server.route('/:id', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'Updates Feed' });
 	link({ href: '/:id', rel: 'self item', id: ':id', title: 'Update :id' });
@@ -103,9 +100,6 @@ server.route('/:id', function(link, method) {
 		var update = _updates[req.pathArgs.id];
 		if (!update) throw 404;
 
-		if (/*!from_update_owner*/false) // :TODO:
-			throw 403;
-
 		var html = req.body;
 		if (origin_untrusted) {
 			html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+update.html;
@@ -126,4 +120,4 @@ server.route('/:id', function(link, method) {
 		delete _updates[req.pathArgs.id];
 		return 204;
 	});
-});
+});*/
