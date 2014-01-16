@@ -21,7 +21,9 @@ grim: security
  - make sure CSP comes from headers *1
 grim: fix the issue with percent encoding and URI templates *0
 grim: see if X-Origin can be completely replaced with Via *0
-grim: restructure *0
+grim: fix page via link in explorer *0
+grim: fix the targets situation *0
+ - maybe _null
 
 servware: mechanism to update existing links
 servware: regex methodname
@@ -72,6 +74,10 @@ grim: access control service
     - eg /users-patch
     - the effect types namespace is only populated with paths used by the same origin
     - subsequent requests of the same effect type will update the prompt, then all receive the same decision
+
+
+"This program asked you to change a fundamental security decision. That seems odd to me, because it's a productivity tool. Did you expect this?"
+  - "Stop, please. After further investigation, we've discovered this was an attack on the system. Attached is the information about this attack for you to review. If you would like to inform us of the attack, you can send this information to us."
 
 
 ---

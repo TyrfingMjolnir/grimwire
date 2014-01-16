@@ -2,6 +2,7 @@
 // =======
 
 var common = require('./common');
+var network = require('./network');
 
 // constants
 var default_script_src = "importScripts('/js/local.js');\nimportScripts('/js/servware.js');\n\nvar server = servware();\nlocal.worker.setServer(server);\n\nserver.route('/', function(link, method) {\n    link({ href: '/', rel: 'self via service', title: 'Hello World Worker' });\n\n    method('GET', function(req, res) {\n        return [200, 'Hello, world!'];\n    });\n});\n/**\n * Be sure to open the tutorials.\n * in the Worker dropdown.\n* (top left!)\n */\n";
@@ -412,7 +413,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		// Spawn server
 		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
-		common.publishNetworkLinks();
+		network.publishNetworkLinks();
 		saveEditorState();
 
 		return 204;
@@ -427,7 +428,7 @@ app_local_server.route('/w/:id', function(link, method) {
 			local.removeServer(name);
 		}
 		delete active_workers[name];
-		common.publishNetworkLinks();
+		network.publishNetworkLinks();
 		saveEditorState();
 
 		return 204;

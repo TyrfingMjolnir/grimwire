@@ -1,113 +1,99 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 
 var common = module.exports = {};
-var network_sid = localStorage.getItem('network_sid');
-var is_first_session = network_sid === null;
-if (is_first_session) network_sid = genDeviceSid();
+common.serviceURL = window.location.protocol+'//'+window.location.host;
+common.feedUA = local.agent('httpl://feed');
 
-// Network Setup
-// =============
+// Database Utilities
+// ==================
 
-// Loadtime p2p setup
-common.setupRelay = function(relay) {
-	common.relay = relay;
-	relay.on('accessGranted', function() { relay.startListening(); });
-	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
-	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
-	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
-	relay.setServer(function(req, res, peer) {
-		var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
-		var links = [{ href: '/', rel: 'service', title: relay.getUserId() }];
-		res.setHeader('Via', via);
-
-		// Home resource
-		if (req.path == '/') {
-			if (relay.registeredLinks) {
-				links = links.concat(relay.registeredLinks);
-			}
-			links.rel += ' self';
-			res.setHeader('Link', links);
-			return res.writeHead(204, 'OK, No Content').end();
-		}
-		// links[0].rel += ' via';
-
-		// Parse path
-		var proxy_uri = decodeURIComponent(req.path.slice(1));
-		var proxy_urid = local.parseUri(proxy_uri);
-
-		// Only allow for published servers
-		var server = local.getServer(proxy_urid.authority);
-		if (!server) return res.writeHead(404, 'Not Found').end();
-		if (!server.context || !server.context.config || !server.context.config.on_network)
-			return res.writeHead(404, 'Not Found').end();
-
-		// Pass the request through
-		var req2 = new local.Request({
-			method: req.method,
-			url: proxy_uri,
-			query: local.util.deepClone(req.query),
-			headers: local.util.deepClone(req.headers),
-			stream: true
-		});
-
-		// Clear the headers we're going to set
-		delete req2.headers['X-Public-Host'];
-		delete req2.headers['x-public-host'];
-		delete req2.headers['From'];
-		delete req2.headers['from'];
-		delete req2.headers['Via'];
-		delete req2.headers['via'];
-
-		// Put origin and public name into the headers
-		req2.headers['From'] = peer.config.domain;
-		req2.headers['X-Public-Host'] = req.host;
-		req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
-
-		var res2_ = local.dispatch(req2);
-		res2_.always(function(res2) {
-			// Set headers
-			res2.headers.link = res2.parsedHeaders.link; // use parsed headers, since they'll all be absolute now
-			res2.headers.via = via.concat(req.parsedHeaders.via||[]);
-
-			// Pipe back
-			res.writeHead(res2.status, res2.reason, res2.headers);
-			res2.on('data', function(chunk) { res.write(chunk); });
-			res2.on('end', function() { res.end(); });
-			res2.on('close', function() { res.close(); });
-		});
-		req.on('data', function(chunk) { req2.write(chunk); });
-		req.on('end', function() { req2.end(); });
+// Adds a message to the given db, guarantees a unique ID
+common.addMessage = function(db, doc) {
+	var p = local.promise();
+	doc._id = doc.from + '.' + Date.now() + '.' + Math.round(Math.random()*10000);
+	db.put(doc, function(err, res) {
+		if (err && err.status == 409) { common.addMessage(db, doc).chain(p); }
+		else if (err) p.reject(err);
+		else p.fulfill(res);
 	});
-	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
-	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
-	relay.on('accessGranted', function() {
-		relay.setSid(network_sid);
-		relay.startListening();
-	});
-	relay.on('streamTaken', function() {
-		// If a stream collision occurred, generate a new sid based on whether this is a new device in the network
-		network_sid = (is_first_session) ? common.genDeviceSid() : common.genSessionSid(network_sid);
-		relay.setSid(network_sid);
-		relay.startListening();
-	});
-	relay.on('listening', function() {
-		relay.registerLinks([
-			{ href: '/', rel: 'self service mail.gwr.io', title: 'Syncmail' },
-			{ href: '/folders', rel: 'collection mail.gwr.io/folders', id: 'folders', title: 'Mail Folders' }
-		]);
-		local.dispatch({ method: 'REFRESH', url: 'layout.app' });
-		if (is_first_session) { // save the sid if this was a new device
-			console.log('Detected first run on this device, assigned network identity with sid:', network_sid);
-			localStorage.setItem('network_sid', network_sid);
-		} else {
-			console.log('Assumed existing network identity with sid:', network_sid);
-		}
-	});*/
+	return p;
 };
 
+// Gets, updates, and puts a doc
+common.updateDoc = function(db, id, updates) {
+	var p = local.promise();
+	db.get(id, function(err, doc) {
+		if (err) { return p.reject([500, err]); }
 
-// Navigation Behavior
-// ===================
+		for (var k in updates) {
+			doc[k] = updates[k];
+		}
+
+		db.put(doc, function(err) {
+			if (err) { return p.reject([500, err]); }
+			p.fulfill(204);
+		});
+	});
+	return p;
+};
+
+// App Utilities
+// =============
+
+var ltregexp = /</g;
+var gtregexp = />/g;
+common.escape = function(str) {
+	return (''+str).replace(ltregexp, '&lt;').replace(gtregexp, '&gt;');
+};
+var sanitizeHtmlRegexp = /<\s*script/g;
+common.sanitizeHtml = function(html) {
+	// :TODO: this is probably naive in some important way that I'm too naive to diagnose
+	// CSP stops inline or remote script execution, but we still want to stop inclusions of scripts on our domain
+	return html.replace(sanitizeHtmlRegexp, '&lt;script');
+};
+common.normalizeRel = function(rel) {
+	var reld = local.parseUri(rel);
+	if (!reld.path) reld.relative = '/'+reld.relative; // Always have a trailing slash on the hostname
+	else if (reld.path != '/' && reld.path.slice(-1) == '/') reld.relative = reld.relative.replace(reld.path, reld.path.slice(0,-1)); // Never have a trailing slash on the path
+	return reld.authority + reld.relative;
+};
+common.normalizeUri = function(uri) {
+	var urid = local.parseUri(uri);
+	if (!urid.path) urid.relative = '/'+urid.relative; // Always have a trailing slash on the hostname
+	else if (urid.path != '/' && urid.path.slice(-1) == '/') urid.relative = urid.relative.replace(urid.path, urid.path.slice(0,-1)); // Never have a trailing slash on the path
+	return (urid.protocol||'httpl') + '://' + urid.authority + urid.relative;
+};
+
+var sources = null;
+common.getSources = function(forceReload) {
+	if (!sources || forceReload) {
+		try { sources = JSON.parse(localStorage.getItem('sources')); }
+		catch (e) { return []; }
+	}
+	return sources || [];
+};
+common.setSources = function(s, noSave) {
+	sources = s;
+	if (!noSave) {
+		localStorage.setItem('sources', JSON.stringify(sources));
+	}
+};
+
+var relayUsers = null;
+common.getRelayUsers = function() {
+	if (relayUsers) {
+		return local.promise(relayUsers);
+	}
+	return relay.getUsers().then(
+		function(res) { relayUsers = res.body.rows; return relayUsers; },
+		function(res) { console.error('Failed to fetch relay users', res); return null; }
+	);
+};
+common.ucfirst = function(str) { return str.charAt(0).toUpperCase() + str.slice(1); };
+},{}],2:[function(require,module,exports){
+
+var common = require('./common');
+var contentFrame = module.exports = {};
 
 var current_content_origin = null;
 var $chrome_url = $('#chrome-url');
@@ -150,7 +136,7 @@ function renderFromCache(pos) {
 	// $('main').html(history.html);
 }
 
-common.setupChromeUI = function() {
+contentFrame.setupChromeUI = function() {
 	$chrome_back.on('click', function() {
 		goBack();
 		renderFromCache();
@@ -162,17 +148,17 @@ common.setupChromeUI = function() {
 		return false;
 	});
 	$chrome_refresh.on('click', function() {
-		common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' }, null, { is_refresh: true });
+		contentFrame.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' }, null, { is_refresh: true });
 		return false;
 	});
 	$chrome_url.on('keydown', function(e) {
 		if (e.which === 13) {
-			common.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
+			contentFrame.dispatchRequest({ method: 'GET', url: $chrome_url.val(), target: '_content' });
 		}
 	});
 };
 
-common.prepIframeRequest = function (req) {
+contentFrame.prepIframeRequest = function (req) {
 	if (current_content_origin) {
 		// Clear the headers we're going to set
 		delete req.headers['From'];
@@ -183,20 +169,18 @@ common.prepIframeRequest = function (req) {
 	}
 };
 
-// Collapsible panels
-common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true });
 
 // Iframe Behaviors
 var $iframe = $('main iframe');
 local.bindRequestEvents($iframe.contents()[0].body);
 $iframe.contents()[0].body.addEventListener('request', function(e) {
 	var req = e.detail;
-	common.prepIframeRequest(req);
-	common.dispatchRequest(req, e.target);
+	contentFrame.prepIframeRequest(req);
+	contentFrame.dispatchRequest(req, e.target);
 });
 
 // Page dispatch behavior
-common.dispatchRequest = function(req, origin, opts) {
+contentFrame.dispatchRequest = function(req, origin, opts) {
 	opts = opts || {};
 	// Relative link? Use context to make absolute
 	if (!local.isAbsUri(req.url)) {
@@ -209,7 +193,7 @@ common.dispatchRequest = function(req, origin, opts) {
 		return local.dispatch(req).always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
 				if (res.headers.location) {
-					return common.dispatchRequest({ method: 'GET', url: res.headers.location, target: '_content' }, origin);
+					return contentFrame.dispatchRequest({ method: 'GET', url: res.headers.location, target: '_content' }, origin);
 				}
 				console.error('Redirect response is missing its location header');
 			}*/
@@ -288,149 +272,314 @@ window.onhashchange = function() {
 		}
 	}
 	// Not in history, new request
-	common.dispatchRequest(hashurl);
+	contentFrame.dispatchRequest(hashurl);
 };
+},{"./common":1}],3:[function(require,module,exports){
+var common = require('./common');
+var network = require('./network');
+var dashboardGUI = module.exports = {};
 
-// P2P Utilities
-// =============
+// Page state
+// ==========
 
-common.publishNetworkLinks = function() {
-	// Gather servers that are marked 'on_network'
-	var servers = local.getServers();
-	var domains = [];
-	for (var domain in servers) {
-		var server = servers[domain].context;
-		if (server && server.config && server.config.on_network) {
-			domains.push(domain);
-		}
+var _session = null, _session_;
+var _users = {};
+var _session_user = null;
+
+// APIs
+var serviceUA = local.agent(common.serviceURL);
+var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
+var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
+
+// Backend Interop
+// ===============
+
+// Load session
+_session_ = sessionUA.get({ Accept: 'application/json' });
+_session_.then(setSession);
+function setSession(res) {
+	// Update state
+	var first_time = (_session === null);
+	_session = res.body;
+	if (_users[_session.user_id]) {
+		_session_user = _users[_session.user_id];
+	}
+	if (first_time) {
+		network.relay.setAccessToken(_session.user_id+':using_cookie');
 	}
 
-	// Fetch self links
-	var links = [];
-	local.promise.bundle(domains.map(local.HEAD.bind(local))).then(function(ress) {
-		common.relay.registerLinks(ress.map(function(res, i) {
-			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
-			if (!selfLink) {
-				selfLink = { rel: 'service', id: domains[i] };
+	// Update UI
+	$('#userid').html(_session.user_id+' <b class="caret"></b>');
+	renderAll();
+}
+
+// Load active users
+function loadActiveUsers() {
+	usersUA.get({ Accept: 'application/json' })
+		.then(
+			function(res) {
+				_users = res.body.rows;
+				if (_session && _users[_session.user_id]) {
+					_session_user = _users[_session.user_id];
+				}
+				renderAll();
+			},
+			handleFailedRequest
+		);
+	return false;
+	// ^ loadActiveUsers() is sometimes used as a DOM event handler
+}
+loadActiveUsers();
+
+// Refresh users on tab focus
+(function() {
+	var lastRefresh = Date.now();
+	window.onfocus = function() {
+		if (Date.now() - lastRefresh > 60000) {
+			loadActiveUsers();
+			lastRefresh = Date.now();
+		}
+	};
+})();
+
+// Standard request error handler for our host
+function handleFailedRequest(res) {
+	if (res.status == 401) {
+		// session lost
+		alert('Your session has expired, redirecting you to the login page.');
+		window.location.reload();
+	}
+}
+
+
+// UI Behaviors
+// ============
+
+// Cache selectors and templates
+var $active_links = $('#active-links');
+var $your_connections = $('#your-connections');
+var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
+
+dashboardGUI.setup = function() {
+	// Dropdown behaviors
+	$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
+	$('body').on('click', function() { $('.dropdown').removeClass('open'); });
+
+	// Change email link
+	$('#change-email').on('click', function() {
+		if (!_session_user) return false;
+
+		var new_email = prompt('Your current address is '+(_session_user.email?_session_user.email:'not set')+'. Update your address to:');
+		if (!new_email) return false;
+
+		// Update or setup update process depending on whether this is the first time
+		var userUA = usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id });
+		if (!_session_user.email) {
+			userUA.PATCH({ email: new_email })
+				.then(function() { _session_user.email = new_email; alert('Your email has been updated to '+new_email); })
+				.fail(function(res) {
+					if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
+					alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
+				});
+		} else {
+			userUA.follow({ rel: 'gwr.io/confirmed-update' }).POST({ email: new_email })
+				.then(function() { _session_user.email = new_email; alert('An email has been sent to your old address to confirm the update to '+new_email); })
+				.fail(function(res) {
+					if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
+					alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
+				});
+		}
+		return false;
+	});
+
+	// Change password link
+	$('#change-pw').on('click', function() {
+		if (!_session_user) return false;
+		if (!_session_user.email) {
+			alert('Password updates require an email account to confirm identity. Please use the "Change Email" to set this first.');
+			return false;
+		}
+		if (!confirm('For security purposes, a confirmation email will be sent to '+_session_user.email+' with an update link. Send the email?')) {
+			return false;
+		}
+		usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id })
+			.follow({ rel: 'gwr.io/confirmed-update' })
+			.POST({ password: true })
+			.then(function() { alert('Check your inbox for the confirmation link.'); })
+			.fail(function(res) { alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason); });
+		return false;
+	});
+
+	// Logout link
+	$('#logout').on('click', function(e) {
+		sessionUA.delete()
+			.then(window.location.reload.bind(window.location), function() {
+				console.warn('Failed to delete session');
+			});
+		return false;
+	});
+
+	// Refresh button
+	$('#refresh-active-links').on('click', loadActiveUsers);
+};
+
+// Guest slot +/- buttons
+var _updateGuestStreamsReq = null;
+var _updateGuestBufferingTimeout = null;
+function updateGuestSlotsCB(d_streams) {
+	return function() {
+		if (_session_user) {
+			// Find the target
+			var target = _session_user.max_guest_streams + d_streams;
+			if (target < _session_user.num_guest_streams) return false;
+			if (target > (_session_user.max_user_streams - _session_user.num_user_streams)) return false;
+			_session_user.max_guest_streams = target;
+
+			// Cancel any requests in progress
+			if (_updateGuestStreamsReq) {
+				_updateGuestStreamsReq.close();
 			}
-			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
-			selfLink.href = '/'+encodeURIComponent('httpl://'+domains[i]); // Overwrite href
-			return selfLink;
-		}));
-	});
-};
+			if (_updateGuestBufferingTimeout) {
+				clearTimeout(_updateGuestBufferingTimeout);
+			}
+
+			renderUserConnections();
+			_updateGuestBufferingTimeout = setTimeout(function() {
+				// Create the request
+				_updateGuestStreamsReq = new local.Request({
+					method: 'PATCH',
+					headers: { 'content-type': 'application/json' }
+				});
+				usersUA.follow({ rel: 'item', id: _session.user_id })
+					.dispatch(_updateGuestStreamsReq)
+					.then(renderUserConnections);
+				_updateGuestStreamsReq.end({ max_guest_streams: target });
+			}, 250);
+		}
+		return false;
+	};
+}
 
 
-// Database Utilities
-// ==================
+// Avatars
+// =======
 
-// Adds a message to the given db, guarantees a unique ID
-common.addMessage = function(db, doc) {
-	var p = local.promise();
-	doc._id = doc.from + '.' + Date.now() + '.' + Math.round(Math.random()*10000);
-	db.put(doc, function(err, res) {
-		if (err && err.status == 409) { common.addMessage(db, doc).chain(p); }
-		else if (err) p.reject(err);
-		else p.fulfill(res);
-	});
-	return p;
-};
+(function() {
+	var arr=[];
+	_avatars = JSON.parse($('#avatars').text());
+	var nAvatars = _avatars.length;
+	$('.avatars').html(
+		_avatars.sort().map(function(avatar, i) {
+			// Add the avatar to the array
+			arr.push('<a href="javascript:void(0)" data-avatar="'+avatar+'"><img src="/img/avatars/'+avatar+'" title="'+avatar+'" /></a>');
+			// Flush the array on every 8th (or the last)
+			if (arr.length === 8 || i === nAvatars-1) {
+				var str = '<li>'+arr.join('')+'</li>';
+				arr.length = 0;
+				return str;
+			}
+			return '';
+		}).join('')
+	);
+})();
+$('.avatars a').on('click', function() {
+	var avatar = $(this).data('avatar');
 
-// Gets, updates, and puts a doc
-common.updateDoc = function(db, id, updates) {
-	var p = local.promise();
-	db.get(id, function(err, doc) {
-		if (err) { return p.reject([500, err]); }
+	// Update UI
+	$('.avatars a.selected').removeClass('selected');
+	$(this).addClass('selected');
+	$('.user-avatar').attr('src', '/img/avatars/'+avatar);
 
-		for (var k in updates) {
-			doc[k] = updates[k];
+	// Update the user
+	usersUA.follow({ rel: 'item', id: _session.user_id }).patch({ avatar: avatar });
+	_session.avatar = avatar;
+
+	return false;
+});
+
+
+// Rendering Helpers
+// =================
+
+function renderLinkRow(link) {
+	var urld = local.parseUri(link.href);
+	var peerd = local.parsePeerDomain(urld.authority);
+	var appUrl = peerd ? peerd.app : urld.authority;
+
+	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
+	if (appUrl != window.location.host) {
+		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+	}
+	return html+'</td></tr>';
+}
+function renderLinks(userId) {
+	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
+}
+function renderWorkerLinks(userId) {
+	return Object.keys(workers_server.active_workers).map(function(domain) {
+		return renderLinkRow({ href: 'httpl://'+domain, title: domain });
+	}).join('');
+}
+
+// Update connections view
+function renderUserConnections() {
+	if (_session_user) {
+		// Render active connections
+		var max_guest_streams = Math.min(_session_user.max_user_streams - _session_user.num_user_streams, _session_user.max_guest_streams);
+		html = renderYourConnections({
+			num_user_streams: _session_user.num_user_streams,
+			max_user_streams: _session_user.max_user_streams,
+			num_guest_streams: _session_user.num_guest_streams,
+			max_guest_streams: _session_user.max_guest_streams,
+			pct_user_streams: Math.round((_session_user.num_user_streams / _session_user.max_user_streams) * 100),
+			pct_guest_streams: Math.round((_session_user.num_guest_streams / _session_user.max_user_streams) * 100),
+			pct_guest_remaining: Math.round(((max_guest_streams - _session_user.num_guest_streams) / _session_user.max_user_streams) * 100)
+		});
+		$your_connections.html(html);
+
+		// Bind guest slot add/remove btns
+		$('#remove-guest-slot').on('click', updateGuestSlotsCB(-1));
+		$('#add-guest-slot').on('click', updateGuestSlotsCB(+1));
+	} else {
+		$your_connections.html('');
+	}
+}
+
+// Update UI state
+function renderAll() {
+	var html;
+
+	if (_session && Object.keys(_users).length > 0) {
+		// Set active avatar
+		$('.avatars a[data-avatar="'+_session.avatar+'"]').addClass('selected');
+
+		// Session user
+		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
+		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)/*+renderWorkerLinks()*/+'</table>';
+
+		// Other users
+		var html2 = '';
+		for (var id in _users) {
+			var user = _users[id];
+			if (user.id == _session.user_id) { continue; }
+			if (user.online) {
+				html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id+'</h4>';
+				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
+			} else {
+				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+user.avatar+'" /> '+user.id+' offline</small></p>';
+			}
 		}
 
-		db.put(doc, function(err) {
-			if (err) { return p.reject([500, err]); }
-			p.fulfill(204);
-		});
-	});
-	return p;
-};
-
-// App Utilities
-// =============
-
-/*var relay = grimwidget.getRelay();
-common.getSessionUser = relay.getUserId.bind(relay);
-common.getSessionRelay = function() {
-	var providerd = local.parseUri(relay.getProvider() || '');
-	if (providerd) return providerd.authority;
-	return '';
-};
-common.getSessionEmail = function() { return common.getSessionUser() + '@' + common.getSessionRelay(); };
-common.isPeerSessionUser = function(peer) {
-	return (peer.getPeerInfo().user == common.getSessionUser() && peer.getPeerInfo().relay == common.getSessionRelay());
-};*/
-function genDeviceSid() { return Math.round(Math.random()*10000)*100; }; // [0,1000000) with a step of 100
-common.genDeviceSid = genDeviceSid;
-common.genSessionSid = function(deviceSid) { return deviceSid+Math.round(Math.random()*99)+1; }; // [deviceSid+1, deviceSid+100)
-common.genDeviceName = function() {
-	if (navigator.userAgent.indexOf('Opera') !== -1) return 'Opera';
-	else if (navigator.userAgent.indexOf('MSIE') !== -1) return 'IE';
-	else if (navigator.userAgent.indexOf('Chrome') !== -1) return 'Chrome';
-	else if (navigator.userAgent.indexOf('Safari') !== -1) return 'Safari';
-	else if (navigator.userAgent.indexOf('Firefox') !== -1) return 'Firefox';
-	// :TODO: mobile
-	return 'device';
-};
-var ltregexp = /</g;
-var gtregexp = />/g;
-common.escape = function(str) {
-	return (''+str).replace(ltregexp, '&lt;').replace(gtregexp, '&gt;');
-};
-var sanitizeHtmlRegexp = /<\s*script/g;
-common.sanitizeHtml = function(html) {
-	// :TODO: this is probably naive in some important way that I'm too naive to diagnose
-	// CSP stops inline or remote script execution, but we still want to stop inclusions of scripts on our domain
-	return html.replace(sanitizeHtmlRegexp, '&lt;script');
-};
-common.normalizeRel = function(rel) {
-	var reld = local.parseUri(rel);
-	if (!reld.path) reld.relative = '/'+reld.relative; // Always have a trailing slash on the hostname
-	else if (reld.path != '/' && reld.path.slice(-1) == '/') reld.relative = reld.relative.replace(reld.path, reld.path.slice(0,-1)); // Never have a trailing slash on the path
-	return reld.authority + reld.relative;
-};
-common.normalizeUri = function(uri) {
-	var urid = local.parseUri(uri);
-	if (!urid.path) urid.relative = '/'+urid.relative; // Always have a trailing slash on the hostname
-	else if (urid.path != '/' && urid.path.slice(-1) == '/') urid.relative = urid.relative.replace(urid.path, urid.path.slice(0,-1)); // Never have a trailing slash on the path
-	return (urid.protocol||'httpl') + '://' + urid.authority + urid.relative;
-};
-
-var sources = null;
-common.getSources = function(forceReload) {
-	if (!sources || forceReload) {
-		try { sources = JSON.parse(localStorage.getItem('sources')); }
-		catch (e) { return []; }
+		// Render
+		$active_links.html(html+html2);
+	} else {
+		$active_links.html('');
 	}
-	return sources || [];
-};
-common.setSources = function(s, noSave) {
-	sources = s;
-	if (!noSave) {
-		localStorage.setItem('sources', JSON.stringify(sources));
-	}
-};
 
-var relayUsers = null;
-common.getRelayUsers = function() {
-	if (relayUsers) {
-		return local.promise(relayUsers);
-	}
-	return relay.getUsers().then(
-		function(res) { relayUsers = res.body.rows; return relayUsers; },
-		function(res) { console.error('Failed to fetch relay users', res); return null; }
-	);
-};
-common.ucfirst = function(str) { return str.charAt(0).toUpperCase() + str.slice(1); };
-},{}],2:[function(require,module,exports){
+	renderUserConnections();
+}
+renderAll();
+},{"./common":1,"./network":8}],4:[function(require,module,exports){
 /*
 httpl://explorer
 
@@ -660,7 +809,7 @@ server.route('/intro', function(link, method) {
 		].join(' '), { 'content-type': 'text/html' }];
 	});
 });
-},{"./common":1}],3:[function(require,module,exports){
+},{"./common":1}],5:[function(require,module,exports){
 /*
 httpl://feed
 
@@ -790,70 +939,9 @@ server.route('/:id', function(link, method) {
 		return 204;
 	});
 });
-},{}],4:[function(require,module,exports){
-var common = require('./common');
-
-// Page state
-// ==========
-
-var _session = null, _session_;
-var _users = {};
-var _session_user = null;
-
-// APIs
-var serviceURL = window.location.protocol+'//'+window.location.host;
-var serviceUA = local.agent(serviceURL);
-var usersUA   = serviceUA.follow({ rel: 'gwr.io/users', link_bodies: 1 });
-var sessionUA = serviceUA.follow({ rel: 'gwr.io/session', type: 'user' });
-common.feedUA = local.agent('httpl://feed');
-
-// Setup
-// =====
-
-common.feedUA.POST('Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
-common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
-common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro" target="_content">Start here</a>.</div>', { Content_Type: 'text/html' });
-common.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'httpl://feed', target: '_content' });
-
-// So PouchDB can target locals
-// local.patchXHR();
-// Pouch.adapter('httpl', Pouch.adapters['http']);
-
-// Traffic logging
-local.setDispatchWrapper(function(req, res, dispatch) {
-	var res_ = dispatch(req, res);
-	res_.then(
-		function() { console.log(req, res); },
-		function() { console.error(req, res); }
-	);
-});
-
-// Servers
-var workers_server = require('./workers');
-// local.addServer('href', require('./href'));
-local.addServer('storage', require('./storage'));
-local.addServer('explorer', require('./explorer'));
-local.addServer('feed', require('./feed'));
-local.addServer('workers', workers_server);
-local.addServer(window.location.host, function(req, res) {
-	var req2 = new local.Request({
-		method: req.method,
-		url: serviceURL+req.path,
-		query: local.util.deepClone(req.query),
-		headers: local.util.deepClone(req.headers),
-		stream: true
-	});
-	local.dispatch(req2).always(function(res2) {
-		res.writeHead(res2.status, res2.reason, res2.headers);
-		res2.on('data', function(data) { res.write(data); });
-		res2.on('end', function() { res.end(); });
-		return res2;
-	});
-	req.on('data', function(chunk) { req2.write(chunk); });
-	req.on('end', function() { req2.end(); });
-});
-local.removeServer('hosts'); // replace hosts service
-local.addServer('hosts', function(req, res) {
+},{}],6:[function(require,module,exports){
+// Replacement for httpl://hosts
+module.exports = function(req, res) {
 	var localHosts = local.getServers();
 
 	if (!(req.method == 'HEAD' || req.method == 'GET'))
@@ -888,310 +976,245 @@ local.addServer('hosts', function(req, res) {
 		res.writeHead(200, 'ok', { 'content-type': 'application/json' });
 		res.end({ host_names: domains });
 	});
+};
+},{}],7:[function(require,module,exports){
+var common = require('./common');
+var contentFrame = require('./content-frame');
+var network = require('./network');
+var dashboardGUI = require('./dashboard-gui');
+
+// Setup
+// =====
+
+common.feedUA.POST('Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
+common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
+common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro" target="_content">Start here</a>.</div>', { Content_Type: 'text/html' });
+contentFrame.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'httpl://feed', target: '_content' });
+
+// So PouchDB can target locals
+// local.patchXHR();
+// Pouch.adapter('httpl', Pouch.adapters['http']);
+
+// Traffic logging
+local.setDispatchWrapper(function(req, res, dispatch) {
+	var res_ = dispatch(req, res);
+	res_.then(
+		function() { console.log(req, res); },
+		function() { console.error(req, res); }
+	);
 });
+
+// Servers
+var workers_server = require('./workers');
+// local.addServer('href', require('./href'));
+local.addServer('storage', require('./storage'));
+local.addServer('explorer', require('./explorer'));
+local.addServer('feed', require('./feed'));
+local.addServer('workers', workers_server);
+local.addServer(window.location.host, network.hostProxy);
+local.removeServer('hosts'); // replace hosts service
+local.addServer('hosts', require('./hosts'));
 
 // Request events
 local.bindRequestEvents(document.body);
 document.body.addEventListener('request', function(e) {
 	var req = e.detail;
-	// common.prepDocumentRequest(req); :NOTE: do NOT do this. common.prepDocumentRequest assumes the origin of the main iframe; these request events come from the shell
-	common.dispatchRequest(req, e.target);
+	contentFrame.dispatchRequest(req, e.target);
 });
 
 // Network relay
-var relay = local.joinRelay(serviceURL);
-common.setupRelay(relay);
+var relay = local.joinRelay(common.serviceURL);
+network.setupRelay(common.serviceURL, relay);
 
+// GUI
+dashboardGUI.setup();
+contentFrame.setupChromeUI();
+common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east__size: 300, east__initClosed: true });
+},{"./common":1,"./content-frame":2,"./dashboard-gui":3,"./explorer":4,"./feed":5,"./hosts":6,"./network":8,"./storage":9,"./workers":10}],8:[function(require,module,exports){
 
-// Backend Interop
-// ===============
+var common = require('./common');
+var network = module.exports = {};
 
-// Load session
-_session_ = sessionUA.get({ Accept: 'application/json' });
-_session_.then(setSession);
-function setSession(res) {
-	// Update state
-	var first_time = (_session === null);
-	_session = res.body;
-	if (_users[_session.user_id]) {
-		_session_user = _users[_session.user_id];
-	}
-	if (first_time) {
-		relay.setAccessToken(_session.user_id+':using_cookie');
-	}
+/*
+var network_sid = localStorage.getItem('network_sid');
+var is_first_session = network_sid === null;
+if (is_first_session) network_sid = genDeviceSid();
+*/
+// Prep the relay connection
+network.setupRelay = function(serviceURL, relay) {
+	network.serviceURL = serviceURL;
+	network.relay = relay;
 
-	// Update UI
-	$('#userid').html(_session.user_id+' <b class="caret"></b>');
-	renderAll();
-}
-
-// Load active users
-function loadActiveUsers() {
-	usersUA.get({ Accept: 'application/json' })
-		.then(
-			function(res) {
-				_users = res.body.rows;
-				if (_session && _users[_session.user_id]) {
-					_session_user = _users[_session.user_id];
-				}
-				renderAll();
-			},
-			handleFailedRequest
-		);
-	return false;
-	// ^ loadActiveUsers() is sometimes used as a DOM event handler
-}
-loadActiveUsers();
-
-// Refresh users on tab focus
-(function() {
-	var lastRefresh = Date.now();
-	window.onfocus = function() {
-		if (Date.now() - lastRefresh > 60000) {
-			loadActiveUsers();
-			lastRefresh = Date.now();
+	relay.on('accessGranted', function() { relay.startListening(); });
+	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
+	relay.setServer(peerProxy);
+	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
+	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically
+	relay.on('accessGranted', function() {
+		relay.setSid(network_sid);
+		relay.startListening();
+	});
+	relay.on('streamTaken', function() {
+		// If a stream collision occurred, generate a new sid based on whether this is a new device in the network
+		network_sid = (is_first_session) ? common.genDeviceSid() : common.genSessionSid(network_sid);
+		relay.setSid(network_sid);
+		relay.startListening();
+	});
+	relay.on('listening', function() {
+		relay.registerLinks([
+			{ href: '/', rel: 'self service mail.gwr.io', title: 'Syncmail' },
+			{ href: '/folders', rel: 'collection mail.gwr.io/folders', id: 'folders', title: 'Mail Folders' }
+		]);
+		local.dispatch({ method: 'REFRESH', url: 'layout.app' });
+		if (is_first_session) { // save the sid if this was a new device
+			console.log('Detected first run on this device, assigned network identity with sid:', network_sid);
+			localStorage.setItem('network_sid', network_sid);
+		} else {
+			console.log('Assumed existing network identity with sid:', network_sid);
 		}
-	};
-})();
+	});*/
+};
 
-// Standard request error handler for our host
-function handleFailedRequest(res) {
-	if (res.status == 401) {
-		// session lost
-		alert('Your session has expired, redirecting you to the login page.');
-		window.location.reload();
-	}
-}
+// Handles requests from oeers
+function peerProxy(req, res, peer) {
+	var via = [{proto: {version:'1.0', name:'httpl'}, hostname: req.host}];
+	var links = [{ href: '/', rel: 'service', title: network.relay.getUserId() }];
+	res.setHeader('Via', via);
 
-
-// UI Behaviors
-// ============
-
-common.setupChromeUI();
-
-// Cache selectors and templates
-var $active_links = $('#active-links');
-var $your_connections = $('#your-connections');
-var renderYourConnections = Handlebars.compile($('#your-connections-tmpl').html());
-
-// Dropdown behaviors
-$('.dropdown > a').on('click', function() { $(this).parent().toggleClass('open'); return false; });
-$('body').on('click', function() { $('.dropdown').removeClass('open'); });
-
-// Change email link
-$('#change-email').on('click', function() {
-	if (!_session_user) return false;
-
-	var new_email = prompt('Your current address is '+(_session_user.email?_session_user.email:'not set')+'. Update your address to:');
-	if (!new_email) return false;
-
-	// Update or setup update process depending on whether this is the first time
-	var userUA = usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id });
-	if (!_session_user.email) {
-		userUA.PATCH({ email: new_email })
-			.then(function() { _session_user.email = new_email; alert('Your email has been updated to '+new_email); })
-			.fail(function(res) {
-				if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
-				alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
-			});
-	} else {
-		userUA.follow({ rel: 'gwr.io/confirmed-update' }).POST({ email: new_email })
-			.then(function() { _session_user.email = new_email; alert('An email has been sent to your old address to confirm the update to '+new_email); })
-			.fail(function(res) {
-				if (res.status == 422) return alert('Invalid email address. Please check your adress and try again.');
-				alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason);
-			});
-	}
-	return false;
-});
-
-// Change password link
-$('#change-pw').on('click', function() {
-	if (!_session_user) return false;
-	if (!_session_user.email) {
-		alert('Password updates require an email account to confirm identity. Please use the "Change Email" to set this first.');
-		return false;
-	}
-	if (!confirm('For security purposes, a confirmation email will be sent to '+_session_user.email+' with an update link. Send the email?')) {
-		return false;
-	}
-	usersUA.follow({ rel: 'gwr.io/user', id: _session.user_id })
-		.follow({ rel: 'gwr.io/confirmed-update' })
-		.POST({ password: true })
-		.then(function() { alert('Check your inbox for the confirmation link.'); })
-		.fail(function(res) { alert('Sorry! There seems to have been an error while updating your email: '+res.status+' '+res.reason); });
-	return false;
-});
-
-// Logout link
-$('#logout').on('click', function(e) {
-	sessionUA.delete()
-		.then(window.location.reload.bind(window.location), function() {
-			console.warn('Failed to delete session');
-		});
-	return false;
-});
-
-// Refresh button
-$('#refresh-active-links').on('click', loadActiveUsers);
-
-// Guest slot +/- buttons
-var _updateGuestStreamsReq = null;
-var _updateGuestBufferingTimeout = null;
-function updateGuestSlotsCB(d_streams) {
-	return function() {
-		if (_session_user) {
-			// Find the target
-			var target = _session_user.max_guest_streams + d_streams;
-			if (target < _session_user.num_guest_streams) return false;
-			if (target > (_session_user.max_user_streams - _session_user.num_user_streams)) return false;
-			_session_user.max_guest_streams = target;
-
-			// Cancel any requests in progress
-			if (_updateGuestStreamsReq) {
-				_updateGuestStreamsReq.close();
-			}
-			if (_updateGuestBufferingTimeout) {
-				clearTimeout(_updateGuestBufferingTimeout);
-			}
-
-			renderUserConnections();
-			_updateGuestBufferingTimeout = setTimeout(function() {
-				// Create the request
-				_updateGuestStreamsReq = new local.Request({
-					method: 'PATCH',
-					headers: { 'content-type': 'application/json' }
-				});
-				usersUA.follow({ rel: 'item', id: _session.user_id })
-					.dispatch(_updateGuestStreamsReq)
-					.then(renderUserConnections);
-				_updateGuestStreamsReq.end({ max_guest_streams: target });
-			}, 250);
+	// Home resource
+	if (req.path == '/') {
+		if (network.relay.registeredLinks) {
+			links = links.concat(network.relay.registeredLinks);
 		}
-		return false;
-	};
-}
-
-
-// Avatars
-// =======
-
-(function() {
-	var arr=[];
-	_avatars = JSON.parse($('#avatars').text());
-	var nAvatars = _avatars.length;
-	$('.avatars').html(
-		_avatars.sort().map(function(avatar, i) {
-			// Add the avatar to the array
-			arr.push('<a href="javascript:void(0)" data-avatar="'+avatar+'"><img src="/img/avatars/'+avatar+'" title="'+avatar+'" /></a>');
-			// Flush the array on every 8th (or the last)
-			if (arr.length === 8 || i === nAvatars-1) {
-				var str = '<li>'+arr.join('')+'</li>';
-				arr.length = 0;
-				return str;
-			}
-			return '';
-		}).join('')
-	);
-})();
-$('.avatars a').on('click', function() {
-	var avatar = $(this).data('avatar');
-
-	// Update UI
-	$('.avatars a.selected').removeClass('selected');
-	$(this).addClass('selected');
-	$('.user-avatar').attr('src', '/img/avatars/'+avatar);
-
-	// Update the user
-	usersUA.follow({ rel: 'item', id: _session.user_id }).patch({ avatar: avatar });
-	_session.avatar = avatar;
-
-	return false;
-});
-
-
-// Rendering Helpers
-// =================
-
-function renderLinkRow(link) {
-	var urld = local.parseUri(link.href);
-	var peerd = local.parsePeerDomain(urld.authority);
-	var appUrl = peerd ? peerd.app : urld.authority;
-
-	var html = '<tr><td data-local-alias="a" href="'+link.href+'" target="_content">'+(link.title||link.href);
-	if (appUrl != window.location.host) {
-		html += '<a class="pull-right" href="http://'+appUrl+'" target="_blank">'+appUrl+'</a>';
+		links.rel += ' self';
+		res.setHeader('Link', links);
+		return res.writeHead(204, 'OK, No Content').end();
 	}
-	return html+'</td></tr>';
+	// links[0].rel += ' via';
+
+	// Parse path
+	var proxy_uri = decodeURIComponent(req.path.slice(1));
+	var proxy_urid = local.parseUri(proxy_uri);
+
+	// Only allow for published servers
+	var server = local.getServer(proxy_urid.authority);
+	if (!server) return res.writeHead(404, 'Not Found').end();
+	if (!server.context || !server.context.config || !server.context.config.on_network)
+		return res.writeHead(404, 'Not Found').end();
+
+	// Pass the request through
+	var req2 = new local.Request({
+		method: req.method,
+		url: proxy_uri,
+		query: local.util.deepClone(req.query),
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+
+	// Clear the headers we're going to set
+	delete req2.headers['X-Public-Host'];
+	delete req2.headers['x-public-host'];
+	delete req2.headers['From'];
+	delete req2.headers['from'];
+	delete req2.headers['Via'];
+	delete req2.headers['via'];
+
+	// Put origin and public name into the headers
+	req2.headers['From'] = peer.config.domain;
+	req2.headers['X-Public-Host'] = req.host;
+	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
+
+	var res2_ = local.dispatch(req2);
+	res2_.always(function(res2) {
+		// Set headers
+		res2.headers.link = res2.parsedHeaders.link; // use parsed headers, since they'll all be absolute now
+		res2.headers.via = via.concat(req.parsedHeaders.via||[]);
+
+		// Pipe back
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(chunk) { res.write(chunk); });
+		res2.on('end', function() { res.end(); });
+		res2.on('close', function() { res.close(); });
+	});
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
 }
-function renderLinks(userId) {
-	return (_users[userId]) ? _users[userId].links.map(renderLinkRow).join('') : '';
-}
-function renderWorkerLinks(userId) {
-	return Object.keys(workers_server.active_workers).map(function(domain) {
-		return renderLinkRow({ href: 'httpl://'+domain, title: domain });
-	}).join('');
-}
 
-// Update connections view
-function renderUserConnections() {
-	if (_session_user) {
-		// Render active connections
-		var max_guest_streams = Math.min(_session_user.max_user_streams - _session_user.num_user_streams, _session_user.max_guest_streams);
-		html = renderYourConnections({
-			num_user_streams: _session_user.num_user_streams,
-			max_user_streams: _session_user.max_user_streams,
-			num_guest_streams: _session_user.num_guest_streams,
-			max_guest_streams: _session_user.max_guest_streams,
-			pct_user_streams: Math.round((_session_user.num_user_streams / _session_user.max_user_streams) * 100),
-			pct_guest_streams: Math.round((_session_user.num_guest_streams / _session_user.max_user_streams) * 100),
-			pct_guest_remaining: Math.round(((max_guest_streams - _session_user.num_guest_streams) / _session_user.max_user_streams) * 100)
-		});
-		$your_connections.html(html);
+// A local proxy to the remote host
+// - somewhat temporary, mainly an easy way to introduce the host services into the local namespace
+network.hostProxy = function(req, res) {
+	var req2 = new local.Request({
+		method: req.method,
+		url: network.serviceURL+req.path,
+		query: local.util.deepClone(req.query),
+		headers: local.util.deepClone(req.headers),
+		stream: true
+	});
+	local.dispatch(req2).always(function(res2) {
+		res.writeHead(res2.status, res2.reason, res2.headers);
+		res2.on('data', function(data) { res.write(data); });
+		res2.on('end', function() { res.end(); });
+		return res2;
+	});
+	req.on('data', function(chunk) { req2.write(chunk); });
+	req.on('end', function() { req2.end(); });
+};
 
-		// Bind guest slot add/remove btns
-		$('#remove-guest-slot').on('click', updateGuestSlotsCB(-1));
-		$('#add-guest-slot').on('click', updateGuestSlotsCB(+1));
-	} else {
-		$your_connections.html('');
-	}
-}
-
-// Update UI state
-function renderAll() {
-	var html;
-
-	if (_session && Object.keys(_users).length > 0) {
-		// Set active avatar
-		$('.avatars a[data-avatar="'+_session.avatar+'"]').addClass('selected');
-
-		// Session user
-		html = '<h3><img class="user-avatar" src="/img/avatars/'+_session.avatar+'" /> '+_session.user_id+' <small>this is you!</small></h3>';
-		html += '<table id="'+_session.user_id+'-links" class="table table-hover table-condensed">'+renderLinks(_session.user_id)/*+renderWorkerLinks()*/+'</table>';
-
-		// Other users
-		var html2 = '';
-		for (var id in _users) {
-			var user = _users[id];
-			if (user.id == _session.user_id) { continue; }
-			if (user.online) {
-				html += '<h4><img src="/img/avatars/'+user.avatar+'" /> '+user.id+'</h4>';
-				html += '<table id="'+user.id+'-links" class="table table-hover table-condensed">' + renderLinks(user.id) + '</table>';
-			} else {
-				html2 += '<p style="margin:0"><small><img src="/img/avatars/'+user.avatar+'" /> '+user.id+' offline</small></p>';
-			}
+// Helper to gather published links and send them to the host service
+network.publishNetworkLinks = function() {
+	// Gather servers that are marked 'on_network'
+	var servers = local.getServers();
+	var domains = [];
+	for (var domain in servers) {
+		var server = servers[domain].context;
+		if (server && server.config && server.config.on_network) {
+			domains.push(domain);
 		}
-
-		// Render
-		$active_links.html(html+html2);
-	} else {
-		$active_links.html('');
 	}
 
-	renderUserConnections();
-}
-renderAll();
-},{"./common":1,"./explorer":2,"./feed":3,"./storage":5,"./workers":6}],5:[function(require,module,exports){
+	// Fetch self links
+	var links = [];
+	local.promise.bundle(domains.map(local.HEAD.bind(local))).then(function(ress) {
+		network.relay.registerLinks(ress.map(function(res, i) {
+			var selfLink = local.queryLinks(res, { rel: 'self' })[0];
+			if (!selfLink) {
+				selfLink = { rel: 'service', id: domains[i] };
+			}
+			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
+			selfLink.href = '/'+encodeURIComponent('httpl://'+domains[i]); // Overwrite href
+
+			return selfLink;
+		}));
+	});
+};
+
+
+/*var relay = grimwidget.getRelay();
+common.getSessionUser = relay.getUserId.bind(relay);
+common.getSessionRelay = function() {
+	var providerd = local.parseUri(relay.getProvider() || '');
+	if (providerd) return providerd.authority;
+	return '';
+};
+common.getSessionEmail = function() { return common.getSessionUser() + '@' + common.getSessionRelay(); };
+common.isPeerSessionUser = function(peer) {
+	return (peer.getPeerInfo().user == common.getSessionUser() && peer.getPeerInfo().relay == common.getSessionRelay());
+};
+function genDeviceSid() { return Math.round(Math.random()*10000)*100; }; // [0,1000000) with a step of 100
+common.genDeviceSid = genDeviceSid;
+common.genSessionSid = function(deviceSid) { return deviceSid+Math.round(Math.random()*99)+1; }; // [deviceSid+1, deviceSid+100)
+common.genDeviceName = function() {
+	if (navigator.userAgent.indexOf('Opera') !== -1) return 'Opera';
+	else if (navigator.userAgent.indexOf('MSIE') !== -1) return 'IE';
+	else if (navigator.userAgent.indexOf('Chrome') !== -1) return 'Chrome';
+	else if (navigator.userAgent.indexOf('Safari') !== -1) return 'Safari';
+	else if (navigator.userAgent.indexOf('Firefox') !== -1) return 'Firefox';
+	// :TODO: mobile
+	return 'device';
+};*/
+},{"./common":1}],9:[function(require,module,exports){
 /*
 httpl://storage
 
@@ -1259,11 +1282,12 @@ server.route('/:storage/:bucket/:id', function(link, method) {
 		return 204;
 	});
 });
-},{}],6:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 // workers
 // =======
 
 var common = require('./common');
+var network = require('./network');
 
 // constants
 var default_script_src = "importScripts('/js/local.js');\nimportScripts('/js/servware.js');\n\nvar server = servware();\nlocal.worker.setServer(server);\n\nserver.route('/', function(link, method) {\n    link({ href: '/', rel: 'self via service', title: 'Hello World Worker' });\n\n    method('GET', function(req, res) {\n        return [200, 'Hello, world!'];\n    });\n});\n/**\n * Be sure to open the tutorials.\n * in the Worker dropdown.\n* (top left!)\n */\n";
@@ -1674,7 +1698,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		// Spawn server
 		active_workers[name] = local.spawnWorkerServer(src, { domain: name, on_network: !!(req.query.network) }, worker_remote_server);
 		// active_workers[name].getPort().addEventListener('error', onError, false); ?
-		common.publishNetworkLinks();
+		network.publishNetworkLinks();
 		saveEditorState();
 
 		return 204;
@@ -1689,7 +1713,7 @@ app_local_server.route('/w/:id', function(link, method) {
 			local.removeServer(name);
 		}
 		delete active_workers[name];
-		common.publishNetworkLinks();
+		network.publishNetworkLinks();
 		saveEditorState();
 
 		return 204;
@@ -1828,5 +1852,5 @@ function renderEditorChrome() {
 	].join(''));
     $('#worker-editor > .nav-tabs').html(html);
 }
-},{"./common":1}]},{},[4])
+},{"./common":1,"./network":8}]},{},[7])
 ;
