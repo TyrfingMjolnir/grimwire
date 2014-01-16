@@ -994,7 +994,7 @@ var dashboardGUI = require('./dashboard-gui');
 common.feedUA.POST('Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
 common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
 common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro">Start here</a>.</div>', { Content_Type: 'text/html' });
-contentFrame.dispatchRequest({ method: 'GET', url: /*window.location.hash.slice(1) || */'httpl://feed', target: '_content' });
+contentFrame.dispatchRequest({ method: 'GET', url: window.location.hash.slice(1) || 'httpl://feed', target: '_content' });
 
 // So PouchDB can target locals
 // local.patchXHR();

@@ -4,21 +4,21 @@ local: add support for local.POST({}, 'httpl://nquery') *0
 local: link header relative → abs is fucking up data uris (not recognizing them as absolute probly) *0
 local: add timeout to hosts *0
 local: add host.page to workers *0
-local: move request .host to headers
+local: s/link query failed to match/Link Query Failed/ *0
+local: move request .host to headers *1
+local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link') *1
 local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely (may be fixed)
-local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link')
 local: data-local-alias sucks, replace with something more obvious
 local: add functions to queryLinks
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
-local: s/link query failed to match/Link Query Failed/
 local: document relay.isListening
 local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
 grim: security
- - complete access control review *1
- - escaping strategy *1
- - make sure CSP comes from headers *1
+ - complete access control review *0
+ - escaping strategy *0
+ - make sure CSP comes from headers *0
 
 servware: mechanism to update existing links
 servware: regex methodname
@@ -30,8 +30,7 @@ servware: document api
 
 TOLATER
 
-
-local:
+escaping idea:
 "warning| Page content which was undergoing approval was found to contain live directives without a warning label."
 "warning|  - this indicates some piece of software, either maliciously or unintentionally, let the directives through"
 "warning|  - the address it came from was foobar.com"
@@ -55,6 +54,8 @@ grim: access control service
   - accepts requests describing attempted effects
     - eg [Storage, "Wants to store {>Object} in your browser."]
     - eg [Worker Editor, "Wants to open httpl://bob@grimwire.net/foo.js/foo.js."]
+  - description can also include parameters for behavior tracking
+    - eg { allow: 3, reset: 24*60*60*1000 } == let an origin do this action 3 times over 24 hours before prompting the user about it
   - user choice creates a security profile for the origin
     - prompts if no previous choice is in effect
     - choice is included in the response to the program
@@ -71,10 +72,9 @@ grim: access control service
     - eg /users-patch
     - the effect types namespace is only populated with paths used by the same origin
     - subsequent requests of the same effect type will update the prompt, then all receive the same decision
-
-
 "This program asked you to change a fundamental security decision. That seems odd to me, because it's a productivity tool. Did you expect this?"
-  - "Stop, please. After further investigation, we've discovered this was an attack on the system. Attached is the information about this attack for you to review. If you would like to inform us of the attack, you can send this information to us."
+"Stop, please. After further investigation, we've discovered this was an attack on the system. Attached is the information about this attack for you to review. If you would like to inform us of the attack, you can send this information to us."
+""
 
 
 ---
