@@ -13,7 +13,7 @@ function checkPerms(req, res) {
 	if (from && from.indexOf('@') !== -1)
 		throw 403;
 	// Buckets are currently only allowed for the domain of the same name
-	if (req.pathArgs.bucket && req.pathArgs.bucket != from)
+	if (req.params.bucket && req.params.bucket != from)
 		throw 403;
 	return true;
 }
@@ -64,8 +64,8 @@ server.route('/:bucket/:key', function(link, method) {
 			default:
 				req.storage = localStorage; break;
 		}
-		req.bucket_key = 'storage_'+req.pathArgs.bucket;
-		req.item_key = req.bucket_key+':'+req.pathArgs.key;
+		req.bucket_key = 'storage_'+req.params.bucket;
+		req.item_key = req.bucket_key+':'+req.params.key;
 		return true;
 	}
 
@@ -92,8 +92,8 @@ server.route('/:bucket/:key', function(link, method) {
 		var bucket;
 		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
 		catch(e) { bucket = []; }
-		if (bucket.indexOf(req.pathArgs.key) === -1) {
-			bucket.push(req.pathArgs.key);
+		if (bucket.indexOf(req.params.key) === -1) {
+			bucket.push(req.params.key);
 			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));
 		}
 
@@ -108,7 +108,7 @@ server.route('/:bucket/:key', function(link, method) {
 		var bucket;
 		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
 		catch(e) { bucket = []; }
-		var index = bucket.indexOf(req.pathArgs.key);
+		var index = bucket.indexOf(req.params.key);
 		if (index !== -1) {
 			bucket.splice(index, 1);
 			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));

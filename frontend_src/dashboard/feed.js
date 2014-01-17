@@ -82,7 +82,7 @@ server.route('/', function(link, method) {
 	method('HEAD', forbidPeers, function() { return 204; });
 
 	method('GET', forbidPeers, function(req, res) {
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
 		var accept = local.preferredType(req, ['text/html', 'application/json']);
@@ -97,7 +97,7 @@ server.route('/', function(link, method) {
 		req.assert({ type: 'text/html' });
 		var origin_untrusted = false; // :TODO:
 
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
 		var html = req.body;
@@ -114,10 +114,10 @@ server.route('/', function(link, method) {
 	});
 
 	method('DELETE', forbidPeers, function(req, res) {
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
-		delete _updates[req.pathArgs.id];
+		delete _updates[req.params.id];
 		return 204;
 	});
 });*/

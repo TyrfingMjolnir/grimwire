@@ -321,7 +321,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 	// UI methods
 
 	method('SHOW', access_default, function(req, res) {
-		var id = req.pathArgs.id;
+		var id = req.params.id;
 		// if (!active_editors[id]) { throw 404; }
 		if (active_editors[id]) { // kinda clunky, but we need steal_focus to work
 			if (active_editors[the_active_editor])
@@ -361,7 +361,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	// CRUD methods
 
 	method('HEAD', access_default, function(req, res) {
-		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		var js = localStorage.getItem('worker_'+req.params.id);
 		if (!js) throw 404;
 		return 204;
 	});
@@ -370,10 +370,10 @@ app_local_server.route('/w/:id', function(link, method) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
 
 		var from = req.header('From');
-		if (from && from.indexOf('.js') !== -1 && req.pathArgs.id != from)
+		if (from && from.indexOf('.js') !== -1 && req.params.id != from)
 			throw 403; // only allow workers to access their own code
 
-		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		var js = localStorage.getItem('worker_'+req.params.id);
 		if (!js) throw 404;
 
 		res.setHeader('Content-Type', 'application/javascript');
@@ -381,7 +381,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('PUT', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 		req.assert({ type: ['application/javascript', 'text/javascript', 'text/plain'] });
 		localStorage.setItem('worker_'+name, req.body || '');
 		if (installed_workers.indexOf(name) === -1) {
@@ -392,7 +392,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('DELETE', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// stop worker
 		local.dispatch({ method: 'STOP', url: 'httpl://'+req.header('Host')+'/w/'+name });
@@ -413,7 +413,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	// Worker control methods
 
 	method('START', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// Unload script if active
 		if (active_workers[name]) {
@@ -440,7 +440,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('STOP', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// Unload script if active
 		if (active_workers[name]) {

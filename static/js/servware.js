@@ -134,6 +134,7 @@ module.exports = mixin;
 },{}],3:[function(require,module,exports){
 function mixin(response) {
 	Object.defineProperty(response, 'link', { value: res_link, enumerable: false });
+	Object.defineProperty(response, 'modlinks', { value: res_modlinks, enumerable: false });
 }
 
 // Adds a link to the response
@@ -150,10 +151,30 @@ function res_link(linkObj) {
 	this.headers.link.push(linkObj);
 }
 
+// Queries links in the response and applies a patch to the hits
+// - query: required object|Array(object)|string, a valid queryLink() query
+// - update required object|function, a map of KVs to update or a function to call on the matching links
+function res_modlinks(query, update) {
+	var is_function = (typeof update == 'function');
+	if (!this.headers.link) { this.headers.link = []; }
+	this.headers.link.forEach(function(link) {
+		if (local.queryLink(link, query)) {
+			if (is_function) {
+				update.call(null, link);
+			} else {
+				for (var k in update) {
+					link[k] = update[k];
+				}
+			}
+		}
+	});
+}
+
 module.exports = mixin;
 },{}],4:[function(require,module,exports){
-function Route(path) {
+function Route(path, pathTokenMap) {
 	this.path = path;
+	this.pathTokenMap = pathTokenMap;
 	this.links = [];
 	this.methods = {};
 
@@ -215,22 +236,21 @@ function servware() {
 			var match = routeRegexes[i].exec(req.path);
 			if (match) {
 				// Extract params
-				req.pathArgs = match.slice(1);
-				var path = routeRegexes[i].path;
-				var pathTokenMap = routeRegexes[i].tokenMap;
-				var route = routes[path];
+				req.params = match.slice(1);
+				var route = routes[routeRegexes[i]];
+				var pathTokenMap = route.pathTokenMap;
 
 				// Match the method
 				var methodHandlers = route.methods[req.method];
 				if (methodHandlers) {
-					// Add tokens to pathArgs
+					// Add tokens to params
 					for (var k in pathTokenMap) {
-						req.pathArgs[pathTokenMap[k]] = req.pathArgs[k];
+						req.params[pathTokenMap[k]] = req.params[k];
 					}
 
 					// Pull route links into response
 					if (route.links.length) {
-						res.setHeader('link', route.links.slice(0));
+						res.setHeader('link', local.util.deepClone(route.links));
 					}
 
 					// Patch serializeHeaders() to replace path tokens
@@ -240,7 +260,7 @@ function servware() {
 						if (!this.headers.link) return;
 						for (var k in pathTokenMap) {
 							var token = ':'+pathTokenMap[k];
-							this.headers.link = this.headers.link.replace(RegExp(token, 'g'), req.pathArgs[k]);
+							this.headers.link = this.headers.link.replace(RegExp(token, 'g'), req.params[k]);
 						}
 					}, configurable: true });
 
@@ -276,19 +296,21 @@ function servware() {
 		res.writeHead(404, reasons[404]).end();
 	};
 	serverFn.route = function(path, defineFn) {
-		// Parse named tokens and create a token map
 		var pathTokenMap = {}; // regex match index -> token name (eg {0: 'section', 1: 'id'})
-		path = parsePathTokens(path, pathTokenMap);
 
-		// Create the regex to do path routing
-		var regex = new RegExp('^'+path+'$', 'i');
-		regex.path = path; // store so we can find the route on match
-		regex.tokenMap = pathTokenMap; // store so we can assign values to tokens on match
-		routeRegexes.push(regex);
+		var regex;
+		if (path instanceof RegExp) {
+			regex = path;
+		} else {
+			// Parse named tokens and create a token map
+			path = parsePathTokens(path, pathTokenMap);
+			regex = new RegExp('^'+path+'$', 'i');
+		}
 
 		// Create the route object
-		var route = new Route(path);
-		routes[path] = route;
+		var route = new Route(path, pathTokenMap);
+		routes[regex] = route;
+		routeRegexes.push(regex);
 
 		// Call the given definer
 		defineFn.call(route, route.link.bind(route), route.method.bind(route));

@@ -900,7 +900,7 @@ server.route('/', function(link, method) {
 	method('HEAD', forbidPeers, function() { return 204; });
 
 	method('GET', forbidPeers, function(req, res) {
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
 		var accept = local.preferredType(req, ['text/html', 'application/json']);
@@ -915,7 +915,7 @@ server.route('/', function(link, method) {
 		req.assert({ type: 'text/html' });
 		var origin_untrusted = false; // :TODO:
 
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
 		var html = req.body;
@@ -932,10 +932,10 @@ server.route('/', function(link, method) {
 	});
 
 	method('DELETE', forbidPeers, function(req, res) {
-		var update = _updates[req.pathArgs.id];
+		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
-		delete _updates[req.pathArgs.id];
+		delete _updates[req.params.id];
 		return 204;
 	});
 });*/
@@ -1237,7 +1237,7 @@ function checkPerms(req, res) {
 	if (from && from.indexOf('@') !== -1)
 		throw 403;
 	// Buckets are currently only allowed for the domain of the same name
-	if (req.pathArgs.bucket && req.pathArgs.bucket != from)
+	if (req.params.bucket && req.params.bucket != from)
 		throw 403;
 	return true;
 }
@@ -1288,8 +1288,8 @@ server.route('/:bucket/:key', function(link, method) {
 			default:
 				req.storage = localStorage; break;
 		}
-		req.bucket_key = 'storage_'+req.pathArgs.bucket;
-		req.item_key = req.bucket_key+':'+req.pathArgs.key;
+		req.bucket_key = 'storage_'+req.params.bucket;
+		req.item_key = req.bucket_key+':'+req.params.key;
 		return true;
 	}
 
@@ -1316,8 +1316,8 @@ server.route('/:bucket/:key', function(link, method) {
 		var bucket;
 		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
 		catch(e) { bucket = []; }
-		if (bucket.indexOf(req.pathArgs.key) === -1) {
-			bucket.push(req.pathArgs.key);
+		if (bucket.indexOf(req.params.key) === -1) {
+			bucket.push(req.params.key);
 			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));
 		}
 
@@ -1332,7 +1332,7 @@ server.route('/:bucket/:key', function(link, method) {
 		var bucket;
 		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
 		catch(e) { bucket = []; }
-		var index = bucket.indexOf(req.pathArgs.key);
+		var index = bucket.indexOf(req.params.key);
 		if (index !== -1) {
 			bucket.splice(index, 1);
 			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));
@@ -1665,7 +1665,7 @@ app_local_server.route('/ed/:id', function(link, method) {
 	// UI methods
 
 	method('SHOW', access_default, function(req, res) {
-		var id = req.pathArgs.id;
+		var id = req.params.id;
 		// if (!active_editors[id]) { throw 404; }
 		if (active_editors[id]) { // kinda clunky, but we need steal_focus to work
 			if (active_editors[the_active_editor])
@@ -1705,7 +1705,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	// CRUD methods
 
 	method('HEAD', access_default, function(req, res) {
-		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		var js = localStorage.getItem('worker_'+req.params.id);
 		if (!js) throw 404;
 		return 204;
 	});
@@ -1714,10 +1714,10 @@ app_local_server.route('/w/:id', function(link, method) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
 
 		var from = req.header('From');
-		if (from && from.indexOf('.js') !== -1 && req.pathArgs.id != from)
+		if (from && from.indexOf('.js') !== -1 && req.params.id != from)
 			throw 403; // only allow workers to access their own code
 
-		var js = localStorage.getItem('worker_'+req.pathArgs.id);
+		var js = localStorage.getItem('worker_'+req.params.id);
 		if (!js) throw 404;
 
 		res.setHeader('Content-Type', 'application/javascript');
@@ -1725,7 +1725,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('PUT', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 		req.assert({ type: ['application/javascript', 'text/javascript', 'text/plain'] });
 		localStorage.setItem('worker_'+name, req.body || '');
 		if (installed_workers.indexOf(name) === -1) {
@@ -1736,7 +1736,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('DELETE', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// stop worker
 		local.dispatch({ method: 'STOP', url: 'httpl://'+req.header('Host')+'/w/'+name });
@@ -1757,7 +1757,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	// Worker control methods
 
 	method('START', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// Unload script if active
 		if (active_workers[name]) {
@@ -1784,7 +1784,7 @@ app_local_server.route('/w/:id', function(link, method) {
 	});
 
 	method('STOP', access_default, function(req, res) {
-		var name = req.pathArgs.id;
+		var name = req.params.id;
 
 		// Unload script if active
 		if (active_workers[name]) {

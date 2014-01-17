@@ -137,7 +137,7 @@ server.route('/edit/:id', function(link, method) {
 		var accept = local.preferredType(req, 'text/html');
 		if (!accept) throw 406;
 
-		var id = req.pathArgs.id;
+		var id = req.params.id;
 		if (id == 'new') {
 			if (!req.query.rel) {
 				// Need to select a reltype
@@ -228,7 +228,7 @@ server.route('/edit/:id', function(link, method) {
 		if (!req.query.rel || !req.query.href) {
 			throw [400, { rel: 'Required', href: 'Required' }, {'content-type': 'application/json'}];
 		}
-		var id = req.pathArgs.id;
+		var id = req.params.id;
 
 		function fetchLink() {
 			local.HEAD(req.query.href).always(function(res2) {
@@ -278,7 +278,7 @@ server.route('/edit/:id', function(link, method) {
 	});
 
 	method('DELETE', function(req, res) {
-		var id = req.pathArgs.id;
+		var id = req.params.id;
 		db.get(id, function(err, doc) {
 			if (err && err.not_found) { return res.writeHead(404, 'Not Found').end(); }
 			if (err) { return res.writeHead(500, 'Internal Error', { 'content-type': 'application/json' }).end(err); }
@@ -467,7 +467,7 @@ function GETlinkRoute(req, res) {
 		var successes = 0;
 
 		// For now, only allow on the inbox
-		if (req.pathArgs.db != 'inbox') throw 403;
+		if (req.params.db != 'inbox') throw 403;
 
 		// Get sources
 		var sources = common.getSources();
@@ -590,7 +590,7 @@ server.route('/:id', function(link, method) {
 		if (!accept) throw 406;
 
 		var p = local.promise();
-		db.get(decodeURIComponent(req.pathArgs.id), function(err, doc) {
+		db.get(decodeURIComponent(req.params.id), function(err, doc) {
 			if (err) { return p.reject([500, err]); }
 
 			var body;
@@ -601,7 +601,7 @@ server.route('/:id', function(link, method) {
 					body = '<a href="'+doc.link.href+'">'+doc.link.href+'</a>';
 				}
 			} else {
-				body = { item: doc, folder: req.pathArgs.db };
+				body = { item: doc, folder: req.params.db };
 			}
 			p.fulfill([200, body, { 'Content-Type': accept }]);
 		});
@@ -611,20 +611,20 @@ server.route('/:id', function(link, method) {
 	method('MOVE', function(req, res) {
 		req.assert({ type: 'application/json' });
 		if (req.body && typeof req.body == 'string' || Array.isArray(req.body)) {
-			return common.updateDoc(db, req.pathArgs.id, { folders: req.body });
+			return common.updateDoc(db, req.params.id, { folders: req.body });
 		}
 		throw [422, { _body: 'Required.' }];
 	});
 
 	method('DELETE', function(req, res) {
-		return common.updateDoc(db, req.pathArgs.id, { is_deleted: true });
+		return common.updateDoc(db, req.params.id, { is_deleted: true });
 	});
 
 	method('MARKREAD',function(req, res) {
-		return common.updateDoc(db, req.pathArgs.id, { is_read: true });
+		return common.updateDoc(db, req.params.id, { is_read: true });
 	});
 
 	method('MARKUNREAD', function(req, res) {
-		return common.updateDoc(db, req.pathArgs.id, { is_read: false });
+		return common.updateDoc(db, req.params.id, { is_read: false });
 	});
 });*/
