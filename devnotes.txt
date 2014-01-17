@@ -10,7 +10,8 @@ local: document relay.isListening
 local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
-grim: need to wait for connections (workers, relay) to be setup before initial request
+grim: disable nav:|| requests from HTML for now (or maybe just limit to 5?) *0
+grim: add more links to httpl://storage *0
 
 servware: mechanism to update existing links
 servware: regex methodname
