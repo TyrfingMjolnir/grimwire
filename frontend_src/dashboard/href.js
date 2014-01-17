@@ -60,14 +60,13 @@ server.route('/', function(link, method) {
 		var p = local.promise();
 		db.query(linkMapReduce, { descending: true, key: type }, p.cb.bind(p));
 		p.always(function(links) {
-			res.headers['link'] = res.headers['link']
-				.concat(links.rows.map(function(item) {
-					// Supply indirect links to data uris (dont put them in the index)
-					if (item.value.href.indexOf('data:') === 0) {
-						item.value.href = '/'+item.id;
-					}
-					return item.value;
-				}));
+			res.header('Link', res.header('Link').concat(links.rows.map(function(item) {
+				// Supply indirect links to data uris (dont put them in the index)
+				if (item.value.href.indexOf('data:') === 0) {
+					item.value.href = '/'+item.id;
+				}
+				return item.value;
+			})));
 			res.writeHead(204).end();
 		});
 	});

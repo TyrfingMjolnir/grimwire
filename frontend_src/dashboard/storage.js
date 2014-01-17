@@ -8,7 +8,7 @@ var server = servware();
 module.exports = server;
 
 function checkPerms(req, res) {
-	var from = req.headers['From'] || req.headers.from; // :TODO: temporary situation
+	var from = req.header('From');
 	// No peer users
 	if (from && from.indexOf('@') !== -1)
 		throw 403;

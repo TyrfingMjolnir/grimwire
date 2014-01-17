@@ -1,6 +1,5 @@
 TODO
 
-local: server interface has sugar ambiguity now ('Link' was coming down as 'parsedHeaders.Link' but not '.link') *0
 local: data-local-alias sucks, replace with something more obvious *0
 local: add functions to queryLinks *0
 
@@ -8,6 +7,7 @@ local: connections being opened asymmetrically, and that causes message reorderi
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
 local: document relay.isListening
 local: document local.* sugars
+local: document req.header()/res.header()
 local: document local.parseProxyUri and local.makeProxyUri
 local: document new headers behaviors
 

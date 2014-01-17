@@ -67,12 +67,8 @@ contentFrame.setupChromeUI = function() {
 
 contentFrame.prepIframeRequest = function (req) {
 	if (current_content_origin) {
-		// Clear the headers we're going to set
-		delete req.headers['From'];
-		delete req.headers['from'];
-
 		// Put origin into the headers
-		req.headers['From'] = current_content_origin;
+		req.headers.from = current_content_origin;
 	}
 };
 
@@ -89,6 +85,8 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 // Page dispatch behavior
 contentFrame.dispatchRequest = function(req, origin, opts) {
 	opts = opts || {};
+	req = (req instanceof local.Request) ? req : (new local.Request(req));
+
 	// Relative link? Use context to make absolute
 	if (!local.isAbsUri(req.url)) {
 		req.url = local.joinUri(current_content_origin, req.url);
@@ -96,20 +94,21 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 
 	// Content target? Update page
 	if (!req.target || req.target == '_content') {
-		if ((!req.headers || !req.headers.accept) && !req.Accept) { req.Accept = 'text/html, */*'; }
-		return local.dispatch(req).always(function(res) {
+		if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
+		var res_ = local.dispatch(req);
+		req.end(req.body);
+		return res_.always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
 				if (res.headers.location) {
 					return contentFrame.dispatchRequest({ method: 'GET', url: res.headers.location, target: '_content' }, origin);
 				}
 				console.error('Redirect response is missing its location header');
 			}*/
-
 			// Generate final html
 			var html;
 			if (res.body && typeof res.body == 'string') {
 				html = res.body;
-				if (res.Content_Type != 'text/html') {
+				if (res.header('Content-Type') != 'text/html') {
 					html = '<pre class="plain">'+html+'</pre>';
 				}
 			} else {
@@ -131,8 +130,8 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 				// Set origin
 				var urld = local.parseUri(req);
 				var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
-				if (res.headers['x-origin']) { // verified in response.processHeaders()
-					origin = common.escape(res.headers['x-origin']);
+				if (res.header('X-Origin')) { // verified in response.processHeaders()
+					origin = common.escape(res.header('X-Origin'));
 				}
 				chrome_history.push({ url: req.url, html: html, origin: origin });
 				chrome_history_position++;

@@ -25,7 +25,7 @@ function render_updates() {
 }
 
 function forbidPeers(req, res) {
-	var from = req.headers.from || req.headers.From; // :TODO: remove fallback
+	var from = req.header('From');
 	if (from && from.indexOf('@') !== -1)
 		throw 403;
 	return true;
@@ -54,7 +54,7 @@ server.route('/', function(link, method) {
 
 	method('POST', forbidPeers, function(req, res) {
 		req.assert({ type: ['text/html', 'text/plain'] });
-		var from = (req.headers.from || req.headers.From);
+		var from = req.header('From');
 		var origin_untrusted = !!from; // not from the page itself?
 
 		var html = req.body;
@@ -69,7 +69,7 @@ server.route('/', function(link, method) {
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
-		res.setHeader('location', 'httpl://'+req.headers.host+'/'+id);
+		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+id);
 		return 201;
 	});
 });

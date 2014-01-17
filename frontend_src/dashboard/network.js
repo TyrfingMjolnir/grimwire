@@ -46,7 +46,7 @@ network.setupRelay = function(serviceURL, relay) {
 
 // Handles requests from oeers
 function peerProxy(req, res, peer) {
-	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.headers.host}];
+	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.header('Host')}];
 	var links = [{ href: '/', rel: 'service', title: network.relay.getUserId() }];
 	res.setHeader('Via', via);
 
@@ -80,24 +80,16 @@ function peerProxy(req, res, peer) {
 		stream: true
 	});
 
-	// Clear the headers we're going to set
-	delete req2.headers['X-Public-Host'];
-	delete req2.headers['x-public-host'];
-	delete req2.headers['From'];
-	delete req2.headers['from'];
-	delete req2.headers['Via'];
-	delete req2.headers['via'];
-
 	// Put origin and public name into the headers
-	req2.headers['From'] = peer.config.domain;
-	req2.headers['X-Public-Host'] = req.headers.host;
-	req2.headers['Via'] = (req.parsedHeaders.via||[]).concat(via);
+	req2.header('From', peer.config.domain);
+	req2.header('X-Public-Host', req.header('Host'));
+	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
 		// Set headers
-		res2.headers.link = res2.parsedHeaders.link; // use parsed headers, since they'll all be absolute now
-		res2.headers.via = via.concat(req.parsedHeaders.via||[]);
+		res2.header('Link', res2.parsedHeaders.link); // use parsed headers, since they'll all be absolute now
+		res2.header('Via', via.concat(req.parsedHeaders.via||[]));
 
 		// Pipe back
 		res.writeHead(res2.status, res2.reason, res2.headers);
