@@ -322,11 +322,13 @@ app_local_server.route('/ed/:id', function(link, method) {
 
 	method('SHOW', access_default, function(req, res) {
 		var id = req.pathArgs.id;
-		if (!active_editors[id]) { throw 404; }
-		if (active_editors[the_active_editor])
-			active_editors[the_active_editor].$div.hide();
-		the_active_editor = +id;
-		active_editors[the_active_editor].$div.show();
+		// if (!active_editors[id]) { throw 404; }
+		if (active_editors[id]) { // kinda clunky, but we need steal_focus to work
+			if (active_editors[the_active_editor])
+				active_editors[the_active_editor].$div.hide();
+			the_active_editor = +id;
+			active_editors[the_active_editor].$div.show();
+		}
 		renderEditorChrome();
 		resizeEditors();
 		if (req.query.steal_focus) {
