@@ -1037,7 +1037,7 @@ common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east
 		// Global URI, wait for network
 		network.relay.once('listening', function() { console.log('going for it'); contentFrame.dispatchRequest(firstreq); });
 	} else if (firstreq.url.indexOf('.js') !== -1) {
-		// Worker, allow to init
+		// Worker, allow to setup
 		setTimeout(function() {
 			contentFrame.dispatchRequest(firstreq);
 		}, 5);
@@ -1252,47 +1252,74 @@ function checkPerms(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'storage', title: 'KVStore', hidden: true });
-	link({ href: '/{storage}/{bucket}/{id}', rel: 'item', title: 'KV', hidden: true });
+	link({ href: '/', rel: 'self service', id: 'storage', title: 'KVStore', hidden: true });
+	link({ href: '/{bucket}{?storage}', rel: 'collection', title: 'KV Bucket', hidden: true });
+	link({ href: '/{bucket}/{key}{?storage}', rel: 'item', title: 'KV', hidden: true });
 
 	method('HEAD', checkPerms, function() { return 204; });
 });
 
-server.route('/:storage/:bucket/:id', function(link, method) {
+server.route('/:bucket', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'up service collection', id: 'storage', title: 'KVStore' });
-	link({ href: '/:storage/:bucket/:id', rel: 'self item', storage: ':storage', bucket: ':bucket', id: ':id', title: 'KV' });
 
-	function getStorage(req, res) {
-		switch (req.pathArgs.storage) {
-			case 'session': req.storage = sessionStorage; break;
-			case 'local': req.storage = localStorage; break;
-			default: throw 404;
+	method('HEAD', checkPerms, function(req, res) {
+		if (req.query.storage) {
+			var s = encodeURIComponent(req.query.storage);
+			res.link({ href: '/:bucket?storage='+s, rel: 'self collection', bucket: ':bucket', storage: req.query.storage, title: 'KV Bucket: :bucket' });
+			res.link({ href: '/:bucket/{key}?storage='+s, rel: 'item', bucket: ':bucket', storage: req.query.storage, title: 'KV', hidden: true });
 		}
-		req.key = 'storage_'+req.pathArgs.bucket+':'+req.pathArgs.id;
+		res.link({ href: '/:bucket{?storage}', rel: 'self collection', bucket: ':bucket', title: 'KV Bucket: :bucket' });
+		res.link({ href: '/:bucket/{key}{?storage}', rel: 'item', bucket: ':bucket', title: 'KV', hidden: true });
+		return 204;
+	});
+});
+
+server.route('/:bucket/:key', function(link, method) {
+	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
+
+	function setLinks(req, res) {
+		if (req.query.storage) {
+			var s = encodeURIComponent(req.query.storage);
+			res.link({ href: '/:bucket?storage='+s, rel: 'up collection', bucket: ':bucket', storage: req.query.storage, title: 'KV Bucket: :bucket' });
+			res.link({ href: '/:bucket/:key?storage='+s, rel: 'self item', bucket: ':bucket', id: ':key', storage: req.query.storage, title: 'KV' });
+		}
+		res.link({ href: '/:bucket{?storage}', rel: 'up collection', bucket: ':bucket', title: 'KV Bucket: :bucket' });
+		res.link({ href: '/:bucket/:key{?storage}', rel: 'self item', bucket: ':bucket', key: ':key', title: 'KV' });
 		return true;
 	}
 
-	method('HEAD', checkPerms, getStorage, function(req, res) {
+	function getStorage(req, res) {
+		switch (req.query.storage) {
+			case 'session':
+				req.storage = sessionStorage; break;
+			case 'local':
+			default:
+				req.storage = localStorage; break;
+		}
+		req.key = 'storage_'+req.pathArgs.bucket+':'+req.pathArgs.key;
+		return true;
+	}
+
+	method('HEAD', checkPerms, setLinks, getStorage, function(req, res) {
 		if (!req.storage.getItem(req.key))
 			return 404;
 		return 204;
 	});
 
-	method('GET', checkPerms, getStorage, function(req, res) {
+	method('GET', checkPerms, setLinks, getStorage, function(req, res) {
 		var value = req.storage.getItem(req.key);
 		if (!value)
 			throw 404;
 		return [200, value];
 	});
 
-	method('PUT', checkPerms, getStorage, function(req, res) {
+	method('PUT', checkPerms, setLinks, getStorage, function(req, res) {
 		req.assert({ type: 'text/plain' });
 		req.storage.setItem(req.key, req.body);
 		return 204;
 	});
 
-	method('DELETE', checkPerms, getStorage, function(req, res) {
+	method('DELETE', checkPerms, setLinks, getStorage, function(req, res) {
 		req.storage.removeItem(req.key);
 		return 204;
 	});
