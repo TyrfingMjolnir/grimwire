@@ -1296,18 +1296,19 @@ server.route('/:bucket/:key', function(link, method) {
 			default:
 				req.storage = localStorage; break;
 		}
-		req.key = 'storage_'+req.pathArgs.bucket+':'+req.pathArgs.key;
+		req.bucket_key = 'storage_'+req.pathArgs.bucket;
+		req.item_key = req.bucket_key+':'+req.pathArgs.key;
 		return true;
 	}
 
 	method('HEAD', checkPerms, setLinks, getStorage, function(req, res) {
-		if (!req.storage.getItem(req.key))
+		if (!req.storage.getItem(req.item_key))
 			return 404;
 		return 204;
 	});
 
 	method('GET', checkPerms, setLinks, getStorage, function(req, res) {
-		var value = req.storage.getItem(req.key);
+		var value = req.storage.getItem(req.item_key);
 		if (!value)
 			throw 404;
 		return [200, value];
@@ -1315,12 +1316,36 @@ server.route('/:bucket/:key', function(link, method) {
 
 	method('PUT', checkPerms, setLinks, getStorage, function(req, res) {
 		req.assert({ type: 'text/plain' });
-		req.storage.setItem(req.key, req.body);
+
+		// Store
+		req.storage.setItem(req.item_key, req.body);
+
+		// Book-keep the collection
+		var bucket;
+		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
+		catch(e) { bucket = []; }
+		if (bucket.indexOf(req.pathArgs.key) === -1) {
+			bucket.push(req.pathArgs.key);
+			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));
+		}
+
 		return 204;
 	});
 
 	method('DELETE', checkPerms, setLinks, getStorage, function(req, res) {
-		req.storage.removeItem(req.key);
+		// Delete
+		req.storage.removeItem(req.item_key);
+
+		// Book-keep the collection
+		var bucket;
+		try { bucket = JSON.parse(req.storage.getItem(req.bucket_key)) || []; }
+		catch(e) { bucket = []; }
+		var index = bucket.indexOf(req.pathArgs.key);
+		if (index !== -1) {
+			bucket.splice(index, 1);
+			req.storage.setItem(req.bucket_key, JSON.stringify(bucket));
+		}
+
 		return 204;
 	});
 });
