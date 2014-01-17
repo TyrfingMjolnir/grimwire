@@ -10,8 +10,6 @@ local: document relay.isListening
 local: document local.* sugars
 local: document local.parseProxyUri and local.makeProxyUri
 
-grim: disable nav:|| requests from HTML for now (or maybe just limit to 5?) *0
-
 servware: mechanism to update existing links
 servware: regex methodname
 servware: change pathArgs to params
