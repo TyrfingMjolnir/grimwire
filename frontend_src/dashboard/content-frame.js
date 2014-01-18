@@ -39,8 +39,17 @@ function renderFromCache(pos) {
 	// Render HTML
 	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
 	var $iframe = $('main iframe');
-	$iframe.contents().find('body').html(common.sanitizeHtml(html));
-	// $('main').html(history.html);
+	$iframe.attr('srcdoc', common.sanitizeHtml(html));
+	setTimeout(function() {
+		local.bindRequestEvents($iframe.contents()[0].body);
+		$iframe.contents()[0].body.addEventListener('request', iframeRequestEventHandler);
+	}, 50); // wait 50 ms for the page to setup
+}
+
+function iframeRequestEventHandler(e) {
+	var req = e.detail;
+	contentFrame.prepIframeRequest(req);
+	contentFrame.dispatchRequest(req, e.target);
 }
 
 contentFrame.setupChromeUI = function() {

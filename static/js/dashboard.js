@@ -132,8 +132,17 @@ function renderFromCache(pos) {
 	// Render HTML
 	var html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/dashboard.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+history.html;
 	var $iframe = $('main iframe');
-	$iframe.contents().find('body').html(common.sanitizeHtml(html));
-	// $('main').html(history.html);
+	$iframe.attr('srcdoc', common.sanitizeHtml(html));
+	setTimeout(function() {
+		local.bindRequestEvents($iframe.contents()[0].body);
+		$iframe.contents()[0].body.addEventListener('request', iframeRequestEventHandler);
+	}, 50); // wait 50 ms for the page to setup
+}
+
+function iframeRequestEventHandler(e) {
+	var req = e.detail;
+	contentFrame.prepIframeRequest(req);
+	contentFrame.dispatchRequest(req, e.target);
 }
 
 contentFrame.setupChromeUI = function() {
@@ -862,7 +871,7 @@ function forbidPeers(req, res) {
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
-	// link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
+	link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
 
 	method('HEAD', forbidPeers, function() { return 204; });
 
@@ -870,6 +879,7 @@ server.route('/', function(link, method) {
 		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
 		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
+			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
 					'<h1>'+today+'</h1>',
@@ -884,13 +894,11 @@ server.route('/', function(link, method) {
 	method('POST', forbidPeers, function(req, res) {
 		req.assert({ type: ['text/html', 'text/plain'] });
 		var from = req.header('From');
-		var origin_untrusted = !!from; // not from the page itself?
 
 		var html = req.body;
-		if (origin_untrusted) {
-			html = common.escape(html);
-		}
-		html = '<div>'+html+'</div>';
+		var oParser = new DOMParser();
+		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
+		html = oDOM.body.innerHTML;
 
 		var id = _updates.length;
 		_updates.push({ id: id, from: from, html: html, created_at: Date.now() });
@@ -903,7 +911,7 @@ server.route('/', function(link, method) {
 	});
 });
 
-/*server.route('/:id', function(link, method) {
+server.route('/:id', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'Updates Feed' });
 	link({ href: '/:id', rel: 'self item', id: ':id', title: 'Update :id' });
@@ -911,8 +919,13 @@ server.route('/', function(link, method) {
 	method('HEAD', forbidPeers, function() { return 204; });
 
 	method('GET', forbidPeers, function(req, res) {
+		var from = req.header('From');
+
 		var update = _updates[req.params.id];
 		if (!update) throw 404;
+
+		if (update.from !== from)
+			throw 403;
 
 		var accept = local.preferredType(req, ['text/html', 'application/json']);
 		if (accept == 'text/html')
@@ -923,33 +936,39 @@ server.route('/', function(link, method) {
 	});
 
 	method('PUT', forbidPeers, function(req, res) {
-		req.assert({ type: 'text/html' });
-		var origin_untrusted = false; // :TODO:
+		req.assert({ type: ['text/plain', 'text/html'] });
+		var from = req.header('From');
 
 		var update = _updates[req.params.id];
 		if (!update) throw 404;
 
-		var html = req.body;
-		if (origin_untrusted) {
-			html = '<link href="css/bootstrap.css" rel="stylesheet"><link href="css/iframe.css" rel="stylesheet">'+update.html;
-			html = html.replace(/"/g, '&quot;');
-			html = '<iframe seamless="seamless" sandbox="allow-popups allow-same-origin allow-scripts" srcdoc="'+html+'"></iframe>';
-		} else {
-			html = '<div>'+html+'</div>';
-		}
+		if (update.from !== from)
+			throw 403;
 
-		update.html = html;
+		var html = req.body;
+		var oParser = new DOMParser();
+		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
+		update.html = oDOM.body.innerHTML;
+
+		// :TODO: replace with nquery
+		$('main iframe').contents().find('#feed-updates').html(render_updates());
+
 		return 204;
 	});
 
 	method('DELETE', forbidPeers, function(req, res) {
+		var from = req.header('From');
+
 		var update = _updates[req.params.id];
 		if (!update) throw 404;
+
+		if (update.from !== from)
+			throw 403;
 
 		delete _updates[req.params.id];
 		return 204;
 	});
-});*/
+});
 },{"./common":1}],6:[function(require,module,exports){
 // Replacement for httpl://hosts
 module.exports = function(req, res) {
@@ -998,7 +1017,7 @@ var dashboardGUI = require('./dashboard-gui');
 // =====
 
 common.feedUA.POST([
-	'<div style="padding: 6px 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro">Start here</a>.</div>',
+	'<img src="/img/exclamation.png"/> <a href="httpl://explorer/intro">Start here</a>.',
 	'<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>',
 	'Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report bugs to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.<br>'
 ].join('<br>'), { Content_Type: 'text/html' });
