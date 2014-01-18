@@ -94,6 +94,7 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 // Page dispatch behavior
 contentFrame.dispatchRequest = function(req, origin, opts) {
 	opts = opts || {};
+	var target = req.target; // local.Request() will strip `target`
 	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
 	// Relative link? Use context to make absolute
@@ -102,7 +103,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	}
 
 	// Content target? Update page
-	if (!req.target || req.target == '_content') {
+	if (!target || target == '_content') {
 		if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
 		var res_ = local.dispatch(req);
 		req.end(req.body);
@@ -169,11 +170,11 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 			}
 			throw res;
 		});*/
-	} else if (req.target == '_null') {
+	} else if (target == '_null') {
 		// Null target, simple dispatch
 		return local.dispatch(req);
 	} else {
-		console.error('Invalid request target', req.target, req, origin);
+		console.error('Invalid request target', target, req, origin);
 	}
 };
 
