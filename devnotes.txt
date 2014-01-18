@@ -9,10 +9,6 @@ local: document local.parseProxyUri and local.makeProxyUri
 local: document new headers behaviors
 local: document using functions in queryLink
 
-servware: regex methodname *0
-servware: methodNames arent cumulative yet *0
-servware: document api *0
-
 ---
 
 TOLATER

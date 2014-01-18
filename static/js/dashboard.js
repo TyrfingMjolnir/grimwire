@@ -838,7 +838,17 @@ function mapRev(arr, cb) {
 
 function render_updates() {
 	return mapRev(_updates, function(update) {
-		return update.html;
+		var time = (new Date(update.created_at)).toLocaleTimeString();//.replace(/\:\d\d /, '');
+		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
+		// ^ other fun ways to strip seconds
+		return [
+			'<div class="panel panel-default">',
+				'<div class="panel-heading" style="border-bottom: 0"><small>'+time+' '+(update.from||'')+'</small></div>',
+				'<div class="panel-body">',
+					update.html,
+				'</div>',
+			'</div>'
+		].join('');
 	}).join('');
 }
 
@@ -863,6 +873,7 @@ server.route('/', function(link, method) {
 			'<div class="row">',
 				'<div class="col-xs-12">',
 					'<h1>'+today+'</h1>',
+					'<hr>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
@@ -986,9 +997,11 @@ var dashboardGUI = require('./dashboard-gui');
 // Setup
 // =====
 
-common.feedUA.POST('Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report any bugs or complaints to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.', { Content_Type: 'text/html' });
-common.feedUA.POST('<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>', {Content_Type: 'text/html'});
-common.feedUA.POST('<div style="padding: 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro">Start here</a>.</div>', { Content_Type: 'text/html' });
+common.feedUA.POST([
+	'<div style="padding: 6px 10px 0"><img src="/img/exclamation.png" style="position: relative; top: -2px"> <a href="httpl://explorer/intro">Start here</a>.</div>',
+	'<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>',
+	'Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report bugs to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.<br>'
+].join('<br>'), { Content_Type: 'text/html' });
 
 // So PouchDB can target locals
 // local.patchXHR();
