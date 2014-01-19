@@ -24,12 +24,12 @@ function render_updates() {
 		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
 		// ^ other fun ways to strip seconds
 		return [
-			'<div class="panel panel-default">',
-				'<div class="panel-heading" style="border-bottom: 0"><small>'+time+' '+(update.from||'')+'</small></div>',
-				'<div class="panel-body">',
-					update.html,
-				'</div>',
-			'</div>'
+			'<table>',
+				'<tr>',
+					'<td><small>'+time+' '+(update.from||'')+'</small></td>',
+					'<td><pre>'+update.html+'</pre></td>',
+				'</tr>',
+			'</table>'
 		].join('');
 	}).join('');
 }
@@ -55,8 +55,6 @@ server.route('/', function(link, method) {
 			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
-					'<h1>'+today+'</h1>',
-					'<hr>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'

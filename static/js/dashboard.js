@@ -859,12 +859,12 @@ function render_updates() {
 		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
 		// ^ other fun ways to strip seconds
 		return [
-			'<div class="panel panel-default">',
-				'<div class="panel-heading" style="border-bottom: 0"><small>'+time+' '+(update.from||'')+'</small></div>',
-				'<div class="panel-body">',
-					update.html,
-				'</div>',
-			'</div>'
+			'<table>',
+				'<tr>',
+					'<td><small>'+time+' '+(update.from||'')+'</small></td>',
+					'<td><pre>'+update.html+'</pre></td>',
+				'</tr>',
+			'</table>'
 		].join('');
 	}).join('');
 }
@@ -890,8 +890,6 @@ server.route('/', function(link, method) {
 			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
-					'<h1>'+today+'</h1>',
-					'<hr>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
@@ -1136,7 +1134,7 @@ network.setupRelay = function(serviceURL, relay) {
 function peerProxy(req, res, peer) {
 	var via = [{proto: {version:'1.0', name:'HTTPL'}, hostname: req.header('Host')}];
 	var links = [{ href: '/', rel: 'service', title: network.relay.getUserId() }];
-	res.setHeader('Via', via);
+	res.setHeader('Via', (req.parsedHeaders.via||[]).concat(via));
 
 	// Home resource
 	if (req.path == '/') {
@@ -1170,17 +1168,14 @@ function peerProxy(req, res, peer) {
 
 	// Put origin and public name into the headers
 	var from = req.header('From');
-	if (!from)
-		from = peer.config.domain;
-	else if (local.parseUri(from).authority != peer.config.domain)
+	if (!from) from = peer.config.domain;
+	else if (local.parseUri(from).authority != peer.config.domain) {
 		from = local.joinUri(peer.config.domain, encodeURIComponent(from));
-	req2.header('From',  from);
+	}
+	req2.header('From', from);
 	req2.header('Host', proxy_urid.authority);
 	req2.header('X-Public-Host', local.joinUri(req.header('Host'), proxy_urid.authority));
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
-
-	console.log('req headers', JSON.stringify(req.headers));
-	console.log('req2 headers', JSON.stringify(req2.headers));
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
@@ -1188,7 +1183,6 @@ function peerProxy(req, res, peer) {
 		res2.header('Link', res2.parsedHeaders.link); // use parsed headers, since they'll all be absolute now
 		res2.header('Via', via.concat(res2.parsedHeaders.via||[]));
 
-		console.log('res2 headers', res2.headers);
 		// Pipe back
 		res.writeHead(res2.status, res2.reason, res2.headers);
 		res2.on('data', function(chunk) { res.write(chunk); });
@@ -1881,7 +1875,7 @@ var worker_remote_server = function(req, res, worker) {
 	});
 
 	// Set headers
-	req2.removeHeader('x-public-host');
+	req2.removeHeader('X-Public-Host');
 	req2.header('From', worker.config.domain);
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
 
