@@ -187,6 +187,7 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 // Page dispatch behavior
 contentFrame.dispatchRequest = function(req, origin, opts) {
 	opts = opts || {};
+	var body = req.body; delete req.body;
 	var target = req.target; // local.Request() will strip `target`
 	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
@@ -195,12 +196,14 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		req.url = local.joinUri(current_content_origin, req.url);
 	}
 
+	// Standard headers
+	if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
+
 	// Content target? Update page
+	var res_;
 	if (!target || target == '_content') {
-		if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
-		var res_ = local.dispatch(req);
-		req.end(req.body);
-		return res_.always(function(res) {
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
 				if (res.headers.location) {
 					return contentFrame.dispatchRequest({ method: 'GET', url: res.headers.location, target: '_content' }, origin);
@@ -265,10 +268,14 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		});*/
 	} else if (target == '_null') {
 		// Null target, simple dispatch
-		return local.dispatch(req);
+		res_ = local.dispatch(req);
 	} else {
 		console.error('Invalid request target', target, req, origin);
+		return null;
 	}
+
+	req.end(req.body);
+	return res_;
 };
 
 window.onhashchange = function() {
