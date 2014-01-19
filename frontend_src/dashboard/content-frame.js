@@ -94,8 +94,8 @@ $iframe.contents()[0].body.addEventListener('request', function(e) {
 // Page dispatch behavior
 contentFrame.dispatchRequest = function(req, origin, opts) {
 	opts = opts || {};
-	var body = req.body; delete req.body;
 	var target = req.target; // local.Request() will strip `target`
+	var body = req.body; delete req.body;
 	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
 	// Relative link? Use context to make absolute
@@ -181,7 +181,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		return null;
 	}
 
-	req.end(req.body);
+	req.end(body);
 	return res_;
 };
 
