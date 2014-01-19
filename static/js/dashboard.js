@@ -1169,16 +1169,26 @@ function peerProxy(req, res, peer) {
 	});
 
 	// Put origin and public name into the headers
-	req2.header('From', peer.config.domain);
-	req2.header('X-Public-Host', req.header('Host'));
+	var from = req.header('From');
+	if (!from)
+		from = peer.config.domain;
+	else if (local.parseUri(from).authority != peer.config.domain)
+		from = local.joinUri(peer.config.domain, encodeURIComponent(from));
+	req2.header('From',  from);
+	req2.header('Host', proxy_urid.authority);
+	req2.header('X-Public-Host', local.joinUri(req.header('Host'), proxy_urid.authority));
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
+
+	console.log('req headers', JSON.stringify(req.headers));
+	console.log('req2 headers', JSON.stringify(req2.headers));
 
 	var res2_ = local.dispatch(req2);
 	res2_.always(function(res2) {
 		// Set headers
 		res2.header('Link', res2.parsedHeaders.link); // use parsed headers, since they'll all be absolute now
-		res2.header('Via', via.concat(req.parsedHeaders.via||[]));
+		res2.header('Via', via.concat(res2.parsedHeaders.via||[]));
 
+		console.log('res2 headers', res2.headers);
 		// Pipe back
 		res.writeHead(res2.status, res2.reason, res2.headers);
 		res2.on('data', function(chunk) { res.write(chunk); });
@@ -1230,7 +1240,7 @@ network.publishNetworkLinks = function() {
 				selfLink = { rel: 'service', id: domains[i] };
 			}
 			selfLink.rel = (selfLink.rel) ? selfLink.rel.replace(/(^|\b)(self|up|via)(\b|$)/gi, '') : 'service';
-			selfLink.href = '/'+encodeURIComponent('httpl://'+domains[i]); // Overwrite href
+			selfLink.href = '/'+encodeURIComponent(domains[i]); // Overwrite href
 
 			return selfLink;
 		}));
@@ -1894,10 +1904,6 @@ var worker_remote_server = function(req, res, worker) {
 // Worker Local Request Patch
 // - modifies requests sent to the workers
 local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, response) {
-	// If we have a public host (set by the RTC proxy) update it to include our hostname
-	if (request.header('X-Public-Host')) {
-		request.header('X-Public-Host', local.joinUri(request.header('X-Public-Host'), request.header('Host')));
-	}
 	var orgfn = response.processHeaders;
 	response.processHeaders = function(req) {
 		// Give the public host as an origin override for clients trying to construct URIs

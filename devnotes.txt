@@ -11,6 +11,7 @@ local: document using functions in queryLink
 
 grim: sudden 404s on streams?
 grim: refresh needs to re-execute the request from the original context
+grim: feed updates lose focus (and all client state)
 
 ---
 

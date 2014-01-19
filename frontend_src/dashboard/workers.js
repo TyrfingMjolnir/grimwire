@@ -487,7 +487,7 @@ var worker_remote_server = function(req, res, worker) {
 	});
 
 	// Set headers
-	req2.removeHeader('x-public-host');
+	req2.removeHeader('X-Public-Host');
 	req2.header('From', worker.config.domain);
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
 
@@ -510,10 +510,6 @@ var worker_remote_server = function(req, res, worker) {
 // Worker Local Request Patch
 // - modifies requests sent to the workers
 local.WorkerBridgeServer.prototype.handleLocalRequest = function(request, response) {
-	// If we have a public host (set by the RTC proxy) update it to include our hostname
-	if (request.header('X-Public-Host')) {
-		request.header('X-Public-Host', local.joinUri(request.header('X-Public-Host'), request.header('Host')));
-	}
 	var orgfn = response.processHeaders;
 	response.processHeaders = function(req) {
 		// Give the public host as an origin override for clients trying to construct URIs
