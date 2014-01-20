@@ -861,8 +861,8 @@ function render_updates() {
 		return [
 			'<table>',
 				'<tr>',
-					'<td><small>'+time+' '+(update.from||'')+'</small></td>',
-					'<td><pre>'+update.html+'</pre></td>',
+					'<td><small class="text-muted">'+time+(update.from?('\n'+update.from):'')+'</small></td>',
+					'<td>'+update.html+'</td>',
 				'</tr>',
 			'</table>'
 		].join('');
@@ -1023,10 +1023,15 @@ var dashboardGUI = require('./dashboard-gui');
 // =====
 
 common.feedUA.POST([
-	'<img src="/img/exclamation.png"/> <a href="httpl://explorer/intro">Start here</a>.',
-	'<small class=text-muted>Early Beta Build. Not all behaviors are expected.</small>',
-	'Welcome to Grimwire v0.6 <strong class="text-danger">unstable</strong> build. Please report bugs to our <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.<br>'
-].join('<br>'), { Content_Type: 'text/html' });
+	'<strong>Grimwire v0.6.0 <span class="text-danger">unstable</span> build.</strong>',
+	'<small class="text-muted">Early Beta Build. Not all behaviors',
+	'are expected.</small>'
+].join('\n'), { Content_Type: 'text/html' });
+
+common.feedUA.POST([
+	'<img src="/img/fatcow/16x16/blackboard_drawing.png"> <a href="httpl://explorer/intro">Start here</a>.',
+	'<img src="/img/fatcow/16x16/bug.png"> Please report bugs to the <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.'
+].join('\n'), { Content_Type: 'text/html' });
 
 // So PouchDB can target locals
 // local.patchXHR();

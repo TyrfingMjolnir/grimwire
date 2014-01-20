@@ -26,8 +26,8 @@ function render_updates() {
 		return [
 			'<table>',
 				'<tr>',
-					'<td><small>'+time+' '+(update.from||'')+'</small></td>',
-					'<td><pre>'+update.html+'</pre></td>',
+					'<td><small class="text-muted">'+time+(update.from?('\n'+update.from):'')+'</small></td>',
+					'<td>'+update.html+'</td>',
 				'</tr>',
 			'</table>'
 		].join('');
