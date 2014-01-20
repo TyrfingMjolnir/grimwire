@@ -23,7 +23,7 @@ a.glyphicon:before, a .glyphicon:before, .link-list .glyphicon:before { color: #
 .ui-layout-center { padding: 0; }
 .ui-layout-west { padding: 0; overflow: hidden; }
 #content { height: 100%; }
-main { max-width: 960px; height: 100%; margin: 0 auto; }
+main { height: 100%; }
 main > iframe { width: 100%; height: 100%; }
 
 /* header */
@@ -38,10 +38,11 @@ main > iframe { width: 100%; height: 100%; }
 #header .navbar-nav .open > a, #header .navbar-nav .open > a:hover, #header .navbar-nav .open > a:focus { box-shadow: 0 4px 5px -3px rgba(0, 0, 0, 0.125) inset; }
 
 /* subwindow chrome */
+#chrome { display: none; }
 #chrome-url { margin-bottom: 5px; }
 
 /* feed */
-#feed-updates > table { white-space: pre; font-size: 13px; line-height: 1.428571429; color: #333333; word-break: break-all; word-wrap: break-word; font-family: Monaco, Menlo, Consolas, "Courier New", monospace; margin-bottom: 2px; }
+#feed-updates > table { white-space: pre; line-height: 1.36; color: #333333; word-break: break-all; word-wrap: break-word; font-family: Monaco, Menlo, Consolas, "Courier New", monospace; margin-bottom: 2px; }
 #feed-updates > table > tbody > tr > td { vertical-align: top; padding: 5px 10px; }
 #feed-updates > table > tbody > tr > td:first-child { border: 1px solid #eee; border-right: 1px solid #C3C1C4; }
 

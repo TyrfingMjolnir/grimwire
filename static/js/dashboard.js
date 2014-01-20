@@ -1029,8 +1029,8 @@ common.feedUA.POST([
 ].join('\n'), { Content_Type: 'text/html' });
 
 common.feedUA.POST([
-	'<img src="/img/fatcow/16x16/blackboard_drawing.png"> <a href="httpl://explorer/intro">Start here</a>.',
-	'<img src="/img/fatcow/16x16/bug.png"> Please report bugs to the <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.'
+	' <img src="/img/fatcow/16x16/blackboard_drawing.png"> <a href="httpl://explorer/intro">Start here</a>.',
+	' <img src="/img/fatcow/16x16/bug.png"> Please report bugs to the <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.'
 ].join('\n'), { Content_Type: 'text/html' });
 
 // So PouchDB can target locals
