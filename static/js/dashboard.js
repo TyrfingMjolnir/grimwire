@@ -1393,6 +1393,8 @@ var dashboardGUI = require('./dashboard-gui');
 // Setup
 // =====
 
+common.feedUA.POST('Welcome to Grimwire. We fight for the user.');
+
 common.feedUA.POST([
 	'<strong>Grimwire v0.6.0 <span class="text-danger">unstable</span> build.</strong>',
 	'<small class="text-muted">Early Beta Build. Not all behaviors',
