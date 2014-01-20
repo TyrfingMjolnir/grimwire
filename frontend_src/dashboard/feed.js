@@ -5,10 +5,18 @@ System updates aggregator
 */
 
 var common = require('./common');
+var cli_parser = require('./cli-parser');
+var cli_executor = require('./cli-executor');
 var server = servware();
 module.exports = server;
 
 var _updates = [];
+function add_update(from, html) {
+	var id = _updates.length;
+	var update = { id: id, from: from, html: html, created_at: Date.now() };
+	_updates.push(update);
+	return update;
+}
 
 function mapRev(arr, cb) {
 	var newarr = [];
@@ -41,6 +49,13 @@ function forbidPeers(req, res) {
 	return true;
 }
 
+function forbidOthers(req, res) {
+	var from = req.header('From');
+	if (from && from !== 'httpl://'+req.header('Host'))
+		throw 403;
+	return true;
+}
+
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
@@ -55,11 +70,60 @@ server.route('/', function(link, method) {
 			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
+					'<form action="/" method="EXEC" target="_null">',
+						'<input class="form-control" type="text" name="cmd" />',
+					'</form>',
+					'<br>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
 		].join('');
 		return [200, html, {'content-type': 'text/html'}];
+	});
+
+	method('EXEC', forbidOthers, function(req, res) {
+		// Validate inputs
+		var cmd, cmd_parsed;
+		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'] });
+		if (typeof req.body == 'string') { cmd = req.body; }
+		else if (typeof req.body.cmd != 'undefined') { cmd = req.body.cmd; }
+		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
+
+		// Parse
+		try {
+			cmd_parsed = cli_parser.parse(cmd);
+		} catch (e) {
+			// Parsing error
+			add_update(null, e.toString());
+			// :TODO: replace with nquery
+			$('main iframe').contents().find('#feed-updates').html(render_updates());
+			return 204;
+		}
+
+		// Execute
+		var evts = cli_executor.exec(cmd_parsed);
+		var last_res;
+		evts.on('response', function(e) { last_res = e.response; });
+		evts.on('done', function(e) {
+			var res = last_res, html = '';
+			if (res.body) {
+				if (typeof res.body == 'string') html = res.body;
+				else html = JSON.stringify(res.body, null, 4);
+			} else {
+				html = '<strong>' + res.status + ' ' + res.reason + '</strong>';
+			}
+
+			// :DEBUG: output
+			add_update(null, html);
+			// :TODO: replace with nquery
+			$('main iframe').contents().find('#feed-updates').html(render_updates());
+		});
+
+		// :DEBUG: output
+		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));
+		// :TODO: replace with nquery
+		$('main iframe').contents().find('#feed-updates').html(render_updates());*/
+		return 204;
 	});
 
 	method('POST', forbidPeers, function(req, res) {
@@ -71,13 +135,11 @@ server.route('/', function(link, method) {
 		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
 		html = oDOM.body.innerHTML;
 
-		var id = _updates.length;
-		_updates.push({ id: id, from: from, html: html, created_at: Date.now() });
-
+		var update = add_update(from, html);
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
-		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+id);
+		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+update.id);
 		return 201;
 	});
 });

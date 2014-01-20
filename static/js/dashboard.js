@@ -1,4 +1,313 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/*
+CLI parsed-command executor
+
+*/
+
+// Executor
+// ========
+var Executor = {};
+module.exports = Executor;
+
+Executor.exec = function(parsed_cmds) {
+	var emitter = new local.util.EventEmitter();
+	emitter.next_index = 0;
+	emitter.parsed_cmds = parsed_cmds;
+	emitter.getNext = getNext;
+	emitter.fireNext = fireNext;
+	emitter.on('request', onRequest);
+	emitter.on('response', onResponse);
+	emitter.fireNext();
+	return emitter;
+};
+
+function getNext() {
+	return this.parsed_cmds[this.next_index];
+}
+
+function fireNext() {
+	if (this.getNext()) {
+		this.emit('request', this.getNext());
+		this.next_index++;
+	} else {
+		this.emit('done');
+	}
+}
+
+function onRequest(e) {
+	var emitter = this;
+
+	// Prep request
+	var body;
+	var req = new local.Request(e.request);
+	// pull accept from right-side pipe
+	if (e.pipe && !e.request.accept) { req.header('Accept', e.pipe); }
+	// pull body and content-type from left-side pipe (last request)
+	if (e.last_res) {
+		if (e.last_res.header('Content-Type') && !req.header('Content-Type')) {
+			req.header('Content-Type', e.last_res.header('Content-Type'));
+		}
+		if (e.last_res.body) {
+			body = e.last_res.body;
+		}
+	}
+	// default method
+	if (!e.request.method) {
+		if (e.last_res) req.method = 'POST';
+		else req.method = 'GET';
+	}
+
+	// Dispatch
+	local.dispatch(req).always(function(res) {
+		//var will_be_done = !emitter.getNext();
+		emitter.emit('response', { request: req, response: res });
+		/*if (will_be_done) {
+			emitter.emit('done');
+		}*/
+	});
+	req.end(body);
+}
+
+function onResponse(e) {
+	var next_cmd = this.getNext();
+	if (next_cmd) {
+		next_cmd.last_res = e.response;
+	}
+	local.util.nextTick(this.fireNext.bind(this));
+}
+},{}],2:[function(require,module,exports){
+/*
+CLI command parser
+
+Examples:
+  - A single, full command:
+	agent> get apps/foo --From=pfraze@grimwire.net [application/json]
+  - A single command using defaults (method=GET, Accept=*, agent=none):
+	apps/foo
+  - A fat pipe command:
+	GET apps/foo [application/json] POST apps/bar
+  - A fat pipe command with defaults:
+    apps/foo [] apps/bar
+
+command      = [ agent ] request [ content-type ] .
+agent        = token '>' .
+request      = [ method ] uri { header-flag } .
+header-flag  = [ '-' | '--' ] header-key '=' header-value .
+content-type = '[' token ']' .
+method       = token .
+uri          = ns-token .
+header-key   = token .
+header-value = token | string .
+string       = '"' { token } '"' .
+token        = /([-\w]*)/ .
+ns-token     = /(\S*)/ .
+*/
+
+// Parser
+// ======
+var Parser = { buffer: null, trash: null, buffer_position: 0, buffer_size: 0, logging: false };
+module.exports = Parser;
+
+// Main API
+// - Generates an array of { agent:, request:, pipe: } objects
+//  - `agent` is the string name of the agent used
+//  - `request` is an object-literal request form
+//  - `pipe` is the string mimetype in the fat pipe
+Parser.parse = function(buffer) {
+	Parser.buffer = buffer;
+	Parser.trash = '';
+	Parser.buffer_position = 0;
+	this.buffer_size = buffer.length;
+
+	var output = [];
+	while (!this.isFinished()) {
+		output.push(Parser.readCommand());
+	}
+
+	return output;
+};
+
+Parser.moveBuffer = function(dist) {
+	this.trash += this.buffer.substring(0, dist);
+	this.buffer = this.buffer.substring(dist);
+	this.buffer_position += dist;
+	this.log('+', dist);
+};
+
+Parser.isFinished = function() {
+	if (this.buffer_position >= this.buffer_size || !/\S/.test(this.buffer))
+		return true;
+	return false;
+};
+
+Parser.readCommand = function() {
+	// command = [ agent ] request [ request ] .
+	// ================================================
+	this.log = ((this.logging) ? (function() { console.log.apply(console,arguments); }) : (function() {}));
+	this.log('>> Parsing:',this.buffer);
+
+	var agent = this.readAgent();
+
+	var request = this.readRequest();
+	if (!request) { throw "Expected request"; }
+
+	var pipe = this.readContentType();
+
+	this.log('<< Finished parsing:', agent, request);
+	return { agent: agent, request: request, pipe: pipe };
+};
+
+Parser.readAgent = function() {
+	// agent = token '>' .
+	// ===================
+	// read non spaces...
+	var match = /^\s*(\S*)/.exec(this.buffer);
+	if (match && />/.test(match[1])) { // check for the identifying angle bracket
+		var match_parts = match[1].split('>');
+		var agent = match_parts[0];
+		this.moveBuffer(agent.length+1);
+		this.log('Read agent:', agent);
+		return agent;
+	}
+	return false;
+};
+
+Parser.readRequest = function() {
+	// request = [ method ] uri { header-flag } .
+	// ==========================================
+	var targetUri = false, method = false, headers = {}, start_pos;
+	start_pos = this.buffer_position;
+	// Read till no more request features
+	while (true) {
+		var headerSwitch = this.readHeaderSwitch();
+		if (headerSwitch) {
+			// shouldn't come before method & uri
+			if (!targetUri && !method) { throw "Unexpected header flag '" + headerSwitch + "'"; }
+			headers[headerSwitch.key.toLowerCase()] = headerSwitch.value;
+			continue;
+		}
+		var string = this.readNSToken();
+		if (string) {
+			// no uri, assume that's what it is
+			if (!targetUri) { targetUri = string; }
+			else if (!method) {
+				// no method, the first item was actually the method and this is the uri
+				method = targetUri;
+				targetUri = string;
+			} else {
+				throw "Unexpected token '" + string + "'";
+			}
+			continue;
+		}
+		break;
+	}
+	// Return a request if we got a URI; otherwise, no match
+	if (!targetUri) { return false; }
+	var request = { headers: headers };
+	request.method = method;
+	request.url = targetUri;
+	this.log(request);
+	return request;
+};
+
+Parser.readContentType = function() {
+	// content-type = "[" [ token | string ] "]" .
+	// ===========================================
+	var match;
+
+	// match opening bracket
+	match = /^\s*\[\s*/.exec(this.buffer);
+	if (!match) { return false; }
+	this.moveBuffer(match[0].length);
+
+	// read content-type
+	match = /^[\w\/\*.0-9\+]+/.exec(this.buffer);
+	var contentType = (!!match) ? match[0] : null;
+	if (contentType)  { this.moveBuffer(contentType.length); }
+
+	// match closing bracket
+	match = /^\s*\]\s*/.exec(this.buffer);
+	if (!match) { throw "Closing bracket ']' expected after content-type"; }
+	this.moveBuffer(match[0].length);
+
+	this.log('Read mimetype:', contentType);
+	return contentType;
+};
+
+Parser.readHeaderSwitch = function() {
+	// header-flag = [ "-" | "--" ] header-key "=" header-value .
+	// ================================================
+	var match, headerKey, headerValue;
+
+	// match switch
+	match = /^\s*-[-]*/.exec(this.buffer);
+	if (!match) { return false; }
+	this.moveBuffer(match[0].length);
+
+	// match key
+	headerKey = this.readToken();
+	if (!headerKey) { throw "Header name expected after '--' switch."; }
+
+	// match '='
+	match = /^\s*\=\s*/.exec(this.buffer);
+	if (match) {
+		// match value
+		this.moveBuffer(match[0].length);
+		headerValue = this.readString() || this.readToken();
+		if (!headerValue) { throw "Value expected for --" + headerKey; }
+	} else {
+		// default value to `true`
+		headerValue = true;
+	}
+
+	var header = { key:headerKey, value:headerValue };
+	this.log('Read header:', header);
+	return header;
+};
+
+Parser.readString = function() {
+	var match;
+
+	// match opening quote
+	match = /^\s*[\"]/.exec(this.buffer);
+	if (!match) { return false; }
+	this.moveBuffer(match[0].length);
+
+	// read the string till the next quote
+	var string = '';
+	while (this.buffer.charAt(0) != '"') {
+		var c = this.buffer.charAt(0);
+		this.moveBuffer(1);
+		if (!c) { throw "String must be terminated by a second quote"; }
+		string += c;
+	}
+	this.moveBuffer(1);
+
+	this.log('Read string:', string);
+	return string;
+};
+
+Parser.readNSToken = function() {
+	// read pretty much anything
+	var match = /^\s*(\S*)/.exec(this.buffer);
+	if (match && match[1].charAt(0) != '[') { // dont match a pipe
+		this.moveBuffer(match[0].length);
+		this.log('Read uri:', match[1]);
+		return match[1];
+	}
+
+	return false;
+};
+
+Parser.readToken = function() {
+	// read the token
+	var match = /^\s*([-\w]*)/.exec(this.buffer);
+	if (!match) { return false; }
+	this.moveBuffer(match[0].length);
+	this.log('Read token:', match[1]);
+	return match[1];
+};
+},{}],3:[function(require,module,exports){
 
 var common = module.exports = {};
 common.serviceURL = window.location.protocol+'//'+window.location.host;
@@ -90,7 +399,7 @@ common.getRelayUsers = function() {
 	);
 };
 common.ucfirst = function(str) { return str.charAt(0).toUpperCase() + str.slice(1); };
-},{}],2:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 
 var common = require('./common');
 var contentFrame = module.exports = {};
@@ -292,7 +601,7 @@ window.onhashchange = function() {
 	// Not in history, new request
 	contentFrame.dispatchRequest(hashurl);
 };
-},{"./common":1}],3:[function(require,module,exports){
+},{"./common":3}],5:[function(require,module,exports){
 var common = require('./common');
 var network = require('./network');
 var dashboardGUI = module.exports = {};
@@ -598,7 +907,7 @@ function renderAll() {
 	renderUserConnections();
 }
 renderAll();
-},{"./common":1,"./network":8}],4:[function(require,module,exports){
+},{"./common":3,"./network":10}],6:[function(require,module,exports){
 /*
 httpl://explorer
 
@@ -832,7 +1141,7 @@ server.route('/intro', function(link, method) {
 		].join(' '), { 'content-type': 'text/html' }];
 	});
 });
-},{"./common":1}],5:[function(require,module,exports){
+},{"./common":3}],7:[function(require,module,exports){
 /*
 httpl://feed
 
@@ -840,10 +1149,18 @@ System updates aggregator
 */
 
 var common = require('./common');
+var cli_parser = require('./cli-parser');
+var cli_executor = require('./cli-executor');
 var server = servware();
 module.exports = server;
 
 var _updates = [];
+function add_update(from, html) {
+	var id = _updates.length;
+	var update = { id: id, from: from, html: html, created_at: Date.now() };
+	_updates.push(update);
+	return update;
+}
 
 function mapRev(arr, cb) {
 	var newarr = [];
@@ -876,6 +1193,13 @@ function forbidPeers(req, res) {
 	return true;
 }
 
+function forbidOthers(req, res) {
+	var from = req.header('From');
+	if (from && from !== 'httpl://'+req.header('Host'))
+		throw 403;
+	return true;
+}
+
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
 	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
@@ -890,11 +1214,60 @@ server.route('/', function(link, method) {
 			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
+					'<form action="/" method="EXEC" target="_null">',
+						'<input class="form-control" type="text" name="cmd" />',
+					'</form>',
+					'<br>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
 		].join('');
 		return [200, html, {'content-type': 'text/html'}];
+	});
+
+	method('EXEC', forbidOthers, function(req, res) {
+		// Validate inputs
+		var cmd, cmd_parsed;
+		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'] });
+		if (typeof req.body == 'string') { cmd = req.body; }
+		else if (typeof req.body.cmd != 'undefined') { cmd = req.body.cmd; }
+		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
+
+		// Parse
+		try {
+			cmd_parsed = cli_parser.parse(cmd);
+		} catch (e) {
+			// Parsing error
+			add_update(null, e.toString());
+			// :TODO: replace with nquery
+			$('main iframe').contents().find('#feed-updates').html(render_updates());
+			return 204;
+		}
+
+		// Execute
+		var evts = cli_executor.exec(cmd_parsed);
+		var last_res;
+		evts.on('response', function(e) { last_res = e.response; });
+		evts.on('done', function(e) {
+			var res = last_res, html = '';
+			if (res.body) {
+				if (typeof res.body == 'string') html = res.body;
+				else html = JSON.stringify(res.body, null, 4);
+			} else {
+				html = '<strong>' + res.status + ' ' + res.reason + '</strong>';
+			}
+
+			// :DEBUG: output
+			add_update(null, html);
+			// :TODO: replace with nquery
+			$('main iframe').contents().find('#feed-updates').html(render_updates());
+		});
+
+		// :DEBUG: output
+		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));
+		// :TODO: replace with nquery
+		$('main iframe').contents().find('#feed-updates').html(render_updates());*/
+		return 204;
 	});
 
 	method('POST', forbidPeers, function(req, res) {
@@ -906,13 +1279,11 @@ server.route('/', function(link, method) {
 		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
 		html = oDOM.body.innerHTML;
 
-		var id = _updates.length;
-		_updates.push({ id: id, from: from, html: html, created_at: Date.now() });
-
+		var update = add_update(from, html);
 		// :TODO: replace with nquery
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
-		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+id);
+		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+update.id);
 		return 201;
 	});
 });
@@ -975,7 +1346,7 @@ server.route('/:id', function(link, method) {
 		return 204;
 	});
 });
-},{"./common":1}],6:[function(require,module,exports){
+},{"./cli-executor":1,"./cli-parser":2,"./common":3}],8:[function(require,module,exports){
 // Replacement for httpl://hosts
 module.exports = function(req, res) {
 	var localHosts = local.getServers();
@@ -1013,7 +1384,7 @@ module.exports = function(req, res) {
 		res.end({ host_names: domains });
 	});
 };
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var common = require('./common');
 var contentFrame = require('./content-frame');
 var network = require('./network');
@@ -1088,7 +1459,7 @@ common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east
 		contentFrame.dispatchRequest(firstreq);
 	}
 })();
-},{"./common":1,"./content-frame":2,"./dashboard-gui":3,"./explorer":4,"./feed":5,"./hosts":6,"./network":8,"./storage":9,"./workers":10}],8:[function(require,module,exports){
+},{"./common":3,"./content-frame":4,"./dashboard-gui":5,"./explorer":6,"./feed":7,"./hosts":8,"./network":10,"./storage":11,"./workers":12}],10:[function(require,module,exports){
 
 var common = require('./common');
 var network = module.exports = {};
@@ -1270,7 +1641,7 @@ common.genDeviceName = function() {
 	// :TODO: mobile
 	return 'device';
 };*/
-},{"./common":1}],9:[function(require,module,exports){
+},{"./common":3}],11:[function(require,module,exports){
 /*
 httpl://storage
 
@@ -1390,7 +1761,7 @@ server.route('/:bucket/:key', function(link, method) {
 		return 204;
 	});
 });
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 // workers
 // =======
 
@@ -1969,5 +2340,5 @@ function renderEditorChrome() {
 	].join(''));
     $('#worker-editor > .nav-tabs').html(html);
 }
-},{"./common":1,"./network":8}]},{},[7])
+},{"./common":3,"./network":10}]},{},[9])
 ;
