@@ -617,7 +617,7 @@ var show_hidden = false;
 function forbidAll(req, res) {
 	// Nobody allowed but the page
 	var from = req.header('From');
-	if (from && from != 'httpl://explorer')
+	if (from && ['httpl://explorer', 'httpl://feed', 'httpl://workers'].indexOf(from) === -1)
 		throw 403;
 	return true;
 }

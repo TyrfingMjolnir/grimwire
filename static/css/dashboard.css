@@ -42,9 +42,8 @@ main > iframe { width: 100%; height: 100%; }
 
 /* feed */
 #feed-updates > table { white-space: pre; font-size: 13px; line-height: 1.428571429; color: #333333; word-break: break-all; word-wrap: break-word; font-family: Monaco, Menlo, Consolas, "Courier New", monospace; margin-bottom: 16px; }
-#feed-updates > table > tbody > tr > td { vertical-align: top; }
-#feed-updates > table > tbody > tr > td:first-child { padding-right: 10px; border-right: 1px solid #C3C1C4; }
-#feed-updates > table > tbody > tr > td:nth-child(2) { padding-left: 10px; }
+#feed-updates > table > tbody > tr > td { vertical-align: top; padding: 5px 10px; }
+#feed-updates > table > tbody > tr > td:first-child { border: 1px solid #eee; border-right: 1px solid #C3C1C4; }
 
 /* link lists */
 .link-list { margin-bottom: 20px; }
