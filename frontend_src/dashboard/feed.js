@@ -102,9 +102,10 @@ server.route('/', function(link, method) {
 
 		// Execute
 		var evts = cli_executor.exec(cmd_parsed);
-		var last_res;
-		evts.on('response', function(e) { last_res = e.response; });
+		var last_req, last_res;
+		evts.on('response', function(e) { last_req = e.request; last_res = e.response; });
 		evts.on('done', function(e) {
+			// Generate final HTML
 			var res = last_res, html = '';
 			if (res.body) {
 				if (typeof res.body == 'string') html = res.body;
@@ -113,8 +114,15 @@ server.route('/', function(link, method) {
 				html = '<strong>' + res.status + ' ' + res.reason + '</strong>';
 			}
 
-			// :DEBUG: output
-			add_update(null, html);
+			// Get origin
+			var urld = local.parseUri(last_req);
+			var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+			if (last_res.header('X-Origin')) { // verified in response.processHeaders()
+				origin = common.escape(last_res.header('X-Origin'));
+			}
+
+			// Add to history
+			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>');
 			// :TODO: replace with nquery
 			$('main iframe').contents().find('#feed-updates').html(render_updates());
 		});
@@ -132,7 +140,7 @@ server.route('/', function(link, method) {
 
 		var html = req.body;
 		var oParser = new DOMParser();
-		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
+		var oDOM = oParser.parseFromString('<div class="frame-'+common.frame_nonce+'" data-origin="'+from+'">'+html+'</div>', "text/html");
 		html = oDOM.body.innerHTML;
 
 		var update = add_update(from, html);

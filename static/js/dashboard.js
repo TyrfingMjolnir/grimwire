@@ -313,6 +313,16 @@ var common = module.exports = {};
 common.serviceURL = window.location.protocol+'//'+window.location.host;
 common.feedUA = local.agent('httpl://feed');
 
+// Security
+// ========
+
+// :TEMPORARY:
+// - this value is used to identify divs which grimwire wants to act like an iframe
+// - to keep userland from accessing that behavior, we use a random nonce
+// - DANGER - this method will not be safe once programs can read document state (nQuery)
+common.frame_nonce = Math.round(Math.random()*10000000000000000);
+
+
 // Database Utilities
 // ==================
 
@@ -500,17 +510,76 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	var body = req.body; delete req.body;
 	req = (req instanceof local.Request) ? req : (new local.Request(req));
 
-	// Relative link? Use context to make absolute
-	if (!local.isAbsUri(req.url)) {
-		req.url = local.joinUri(current_content_origin, req.url);
-	}
-
 	// Standard headers
 	if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
 
+	// Locate the target
+	var frame;
+	if (!target) { target = '_self'; }
+	if (target == '_self' || target == '_parent') {
+		// From HTML? Check if there's a frame above the origin
+		if (origin.tagName) { // no instanceof HTMLElement - iframes are in play
+			frame = local.util.findParentNode.byClass(origin, 'frame-'+common.frame_nonce);
+			if (frame && target == '_parent') {
+				frame = local.util.findParentNode.byClass(origin, 'frame-'+common.frame_nonce);
+			}
+		}
+		if (!frame) {
+			// No frame means either we're in _content, or _parent is _content
+			target = '_content';
+		}
+	}
+
 	// Content target? Update page
 	var res_;
-	if (!target || target == '_content') {
+	if (frame) { // target == '_self' or '_parent', neither of which ended up resolving to '_content'
+		// Pull origin from frame
+		if (frame.dataset && frame.dataset.origin) {
+			req.header('From', frame.dataset.origin);
+		}
+
+		// Relative link? Use context to make absolute
+		if (!local.isAbsUri(req.url)) {
+			req.url = local.joinUri(req.header('From'), req.url);
+		}
+
+		// Dispatch
+		res_ = local.dispatch(req);
+		res_.always(function(res) {
+			// Generate final html
+			var html;
+			if (res.body && typeof res.body == 'string') {
+				html = res.body;
+				if (res.header('Content-Type') != 'text/html') {
+					html = '<pre class="plain">'+html+'</pre>';
+				}
+			} else {
+				html = '<h1>'+(+res.status)+' <small>'+(res.reason||'').replace(/</g,'&lt;')+'</small></h1>';
+				if (res.body && typeof res.body != 'string') { html += '<pre class="plain">'+JSON.stringify(res.body).replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</pre>'; }
+			}
+
+			// Render
+			frame.innerHTML = html;
+
+			// Set origin
+			var urld = local.parseUri(req);
+			var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+			if (res.header('X-Origin')) { // verified in response.processHeaders()
+				origin = common.escape(res.header('X-Origin'));
+			}
+			frame.dataset.origin = origin;
+
+			return res;
+		});
+	}
+	else if (target == '_content') {
+
+		// Relative link? Use context to make absolute
+		if (!local.isAbsUri(req.url)) {
+			req.url = local.joinUri(current_content_origin, req.url);
+		}
+
+		// Dispatch
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
 			/*if ([301, 302, 303, 305].indexOf(res.status) !== -1) {
@@ -576,6 +645,11 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 			throw res;
 		});*/
 	} else if (target == '_null') {
+		// Relative link? Use context to make absolute
+		if (!local.isAbsUri(req.url)) {
+			req.url = local.joinUri(current_content_origin, req.url);
+		}
+
 		// Null target, simple dispatch
 		res_ = local.dispatch(req);
 	} else {
@@ -1242,9 +1316,10 @@ server.route('/', function(link, method) {
 
 		// Execute
 		var evts = cli_executor.exec(cmd_parsed);
-		var last_res;
-		evts.on('response', function(e) { last_res = e.response; });
+		var last_req, last_res;
+		evts.on('response', function(e) { last_req = e.request; last_res = e.response; });
 		evts.on('done', function(e) {
+			// Generate final HTML
 			var res = last_res, html = '';
 			if (res.body) {
 				if (typeof res.body == 'string') html = res.body;
@@ -1253,8 +1328,15 @@ server.route('/', function(link, method) {
 				html = '<strong>' + res.status + ' ' + res.reason + '</strong>';
 			}
 
-			// :DEBUG: output
-			add_update(null, html);
+			// Get origin
+			var urld = local.parseUri(last_req);
+			var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+			if (last_res.header('X-Origin')) { // verified in response.processHeaders()
+				origin = common.escape(last_res.header('X-Origin'));
+			}
+
+			// Add to history
+			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>');
 			// :TODO: replace with nquery
 			$('main iframe').contents().find('#feed-updates').html(render_updates());
 		});
@@ -1272,7 +1354,7 @@ server.route('/', function(link, method) {
 
 		var html = req.body;
 		var oParser = new DOMParser();
-		var oDOM = oParser.parseFromString('<div>'+html+'</div>', "text/html");
+		var oDOM = oParser.parseFromString('<div class="frame-'+common.frame_nonce+'" data-origin="'+from+'">'+html+'</div>', "text/html");
 		html = oDOM.body.innerHTML;
 
 		var update = add_update(from, html);

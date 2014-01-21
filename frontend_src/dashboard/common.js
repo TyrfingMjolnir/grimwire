@@ -3,6 +3,16 @@ var common = module.exports = {};
 common.serviceURL = window.location.protocol+'//'+window.location.host;
 common.feedUA = local.agent('httpl://feed');
 
+// Security
+// ========
+
+// :TEMPORARY:
+// - this value is used to identify divs which grimwire wants to act like an iframe
+// - to keep userland from accessing that behavior, we use a random nonce
+// - DANGER - this method will not be safe once programs can read document state (nQuery)
+common.frame_nonce = Math.round(Math.random()*10000000000000000);
+
+
 // Database Utilities
 // ==================
 
