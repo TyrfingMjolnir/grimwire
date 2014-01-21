@@ -532,8 +532,6 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	// Pull origin from frame
 	if (frame && frame.dataset && frame.dataset.origin) {
 		req.header('From', frame.dataset.origin);
-	} else {
-		req.header('From', current_content_origin);
 	}
 
 	// Relative link? Use context to make absolute

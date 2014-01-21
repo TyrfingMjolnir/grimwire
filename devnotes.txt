@@ -22,7 +22,11 @@ grim: cli
  - content-type aliases
  - history
  - tab-completion
+ - s/feed/cli/
+ - selective page updates with jquery
 grim: X-HTML-Context
+
+chat.js: extract peer id (dont accept it from request body)
 
 ---
 
