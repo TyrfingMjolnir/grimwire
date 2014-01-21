@@ -9,7 +9,8 @@ local: document local.parseProxyUri and local.makeProxyUri
 local: document new headers behaviors
 local: document using functions in queryLink
 
-grim: sudden 404s on streams?
+grim bug: sudden 404s on streams
+grim bug: hash uri doesnt encode query params
 
 grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick

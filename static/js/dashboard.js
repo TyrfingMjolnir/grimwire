@@ -1350,7 +1350,7 @@ server.route('/', function(link, method) {
 			'<div class="row">',
 				'<div class="col-xs-12">',
 					'<form action="/" method="EXEC" target="_null">',
-						'<input class="form-control" type="text" name="cmd" />',
+						'<input id="feed-cmd-input" class="form-control" type="text" name="cmd" />',
 					'</form>',
 					'<br>',
 					'<div id="feed-updates">'+render_updates()+'</div>',
@@ -1370,6 +1370,7 @@ server.route('/', function(link, method) {
 
 		// Add command to updates
 		add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');
+		$('main iframe').contents().find('#feed-cmd-input').val(''); // :TODO: nquery
 
 		// Parse
 		try {
