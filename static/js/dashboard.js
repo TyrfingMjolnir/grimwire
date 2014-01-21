@@ -1368,6 +1368,9 @@ server.route('/', function(link, method) {
 		else if (typeof req.body.cmd != 'undefined') { cmd = req.body.cmd; }
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
 
+		// Add command to updates
+		add_update('httpl://feed', common.escape(cmd));
+
 		// Parse
 		try {
 			cmd_parsed = cli_parser.parse(cmd);
@@ -1395,7 +1398,7 @@ server.route('/', function(link, method) {
 
 			// Get origin
 			var urld = local.parseUri(last_req);
-			var origin = (urld.protocol || 'httpl')+'://'+urld.authority;
+			var origin = (urld.protocol != 'data') ? (urld.protocol || 'httpl')+'://'+urld.authority : null;
 			if (last_res.header('X-Origin')) { // verified in response.processHeaders()
 				origin = common.escape(last_res.header('X-Origin'));
 			}
