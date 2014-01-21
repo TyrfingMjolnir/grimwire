@@ -6,7 +6,7 @@ var dashboardGUI = require('./dashboard-gui');
 // Setup
 // =====
 
-common.feedUA.POST('<img src="/img/avatars/user_astronaut.png"> Welcome to Grimwire. We fight for the user.', { Content_Type: 'text/html' });
+common.feedUA.POST('<img src="/img/avatars/user_astronaut.png"> "Welcome to Grimwire. We fight for the user."', { Content_Type: 'text/html' });
 
 common.feedUA.POST([
 	'<strong>Grimwire v0.6.0 <span class="text-danger">unstable</span> build.</strong>',
