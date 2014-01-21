@@ -370,7 +370,7 @@ app_local_server.route('/w/:id', function(link, method) {
 		req.assert({ accept: ['application/javascript', 'text/javascript', 'text/plain'] });
 
 		var from = req.header('From');
-		if (from && from.indexOf('.js') !== -1 && req.params.id != from)
+		if (from && from.indexOf('.js') !== -1 && req.params.id != from.slice(8)) // slice() skips httpl://
 			throw 403; // only allow workers to access their own code
 
 		var js = localStorage.getItem('worker_'+req.params.id);
