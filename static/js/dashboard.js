@@ -1207,7 +1207,7 @@ server.route('/', function(link, method) {
 		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
 		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
-			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; style-src \'self\'" />',
+			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; font-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
 					'<form action="/" method="EXEC" target="_null">',
