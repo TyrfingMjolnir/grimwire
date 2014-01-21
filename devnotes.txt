@@ -22,9 +22,8 @@ grim: cli
  - content-type aliases
  - history
  - tab-completion
- - inplace GUI
-  - target=_self ?
-  - would need origin-tracking
+ - idempotent GUI creation
+grim: X-HTML-Context
 
 ---
 
