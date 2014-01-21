@@ -40,13 +40,11 @@ function mapRev(arr, cb) {
 function render_updates() {
 	return mapRev(_updates_keys, function(key) {
 		var update = _updates[key];
-		var time = (new Date(update.created_at)).toLocaleTimeString();//.replace(/\:\d\d /, '');
-		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
-		// ^ other fun ways to strip seconds
+		var time = (new Date(update.created_at)).toLocaleTimeString();
 		return [
 			'<table>',
 				'<tr>',
-					'<td><small class="text-muted">'+time+(update.from?('\n'+update.from):'')+'</small></td>',
+					'<td><small class="text-muted">'+time/*+(update.from?('\n'+update.from):'')*/+'</small></td>',
 					'<td>'+update.html+'</td>',
 				'</tr>',
 			'</table>'
@@ -98,7 +96,7 @@ server.route('/', function(link, method) {
 		var cmd, cmd_parsed;
 		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'] });
 		if (typeof req.body == 'string') { cmd = req.body; }
-		else if (typeof req.body.cmd != 'undefined') { cmd = req.body.cmd; }
+		else if (req.body.cmd) { cmd = req.body.cmd; }
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
 
 		// Add command to updates

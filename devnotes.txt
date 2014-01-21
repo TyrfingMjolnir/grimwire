@@ -1,6 +1,6 @@
 TODO
 
-local: connections being opened asymmetrically, and that causes message reordering to be turned off prematurely (may be fixed)
+local bug: webrtc is not connecting
 local: https://grimwire.com/local/#docs/api/bindrequestevents.md request generation section is wrong
 local: document relay.isListening
 local: document local.* sugars
@@ -16,12 +16,17 @@ grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick
 grim: X-HTML-Context
 grim: resh
- - s/feed/rsh/
+ - s/feed/resh/
  - history
  - selective page updates with jquery
- - better parse-error output
+ - man pages
 grim: sid continuity
-grim: get all the reltypes in
+grim: finish page services
+ - get all the reltypes in
+ - CLIs
+  - all worker tasks
+  - finding users
+  - interacting with the WWW
 
 ---
 
@@ -71,7 +76,6 @@ grim: access control service
     - subsequent requests of the same effect type will update the prompt, then all receive the same decision
 "This program asked you to change a fundamental security decision. That seems odd to me, because it's a productivity tool. Did you expect this?"
 "Stop, please. After further investigation, we've discovered this was an attack on the system. Attached is the information about this attack for you to review. If you would like to inform us of the attack, you can send this information to us."
-""
 
 
 ---

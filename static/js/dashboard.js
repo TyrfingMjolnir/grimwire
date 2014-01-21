@@ -171,7 +171,7 @@ Parser.readCommand = function() {
 	var agent = this.readAgent();
 
 	var request = this.readRequest();
-	if (!request) { throw "Expected request"; }
+	if (!request) { throw this.errorMsg("Command expected"); }
 
 	var pipe = this.readContentType();
 
@@ -220,7 +220,7 @@ Parser.readRequest = function() {
 				method = targetUri;
 				targetUri = nstoken;
 			} else {
-				throw "Unexpected token '" + nstoken + "'";
+				throw this.errorMsg("Unexpected token '" + nstoken + "'");
 			}
 			continue;
 		}
@@ -253,7 +253,7 @@ Parser.readContentType = function() {
 
 	// match closing bracket
 	match = /^\s*\]\s*/.exec(this.buffer);
-	if (!match) { throw "Closing bracket ']' expected after content-type"; }
+	if (!match) { throw this.errorMsg("Closing bracket ']' expected after content-type"); }
 	this.moveBuffer(match[0].length);
 
 	this.log('Read mimetype:', contentType);
@@ -272,15 +272,16 @@ Parser.readHeaderSwitch = function() {
 
 	// match key
 	headerKey = this.readToken();
-	if (!headerKey) { throw "Header name expected after '-' switch."; }
+	if (!headerKey) { throw this.errorMsg("Header name expected after '-' switch."); }
 
 	// match '='
-	match = /^\s*\=\s*/.exec(this.buffer);
+	match = /^\s*\=/.exec(this.buffer);
 	if (match) {
 		// match value
 		this.moveBuffer(match[0].length);
+		if (/^\s/.test(this.buffer)) { throw this.errorMsg("Value expected for -" + headerKey); }
 		headerValue = this.readString() || this.readNSToken();
-		if (!headerValue) { throw "Value expected for -" + headerKey; }
+		if (!headerValue) { throw this.errorMsg("Value expected for -" + headerKey); }
 	} else {
 		// default value to `true`
 		headerValue = true;
@@ -329,7 +330,7 @@ Parser.readString = function() {
 	while (this.buffer.charAt(0) != quote_char || (this.buffer.charAt(0) == quote_char && last_char == '\\')) {
 		var c = this.buffer.charAt(0);
 		this.moveBuffer(1);
-		if (!c) { throw "String must be terminated by a second quote"; }
+		if (!c) { throw this.errorMsg("String must be terminated by a second quote"); }
 		string += c;
 		last_char = c;
 	}
@@ -361,6 +362,10 @@ Parser.readToken = function() {
 	this.moveBuffer(match[0].length);
 	this.log('Read token:', match[1]);
 	return match[1];
+};
+
+Parser.errorMsg = function(msg) {
+	return msg+'\n'+this.trash.slice(-15)+'<span class=text-danger>&bull;</span>'+this.buffer.slice(0,15);
 };
 
 var bslash_regex = /(\\)(.)/g;
@@ -1307,13 +1312,11 @@ function mapRev(arr, cb) {
 function render_updates() {
 	return mapRev(_updates_keys, function(key) {
 		var update = _updates[key];
-		var time = (new Date(update.created_at)).toLocaleTimeString();//.replace(/\:\d\d /, '');
-		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
-		// ^ other fun ways to strip seconds
+		var time = (new Date(update.created_at)).toLocaleTimeString();
 		return [
 			'<table>',
 				'<tr>',
-					'<td><small class="text-muted">'+time+(update.from?('\n'+update.from):'')+'</small></td>',
+					'<td><small class="text-muted">'+time/*+(update.from?('\n'+update.from):'')*/+'</small></td>',
 					'<td>'+update.html+'</td>',
 				'</tr>',
 			'</table>'
@@ -1365,7 +1368,7 @@ server.route('/', function(link, method) {
 		var cmd, cmd_parsed;
 		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'] });
 		if (typeof req.body == 'string') { cmd = req.body; }
-		else if (typeof req.body.cmd != 'undefined') { cmd = req.body.cmd; }
+		else if (req.body.cmd) { cmd = req.body.cmd; }
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
 
 		// Add command to updates
