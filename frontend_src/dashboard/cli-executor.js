@@ -37,11 +37,13 @@ function onRequest(e) {
 	var emitter = this;
 
 	// Prep request
-	var body;
+	var body = e.request.body;
 	var req = new local.Request(e.request);
+
 	// pull accept from right-side pipe
 	if (e.pipe && !e.request.accept) { req.header('Accept', pipeToType(e.pipe)); }
-	// pull body and content-type from left-side pipe (last request)
+
+	// pull body and content-type from the last request
 	if (e.last_res) {
 		if (e.last_res.header('Content-Type') && !req.header('Content-Type')) {
 			req.header('Content-Type', e.last_res.header('Content-Type'));
@@ -50,9 +52,16 @@ function onRequest(e) {
 			body = e.last_res.body;
 		}
 	}
+
+	// act as a data URI if no URI was given (but a body was)
+	if (!req.url && body) {
+		var type = (e.pipe) ? pipeToType(e.pipe) : 'text/plain';
+		req.url = 'data:'+type+','+body;
+		req.method = 'GET';
+	}
 	// default method
-	if (!e.request.method) {
-		if (e.last_res) req.method = 'POST';
+	else if (!e.request.method) {
+		if (typeof body != 'undefined') req.method = 'POST';
 		else req.method = 'GET';
 	}
 

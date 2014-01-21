@@ -14,10 +14,9 @@ grim: sudden 404s on streams?
 grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick
 grim: X-HTML-Context
-grim: cli
- - body parameters (isolated, string-escaped)
+grim: resh
  - history
- - s/feed/cli/
+ - s/feed/rsh/
  - selective page updates with jquery
  - better parse-error output
 grim: sid continuity

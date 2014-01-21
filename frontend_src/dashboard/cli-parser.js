@@ -2,10 +2,12 @@
 CLI command parser
 
 Examples:
-  - A single, full command:
-	agent> get apps/foo --From=pfraze@grimwire.net [application/json]
+  - A single, full GET command:
+	agent> GET apps/foo -From=pfraze@grimwire.net [application/json]
   - A single command using defaults (method=GET, Accept=*, agent=none):
 	apps/foo
+  - A single POST command with a body
+    POST apps/foo --{"foo": "bar"} [json]
   - A fat pipe command:
 	GET apps/foo [application/json] POST apps/bar
   - A fat pipe command with defaults:
@@ -13,15 +15,16 @@ Examples:
 
 command      = [ agent ] request [ content-type ] .
 agent        = token '>' .
-request      = [ method ] uri { header-flag } .
-header-flag  = [ '-' | '--' ] header-key '=' header-value .
-content-type = '[' token ']' .
+request      = [ method ] uri { header-flag } [ body ] .
 method       = token .
 uri          = ns-token .
+header-flag  = '-' header-key '=' header-value .
 header-key   = token .
 header-value = token | string .
+body         = '--' [ string | { ns-token } ] [ '[' | EOF ] .
+content-type = '[' token ']' .
 string       = '"' { token } '"' .
-token        = /([-\w]*)/ .
+token        = /(\w[-\w]*)/ .
 ns-token     = /(\S*)/ .
 */
 
@@ -95,39 +98,43 @@ Parser.readAgent = function() {
 };
 
 Parser.readRequest = function() {
-	// request = [ method ] uri { header-flag } .
-	// ==========================================
-	var targetUri = false, method = false, headers = {}, start_pos;
+	// request = [ [ method ] uri ] { header-flag } [ body ] .
+	// =======================================================
+	var targetUri = false, method = false, headers = {}, body, start_pos;
 	start_pos = this.buffer_position;
 	// Read till no more request features
 	while (true) {
 		var headerSwitch = this.readHeaderSwitch();
 		if (headerSwitch) {
-			// shouldn't come before method & uri
-			if (!targetUri && !method) { throw "Unexpected header flag '" + headerSwitch + "'"; }
 			headers[headerSwitch.key.toLowerCase()] = headerSwitch.value;
 			continue;
 		}
-		var string = this.readNSToken();
-		if (string) {
+		body = this.readBody();
+		if (body) {
+			// body ends the command segment
+			break;
+		}
+		var nstoken = this.readNSToken();
+		if (nstoken) {
 			// no uri, assume that's what it is
-			if (!targetUri) { targetUri = string; }
+			if (!targetUri) { targetUri = nstoken; }
 			else if (!method) {
 				// no method, the first item was actually the method and this is the uri
 				method = targetUri;
-				targetUri = string;
+				targetUri = nstoken;
 			} else {
-				throw "Unexpected token '" + string + "'";
+				throw "Unexpected token '" + nstoken + "'";
 			}
 			continue;
 		}
 		break;
 	}
-	// Return a request if we got a URI; otherwise, no match
-	if (!targetUri) { return false; }
+	// Return a request if we got a URI or body; otherwise, no match
+	if (!targetUri && !body) { return false; }
 	var request = { headers: headers };
 	request.method = method;
 	request.url = targetUri;
+	if (body) { request.body = body; }
 	this.log(request);
 	return request;
 };
@@ -157,26 +164,26 @@ Parser.readContentType = function() {
 };
 
 Parser.readHeaderSwitch = function() {
-	// header-flag = [ "-" | "--" ] header-key "=" header-value .
-	// ================================================
+	// header-flag = "-" header-key "=" header-value .
+	// ===============================================
 	var match, headerKey, headerValue;
 
 	// match switch
-	match = /^\s*-[-]*/.exec(this.buffer);
+	match = /^(\s*-)[^-]/.exec(this.buffer);
 	if (!match) { return false; }
-	this.moveBuffer(match[0].length);
+	this.moveBuffer(match[1].length);
 
 	// match key
 	headerKey = this.readToken();
-	if (!headerKey) { throw "Header name expected after '--' switch."; }
+	if (!headerKey) { throw "Header name expected after '-' switch."; }
 
 	// match '='
 	match = /^\s*\=\s*/.exec(this.buffer);
 	if (match) {
 		// match value
 		this.moveBuffer(match[0].length);
-		headerValue = this.readString() || this.readToken();
-		if (!headerValue) { throw "Value expected for --" + headerKey; }
+		headerValue = this.readString() || this.readNSToken();
+		if (!headerValue) { throw "Value expected for -" + headerKey; }
 	} else {
 		// default value to `true`
 		headerValue = true;
@@ -185,6 +192,30 @@ Parser.readHeaderSwitch = function() {
 	var header = { key:headerKey, value:headerValue };
 	this.log('Read header:', header);
 	return header;
+};
+
+Parser.readBody = function() {
+	// body = '--' [ string | { ns-token } ] [ '[' | EOF ] .
+	// =====================================================
+	var match, body;
+
+	// match switch
+	match = /^\s*--/.exec(this.buffer);
+	if (!match) { return false; }
+	this.moveBuffer(match[0].length);
+
+	// match string
+	body = this.readString();
+	if (!body) {
+		// not a string, read till '[' or EOF
+		match = /([^\[]*)/.exec(this.buffer);
+		if (!match) { body = ''; }
+		body = match[1].trim();
+		this.moveBuffer(match[0].length);
+	}
+
+	this.log('Read body:', body);
+	return body;
 };
 
 Parser.readString = function() {
@@ -228,7 +259,7 @@ Parser.readNSToken = function() {
 
 Parser.readToken = function() {
 	// read the token
-	var match = /^\s*([-\w]*)/.exec(this.buffer);
+	var match = /^\s*(\w[-\w]*)/.exec(this.buffer);
 	if (!match) { return false; }
 	this.moveBuffer(match[0].length);
 	this.log('Read token:', match[1]);
