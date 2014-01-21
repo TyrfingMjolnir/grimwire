@@ -101,36 +101,37 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 	// Standard headers
 	if (!req.header('Accept')) { req.header('Accept', 'text/html, */*'); }
 
-	// Locate the target
+	// Locate the target frame
 	var frame;
 	if (!target) { target = '_self'; }
-	if (target == '_self' || target == '_parent') {
-		// From HTML? Check if there's a frame above the origin
-		if (origin.tagName) { // no instanceof HTMLElement - iframes are in play
+
+	// From HTML? Check if there's a frame above the origin
+	if (origin && origin.tagName) { // no instanceof HTMLElement - iframes are in play
+		frame = local.util.findParentNode.byClass(origin, 'frame-'+common.frame_nonce);
+		if (frame && target == '_parent') {
 			frame = local.util.findParentNode.byClass(origin, 'frame-'+common.frame_nonce);
-			if (frame && target == '_parent') {
-				frame = local.util.findParentNode.byClass(origin, 'frame-'+common.frame_nonce);
-			}
 		}
-		if (!frame) {
-			// No frame means either we're in _content, or _parent is _content
-			target = '_content';
-		}
+	}
+	if (!frame && (target == '_self' || target == '_parent')) {
+		// No frame means either we're in _content, or _parent is _content
+		target = '_content';
+	}
+
+	// Pull origin from frame
+	if (frame && frame.dataset && frame.dataset.origin) {
+		req.header('From', frame.dataset.origin);
+	} else {
+		req.header('From', current_content_origin);
+	}
+
+	// Relative link? Use context to make absolute
+	if (!local.isAbsUri(req.url)) {
+		req.url = local.joinUri(req.header('From'), req.url);
 	}
 
 	// Content target? Update page
 	var res_;
-	if (frame) { // target == '_self' or '_parent', neither of which ended up resolving to '_content'
-		// Pull origin from frame
-		if (frame.dataset && frame.dataset.origin) {
-			req.header('From', frame.dataset.origin);
-		}
-
-		// Relative link? Use context to make absolute
-		if (!local.isAbsUri(req.url)) {
-			req.url = local.joinUri(req.header('From'), req.url);
-		}
-
+	if (target == '_self' || target == '_parent') {
 		// Dispatch
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
@@ -161,12 +162,6 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		});
 	}
 	else if (target == '_content') {
-
-		// Relative link? Use context to make absolute
-		if (!local.isAbsUri(req.url)) {
-			req.url = local.joinUri(current_content_origin, req.url);
-		}
-
 		// Dispatch
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
@@ -233,11 +228,6 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 			throw res;
 		});*/
 	} else if (target == '_null') {
-		// Relative link? Use context to make absolute
-		if (!local.isAbsUri(req.url)) {
-			req.url = local.joinUri(current_content_origin, req.url);
-		}
-
 		// Null target, simple dispatch
 		res_ = local.dispatch(req);
 	} else {

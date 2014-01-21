@@ -7,13 +7,11 @@ var dashboardGUI = require('./dashboard-gui');
 // =====
 
 common.feedUA.POST('<img src="/img/avatars/user_astronaut.png"> "Welcome to Grimwire. We fight for the user."', { Content_Type: 'text/html', From: 'httpl://feed' });
-
 common.feedUA.POST([
 	'<strong>Grimwire v0.6.0 <span class="text-danger">unstable</span> build.</strong>',
 	'<small class="text-muted">Early Beta Build. Not all behaviors',
 	'are expected.</small>'
 ].join('\n'), { Content_Type: 'text/html', From: 'httpl://feed' });
-
 common.feedUA.POST([
 	' <img src="/img/fatcow/16x16/blackboard_drawing.png"> <a href="httpl://explorer/intro" target="_content">Start here</a>.',
 	' <img src="/img/fatcow/16x16/bug.png"> Please report bugs to the <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.'

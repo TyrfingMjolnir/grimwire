@@ -488,7 +488,7 @@ var worker_remote_server = function(req, res, worker) {
 
 	// Set headers
 	req2.removeHeader('X-Public-Host');
-	req2.header('From', worker.config.domain);
+	req2.header('From', 'httpl://'+worker.config.domain);
 	req2.header('Via', (req.parsedHeaders.via||[]).concat(via));
 
 	var res2_ = local.dispatch(req2);

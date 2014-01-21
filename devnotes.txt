@@ -22,7 +22,6 @@ grim: cli
  - content-type aliases
  - history
  - tab-completion
- - idempotent GUI creation
 grim: X-HTML-Context
 
 ---

@@ -10,12 +10,23 @@ var cli_executor = require('./cli-executor');
 var server = servware();
 module.exports = server;
 
-var _updates = [];
-function add_update(from, html) {
-	var id = _updates.length;
-	var update = { id: id, from: from, html: html, created_at: Date.now() };
-	_updates.push(update);
-	return update;
+var _updates = {};
+var _updates_keys = []; // maintains order
+var _updates_idc = 0;
+function add_update(from, html, id) {
+	id = (id || _updates_idc++);
+	var key = from + ' ' + id;
+	if (_updates[key]) {
+		_updates[key].html = html;
+		_updates[key].from = from;
+		return _updates[key];
+	}
+	_updates[key] = { id: id, from: from, key: key, html: html, created_at: Date.now() };
+	_updates_keys.push(key);
+	return _updates[key];
+}
+function get_update(from, id) {
+	return _updates[from + ' ' + id];
 }
 
 function mapRev(arr, cb) {
@@ -27,7 +38,8 @@ function mapRev(arr, cb) {
 }
 
 function render_updates() {
-	return mapRev(_updates, function(update) {
+	return mapRev(_updates_keys, function(key) {
+		var update = _updates[key];
 		var time = (new Date(update.created_at)).toLocaleTimeString();//.replace(/\:\d\d /, '');
 		// .toLocaleTimeString().split(':').map(function(v,i) { return ((i==1)? ':' : '')+((i==2)? v.slice(3) : v); }).join('');
 		// ^ other fun ways to strip seconds
@@ -121,8 +133,14 @@ server.route('/', function(link, method) {
 				origin = common.escape(last_res.header('X-Origin'));
 			}
 
+			// Get ID
+			var id;
+			if (last_res.header('X-UI-Key')) {
+				id = last_res.header('X-UI-Key');
+			}
+
 			// Add to history
-			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>');
+			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>', id);
 			// :TODO: replace with nquery
 			$('main iframe').contents().find('#feed-updates').html(render_updates());
 		});
@@ -162,7 +180,7 @@ server.route('/:id', function(link, method) {
 	method('GET', forbidPeers, function(req, res) {
 		var from = req.header('From');
 
-		var update = _updates[req.params.id];
+		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
 		if (update.from !== from)
@@ -180,10 +198,12 @@ server.route('/:id', function(link, method) {
 		req.assert({ type: ['text/plain', 'text/html'] });
 		var from = req.header('From');
 
-		var update = _updates[req.params.id];
-		if (!update) throw 404;
+		var update = get_update(req.params.id, from);
+		if (!update) {
+			update = add_update(from, html, req.params.id);
+		}
 
-		if (update.from !== from)
+		if (update.from && update.from !== from)
 			throw 403;
 
 		var html = req.body;
@@ -200,13 +220,14 @@ server.route('/:id', function(link, method) {
 	method('DELETE', forbidPeers, function(req, res) {
 		var from = req.header('From');
 
-		var update = _updates[req.params.id];
+		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
 		if (update.from !== from)
 			throw 403;
 
-		delete _updates[req.params.id];
+		delete _updates[update.key];
+		_updates_keys.splice(_updates_keys.indexOf(update.key), 1);
 		return 204;
 	});
 });
