@@ -279,19 +279,24 @@ Parser.readString = function() {
 	var match;
 
 	// match opening quote
-	match = /^\s*[\"]/.exec(this.buffer);
+	match = /^\s*[\"\']/.exec(this.buffer);
 	if (!match) { return false; }
 	this.moveBuffer(match[0].length);
+	var quote_char = match[0];
 
-	// read the string till the next quote
-	var string = '';
-	while (this.buffer.charAt(0) != '"') {
+	// read the string till the next un-escaped quote
+	var string = '', last_char;
+	while (this.buffer.charAt(0) != quote_char || (this.buffer.charAt(0) == quote_char && last_char == '\\')) {
 		var c = this.buffer.charAt(0);
 		this.moveBuffer(1);
 		if (!c) { throw "String must be terminated by a second quote"; }
 		string += c;
+		last_char = c;
 	}
 	this.moveBuffer(1);
+
+	// backlash escape codes
+	string = replaceEscapeCodes(string);
 
 	this.log('Read string:', string);
 	return string;
@@ -317,6 +322,16 @@ Parser.readToken = function() {
 	this.log('Read token:', match[1]);
 	return match[1];
 };
+
+var bslash_regex = /(\\)(.)/g;
+var escape_codes = { b: '\b', t: '\t', n: '\n', v: '\v', f: '\f', r: '\r', ' ': ' ', '"': '"', "'": "'", '\\': '\\' };
+function replaceEscapeCodes(str) {
+	return str.replace(bslash_regex, function(match, a, b) {
+		var code = escape_codes[b];
+		if (!code) throw "Invalid character sequence: '\\"+b+"'";
+		return code;
+	});
+}
 },{}],3:[function(require,module,exports){
 
 var common = module.exports = {};

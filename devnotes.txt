@@ -15,11 +15,10 @@ grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick
 grim: X-HTML-Context
 grim: cli
+ - body parameters (isolated, string-escaped)
  - history
  - s/feed/cli/
  - selective page updates with jquery
- - single-quoted strings and quote-escaping
- - body parameters (isolated, string-escaped)
  - better parse-error output
 grim: sid continuity
 grim: get all the reltypes in
