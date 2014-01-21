@@ -102,7 +102,7 @@ server.route('/', function(link, method) {
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
 
 		// Add command to updates
-		add_update('httpl://feed', common.escape(cmd));
+		add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');
 
 		// Parse
 		try {
