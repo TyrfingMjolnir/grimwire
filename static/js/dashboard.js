@@ -1332,7 +1332,7 @@ function render_updates() {
 						'<small class="text-muted">'+time+'</small>',
 						'<div class="update-panel">',
 							'<a class="glyphicon glyphicon-remove" method="DELETE" href="/'+id+'" title="Delete History" target="_null"></a>',
-							(update.from?(' <small><span class="text-muted">From</span> '+update.from+'</small>'):''),
+							//(update.from?(' <small><span class="text-muted">From</span> '+update.from+'</small>'):''),
 						'</div>',
 					'</td>',
 					'<td>'+update.html+'</td>',

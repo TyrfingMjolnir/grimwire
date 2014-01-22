@@ -17,6 +17,7 @@ grim: workers need more info about current user
 grim: rsh
  - s/feed/rsh/
  - history
+ - target: _cli
  - selective page updates with jquery
  - man pages
 grim: sid continuity
