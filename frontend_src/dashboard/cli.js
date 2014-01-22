@@ -36,25 +36,31 @@ function mapRev(arr, cb) {
 	return newarr;
 }
 
+function render_update(id) {
+	var update = _updates[id];
+	var time = (new Date(update.created_at)).toLocaleTimeString();
+	return [
+		'<table id="update-'+id+'">',
+			'<tr>',
+				'<td>',
+					'<small class="text-muted">'+time+'</small>',
+					'<div class="update-panel">',
+						'<a class="glyphicon glyphicon-remove" method="DELETE" href="/'+id+'" title="Delete History" target="_null"></a>',
+						//(update.from?(' <small><span class="text-muted">From</span> '+update.from+'</small>'):''),
+					'</div>',
+				'</td>',
+				'<td>'+update.html+'</td>',
+			'</tr>',
+		'</table>'
+	].join('');
+}
+
 function render_updates() {
-	return mapRev(_updates_ids, function(id) {
-		var update = _updates[id];
-		var time = (new Date(update.created_at)).toLocaleTimeString();
-		return [
-			'<table id="update-'+id+'">',
-				'<tr>',
-					'<td>',
-						'<small class="text-muted">'+time+'</small>',
-						'<div class="update-panel">',
-							'<a class="glyphicon glyphicon-remove" method="DELETE" href="/'+id+'" title="Delete History" target="_null"></a>',
-							//(update.from?(' <small><span class="text-muted">From</span> '+update.from+'</small>'):''),
-						'</div>',
-					'</td>',
-					'<td>'+update.html+'</td>',
-				'</tr>',
-			'</table>'
-		].join('');
-	}).join('');
+	return mapRev(_updates_ids, render_update).join('');
+}
+
+function dom_prepend_update(update) {
+	$('main iframe').contents().find('#cli-updates').prepend(render_update(update.id));
 }
 
 function forbidPeers(req, res) {
@@ -96,14 +102,15 @@ server.route('/', function(link, method) {
 
 	method('EXEC', forbidOthers, function(req, res) {
 		// Validate inputs
-		var cmd, cmd_parsed;
+		var cmd, cmd_parsed, update;
 		req.assert({ type: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'] });
 		if (typeof req.body == 'string') { cmd = req.body; }
 		else if (req.body.cmd) { cmd = req.body.cmd; }
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
 
 		// Add command to updates
-		add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');
+		update = add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');
+		dom_prepend_update(update);
 		$('main iframe').contents().find('#cli-cmd-input').val(''); // :TODO: nquery
 
 		// Parse
@@ -111,9 +118,8 @@ server.route('/', function(link, method) {
 			cmd_parsed = cli_parser.parse(cmd);
 		} catch (e) {
 			// Parsing error
-			add_update(null, e.toString());
-			// :TODO: replace with nquery
-			$('main iframe').contents().find('#cli-updates').html(render_updates());
+			update = add_update(null, e.toString());
+			dom_prepend_update(update);
 			return 204;
 		}
 
@@ -150,16 +156,11 @@ server.route('/', function(link, method) {
 			}
 
 			// Add to history
-			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'" data-html-context="gwr.io/cli gwr.io/rsh">'+html+'</div>', id);
-			// :TODO: replace with nquery
-			$('main iframe').contents().find('#cli-updates').html(render_updates());
+			update = add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'" data-html-context="gwr.io/cli gwr.io/rsh">'+html+'</div>', id);
+			dom_prepend_update(update);
 		});
 		cmd_task.start();
 
-		// :DEBUG: output
-		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));
-		// :TODO: replace with nquery
-		$('main iframe').contents().find('#cli-updates').html(render_updates());*/
 		return 204;
 	});
 
@@ -173,8 +174,7 @@ server.route('/', function(link, method) {
 		html = oDOM.body.innerHTML;
 
 		var update = add_update(from, html);
-		// :TODO: replace with nquery
-		$('main iframe').contents().find('#cli-updates').html(render_updates());
+		dom_prepend_update(update);
 
 		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+update.id);
 		return 201;
