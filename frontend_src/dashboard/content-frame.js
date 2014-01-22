@@ -117,9 +117,14 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		target = '_content';
 	}
 
-	// Pull origin from frame
-	if (frame && frame.dataset && frame.dataset.origin) {
-		req.header('From', frame.dataset.origin);
+	// Pull data from frame
+	if (frame && frame.dataset) {
+		if (frame.dataset.origin) {
+			req.header('From', frame.dataset.origin);
+		}
+		if (frame.dataset.htmlContext) {
+			req.header('X-HTML-Context', frame.dataset.htmlContext);
+		}
 	}
 
 	// Relative link? Use context to make absolute
@@ -160,6 +165,8 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		});
 	}
 	else if (target == '_content') {
+		req.header('X-HTML-Context', 'gwr.io/page');
+
 		// Dispatch
 		res_ = local.dispatch(req);
 		res_.always(function(res) {

@@ -115,10 +115,15 @@ server.route('/', function(link, method) {
 		}
 
 		// Execute
-		var evts = cli_executor.exec(cmd_parsed);
+		var cmd_task = cli_executor.exec(cmd_parsed);
 		var last_req, last_res;
-		evts.on('response', function(e) { last_req = e.request; last_res = e.response; });
-		evts.on('done', function(e) {
+		cmd_task.on('request', function(cmd) {
+			// Set request headers
+			cmd.request.header('From', 'httpl://feed');
+			cmd.request.header('X-HTML-Context', 'gwr.io/cli gwr.io/rsh');
+		});
+		cmd_task.on('response', function(cmd) { last_req = cmd.request; last_res = cmd.response; });
+		cmd_task.on('done', function(cmd) {
 			// Generate final HTML
 			var res = last_res, html = '';
 			if (res.body) {
@@ -142,10 +147,11 @@ server.route('/', function(link, method) {
 			}
 
 			// Add to history
-			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>', id);
+			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'" data-html-context="gwr.io/cli gwr.io/rsh">'+html+'</div>', id);
 			// :TODO: replace with nquery
 			$('main iframe').contents().find('#feed-updates').html(render_updates());
 		});
+		cmd_task.start();
 
 		// :DEBUG: output
 		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));

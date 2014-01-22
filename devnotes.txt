@@ -14,9 +14,8 @@ grim bug: hash uri doesnt encode query params
 
 grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick
-grim: X-HTML-Context
-grim: resh
- - s/feed/resh/
+grim: rsh
+ - s/feed/rsh/
  - history
  - selective page updates with jquery
  - man pages

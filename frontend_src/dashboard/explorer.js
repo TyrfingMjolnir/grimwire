@@ -56,6 +56,7 @@ server.route('/', function(link, method) {
 			var niceuri = (uri.indexOf('httpl://') === 0) ? uri.slice(8) : uri;
 			var html = render_explorer({
 				via: res2.parsedHeaders.via||[],
+				html_context: req.header('X-HTML-Context') || '',
 
 				uri: uri,
 				niceuri: niceuri,
@@ -95,12 +96,10 @@ function render_explorer(ctx) {
 		// __no_via is set by explorer, not expected on links
 		return 'httpl://explorer?uri='+encodeURIComponent(link.__no_via ? link.href : local.makeProxyUri(ctx.via.concat(link.href)));
 	};
+	var is_cli = (ctx.html_context.indexOf('gwr.io/cli') !== -1);
 	return [
-		'<h1>Explorer</h1>',
-		// '<form action ="httpl://explorer" method="GET">',
-		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
-		// '</form>',
-		'<ul class="list-inline" style="padding-top: 5px">',
+		(!is_cli) ? '<h1>Explorer</h1>' : '',
+		'<ul class="list-inline">',
 			[
 				((ctx.viaLink) ?
 					'<li><a href="'+href(ctx.viaLink)+'" title="Via: '+title(ctx.viaLink)+'">'+title(ctx.viaLink)+'</a></li>'
@@ -112,8 +111,17 @@ function render_explorer(ctx) {
 					'<li><a href="'+href(ctx.selfLink)+'" title="Up: '+title(ctx.selfLink)+'">'+title(ctx.selfLink)+'</a></li>'
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
-			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
-			'<li><small class="text-muted">'+common.escape(ctx.status)+'</small>',
+			'<li><small class="text-muted">',
+				common.escape(ctx.status),
+				' [',
+				((ctx.selfLink) ? [
+					'<a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET) '+title(ctx.selfLink)+'">&raquo; open</a>',
+					((show_hidden) ?
+						' | <a href="'+href(ctx.selfLink)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a>' :
+						' | <a href="'+href(ctx.selfLink)+'&show_hidden=1" title="Show Hidden Links">show hidden</a>'
+					)
+				].join('') : ''),
+			']</small></li>',
         '</ul>',
 		'<div class="link-list-outer">',
 			'<table class="link-list">',
@@ -137,16 +145,7 @@ function render_explorer(ctx) {
 					}).join(''),
 				'</tbody>',
 			'</table>',
-		'</div>',
-		((ctx.selfLink) ? [
-			'<hr>',
-			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)">&raquo; '+title(ctx.selfLink)+'</a></small>',
-			'<br>',
-			((show_hidden) ?
-				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a></small>' :
-				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=1" title="Show Hidden Links">show hidden</a></small>'
-			)
-		].join('') : ''),
+		'</div>'
 	].join('');
 }
 

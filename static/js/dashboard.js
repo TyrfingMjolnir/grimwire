@@ -14,10 +14,10 @@ Executor.exec = function(parsed_cmds) {
 	emitter.next_index = 0;
 	emitter.parsed_cmds = parsed_cmds;
 	emitter.getNext = getNext;
-	emitter.fireNext = fireNext;
+	emitter.start = emitter.fireNext = fireNext;
 	emitter.on('request', onRequest);
+	emitter.on('dispatch', onDispatch);
 	emitter.on('response', onResponse);
-	emitter.fireNext();
 	return emitter;
 };
 
@@ -28,59 +28,66 @@ function getNext() {
 function fireNext() {
 	if (this.getNext()) {
 		this.emit('request', this.getNext());
+		this.emit('dispatch', this.getNext());
 		this.next_index++;
 	} else {
 		this.emit('done');
 	}
 }
 
-function onRequest(e) {
-	var emitter = this;
-
+function onRequest(cmd) {
 	// Prep request
-	var body = e.request.body;
-	var req = new local.Request(e.request);
+	var body = cmd.request.body;
+	var req = new local.Request(cmd.request);
 
 	// pull accept from right-side pipe
-	if (e.pipe && !e.request.accept) { req.header('Accept', pipeToType(e.pipe)); }
+	if (cmd.pipe && !cmd.request.accept) { req.header('Accept', pipeToType(cmd.pipe)); }
 
 	// pull body and content-type from the last request
-	if (e.last_res) {
-		if (e.last_res.header('Content-Type') && !req.header('Content-Type')) {
-			req.header('Content-Type', e.last_res.header('Content-Type'));
+	if (cmd.last_res) {
+		if (cmd.last_res.header('Content-Type') && !req.header('Content-Type')) {
+			req.header('Content-Type', cmd.last_res.header('Content-Type'));
 		}
-		if (e.last_res.body) {
-			body = e.last_res.body;
+		if (cmd.last_res.body) {
+			body = cmd.last_res.body;
 		}
 	}
 
 	// act as a data URI if no URI was given (but a body was)
 	if (!req.url && body) {
-		var type = (e.pipe) ? pipeToType(e.pipe) : 'text/plain';
+		var type = (cmd.pipe) ? pipeToType(cmd.pipe) : 'text/plain';
 		req.url = 'data:'+type+','+body;
 		req.method = 'GET';
 	}
 	// default method
-	else if (!e.request.method) {
+	else if (!cmd.request.method) {
 		if (typeof body != 'undefined') req.method = 'POST';
 		else req.method = 'GET';
 	}
 
+	// Update command
+	cmd.request = req;
+	cmd.body = body;
+}
+
+function onDispatch(cmd) {
+	var emitter = this;
+
 	// Dispatch
-	local.dispatch(req).always(function(res) {
+	local.dispatch(cmd.request).always(function(res) {
 		//var will_be_done = !emitter.getNext();
-		emitter.emit('response', { request: req, response: res });
+		emitter.emit('response', { request: cmd.request, response: res });
 		/*if (will_be_done) {
 			emitter.emit('done');
 		}*/
 	});
-	req.end(body);
+	cmd.request.end(cmd.body);
 }
 
 function onResponse(e) {
 	var next_cmd = this.getNext();
 	if (next_cmd) {
-		next_cmd.last_res = e.response;
+		next_cmd.last_res = cmd.response;
 	}
 	local.util.nextTick(this.fireNext.bind(this));
 }
@@ -599,9 +606,14 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		target = '_content';
 	}
 
-	// Pull origin from frame
-	if (frame && frame.dataset && frame.dataset.origin) {
-		req.header('From', frame.dataset.origin);
+	// Pull data from frame
+	if (frame && frame.dataset) {
+		if (frame.dataset.origin) {
+			req.header('From', frame.dataset.origin);
+		}
+		if (frame.dataset.htmlContext) {
+			req.header('X-HTML-Context', frame.dataset.htmlContext);
+		}
 	}
 
 	// Relative link? Use context to make absolute
@@ -642,6 +654,8 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 		});
 	}
 	else if (target == '_content') {
+		req.header('X-HTML-Context', 'gwr.io/page');
+
 		// Dispatch
 		res_ = local.dispatch(req);
 		res_.always(function(res) {
@@ -1098,6 +1112,7 @@ server.route('/', function(link, method) {
 			var niceuri = (uri.indexOf('httpl://') === 0) ? uri.slice(8) : uri;
 			var html = render_explorer({
 				via: res2.parsedHeaders.via||[],
+				html_context: req.header('X-HTML-Context') || '',
 
 				uri: uri,
 				niceuri: niceuri,
@@ -1137,12 +1152,10 @@ function render_explorer(ctx) {
 		// __no_via is set by explorer, not expected on links
 		return 'httpl://explorer?uri='+encodeURIComponent(link.__no_via ? link.href : local.makeProxyUri(ctx.via.concat(link.href)));
 	};
+	var is_cli = (ctx.html_context.indexOf('gwr.io/cli') !== -1);
 	return [
-		'<h1>Explorer</h1>',
-		// '<form action ="httpl://explorer" method="GET">',
-		// 	'<input class="form-control" type="text" value="'+ctx.uri+'" name="uri" />',
-		// '</form>',
-		'<ul class="list-inline" style="padding-top: 5px">',
+		(!is_cli) ? '<h1>Explorer</h1>' : '',
+		'<ul class="list-inline">',
 			[
 				((ctx.viaLink) ?
 					'<li><a href="'+href(ctx.viaLink)+'" title="Via: '+title(ctx.viaLink)+'">'+title(ctx.viaLink)+'</a></li>'
@@ -1154,8 +1167,17 @@ function render_explorer(ctx) {
 					'<li><a href="'+href(ctx.selfLink)+'" title="Up: '+title(ctx.selfLink)+'">'+title(ctx.selfLink)+'</a></li>'
 				: ''),
 			].filter(function(v) { return !!v; }).join('<li class="text-muted">/</li>'),
-			// 	'<a class="glyphicon glyphicon-bookmark" href="httpl://href/edit?href='+encodeURIComponent(ctx.uri)+'" title="is a" target="_card_group"></a>',
-			'<li><small class="text-muted">'+common.escape(ctx.status)+'</small>',
+			'<li><small class="text-muted">',
+				common.escape(ctx.status),
+				' [',
+				((ctx.selfLink) ? [
+					'<a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET) '+title(ctx.selfLink)+'">&raquo; open</a>',
+					((show_hidden) ?
+						' | <a href="'+href(ctx.selfLink)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a>' :
+						' | <a href="'+href(ctx.selfLink)+'&show_hidden=1" title="Show Hidden Links">show hidden</a>'
+					)
+				].join('') : ''),
+			']</small></li>',
         '</ul>',
 		'<div class="link-list-outer">',
 			'<table class="link-list">',
@@ -1179,16 +1201,7 @@ function render_explorer(ctx) {
 					}).join(''),
 				'</tbody>',
 			'</table>',
-		'</div>',
-		((ctx.selfLink) ? [
-			'<hr>',
-			'<small><a href="'+notmpl(ctx.selfLink.href)+'" title="Open (GET)">&raquo; '+title(ctx.selfLink)+'</a></small>',
-			'<br>',
-			((show_hidden) ?
-				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=0" title="Hide Hidden Links">hide hidden</a></small>' :
-				'<small><a href="'+href(ctx.selfLink)+'&show_hidden=1" title="Show Hidden Links">show hidden</a></small>'
-			)
-		].join('') : ''),
+		'</div>'
 	].join('');
 }
 
@@ -1387,10 +1400,15 @@ server.route('/', function(link, method) {
 		}
 
 		// Execute
-		var evts = cli_executor.exec(cmd_parsed);
+		var cmd_task = cli_executor.exec(cmd_parsed);
 		var last_req, last_res;
-		evts.on('response', function(e) { last_req = e.request; last_res = e.response; });
-		evts.on('done', function(e) {
+		cmd_task.on('request', function(cmd) {
+			// Set request headers
+			cmd.request.header('From', 'httpl://feed');
+			cmd.request.header('X-HTML-Context', 'gwr.io/cli gwr.io/rsh');
+		});
+		cmd_task.on('response', function(cmd) { last_req = cmd.request; last_res = cmd.response; });
+		cmd_task.on('done', function(cmd) {
 			// Generate final HTML
 			var res = last_res, html = '';
 			if (res.body) {
@@ -1414,10 +1432,11 @@ server.route('/', function(link, method) {
 			}
 
 			// Add to history
-			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'">'+html+'</div>', id);
+			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'" data-html-context="gwr.io/cli gwr.io/rsh">'+html+'</div>', id);
 			// :TODO: replace with nquery
 			$('main iframe').contents().find('#feed-updates').html(render_updates());
 		});
+		cmd_task.start();
 
 		// :DEBUG: output
 		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));
