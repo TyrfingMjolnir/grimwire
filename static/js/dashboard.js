@@ -397,6 +397,9 @@ var cli_executor = require('./cli-executor');
 var server = servware();
 module.exports = server;
 
+var cmd_history = [];
+var cmd_history_pos = -1;
+
 var _updates = {};
 var _updates_ids = []; // maintains order
 var _updates_idc = 0;
@@ -484,6 +487,26 @@ server.route('/', function(link, method) {
 				'</div>',
 			'</div>'
 		].join('');
+
+		// :DEBUG: using this hack until nquery is added
+		// - it's not known that the GETed will be rendered after
+		// - this assumes it will be and adds history behaviors, merely failing selector otherwise
+		setTimeout(function() {
+			$('main iframe').contents().find('#cli-cmd-input').on('keyup', function(e) {
+				var is_up = (e.keyCode == 38);
+				var is_down = (e.keyCode == 40);
+				if (!is_up && !is_down) return;
+				if (!cmd_history.length) return;
+
+				var new_pos = cmd_history_pos + ((is_up) ? (-1) : (+1));
+				if (new_pos < 0 || new_pos > cmd_history.length) return;
+				cmd_history_pos = new_pos;
+
+				var v = cmd_history[new_pos] || '';
+				$('main iframe').contents().find('#cli-cmd-input').val(v);
+			});
+		}, 300);
+
 		return [200, html, {'content-type': 'text/html'}];
 	});
 
@@ -494,6 +517,10 @@ server.route('/', function(link, method) {
 		if (typeof req.body == 'string') { cmd = req.body; }
 		else if (req.body.cmd) { cmd = req.body.cmd; }
 		else { throw [422, 'Must pass a text/plain string or an object with a `cmd` string attribute.']; }
+
+		// Add to command history
+		cmd_history.push(cmd);
+		cmd_history_pos = cmd_history.length;
 
 		// Add command to updates
 		update = add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');

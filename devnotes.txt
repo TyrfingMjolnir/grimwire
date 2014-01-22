@@ -14,8 +14,7 @@ grim bug: hash uri doesnt encode query params
 
 grim: workers need more info about current user
  - and the current config mechanism sucks because it's not there on first tick
-grim: rsh
- - history
+grim: cli
  - target: _cli
  - man pages
 grim: storage perms are broken
