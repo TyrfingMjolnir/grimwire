@@ -1296,22 +1296,21 @@ var server = servware();
 module.exports = server;
 
 var _updates = {};
-var _updates_keys = []; // maintains order
+var _updates_ids = []; // maintains order
 var _updates_idc = 0;
 function add_update(from, html, id) {
 	id = (id || _updates_idc++);
-	var key = from + ' ' + id;
-	if (_updates[key]) {
-		_updates[key].html = html;
-		_updates[key].from = from;
-		return _updates[key];
+	if (_updates[id]) {
+		_updates[id].html = html;
+		_updates[id].from = from;
+		return _updates[id];
 	}
-	_updates[key] = { id: id, from: from, key: key, html: html, created_at: Date.now() };
-	_updates_keys.push(key);
-	return _updates[key];
+	_updates[id] = { id: id, from: from, html: html, created_at: Date.now() };
+	_updates_ids.push(id);
+	return _updates[id];
 }
-function get_update(from, id) {
-	return _updates[from + ' ' + id];
+function get_update(id, from) {
+	return _updates[id];
 }
 
 function mapRev(arr, cb) {
@@ -1323,13 +1322,18 @@ function mapRev(arr, cb) {
 }
 
 function render_updates() {
-	return mapRev(_updates_keys, function(key) {
-		var update = _updates[key];
+	return mapRev(_updates_ids, function(id) {
+		var update = _updates[id];
 		var time = (new Date(update.created_at)).toLocaleTimeString();
 		return [
-			'<table>',
+			'<table id="update-'+id+'">',
 				'<tr>',
-					'<td><small class="text-muted">'+time/*+(update.from?('\n'+update.from):'')*/+'</small></td>',
+					'<td>',
+						'<small class="text-muted">'+time/*+(update.from?('\n'+update.from):'')*/+'</small>',
+						'<div class="update-panel">',
+							'<a class="glyphicon glyphicon-remove" method="DELETE" href="/'+id+'" title="Delete History" target="_null"></a>',
+						'</div>',
+					'</td>',
 					'<td>'+update.html+'</td>',
 				'</tr>',
 			'</table>'
@@ -1476,7 +1480,7 @@ server.route('/:id', function(link, method) {
 		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
-		if (update.from !== from)
+		if (from && update.from !== from && from != 'httpl://feed')
 			throw 403;
 
 		var accept = local.preferredType(req, ['text/html', 'application/json']);
@@ -1487,7 +1491,7 @@ server.route('/:id', function(link, method) {
 		throw 406;
 	});
 
-	method('PUT', forbidPeers, function(req, res) {
+	/*method('PUT', forbidPeers, function(req, res) {
 		req.assert({ type: ['text/plain', 'text/html'] });
 		var from = req.header('From');
 
@@ -1508,7 +1512,7 @@ server.route('/:id', function(link, method) {
 		$('main iframe').contents().find('#feed-updates').html(render_updates());
 
 		return 204;
-	});
+	});*/
 
 	method('DELETE', forbidPeers, function(req, res) {
 		var from = req.header('From');
@@ -1516,11 +1520,14 @@ server.route('/:id', function(link, method) {
 		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
-		if (update.from !== from)
+		if (from && from != 'httpl://feed')
 			throw 403;
 
-		delete _updates[update.key];
-		_updates_keys.splice(_updates_keys.indexOf(update.key), 1);
+		delete _updates[update.id];
+		_updates_ids.splice(_updates_ids.indexOf(update.id), 1);
+
+		$('main iframe').contents().find('#feed-updates > #update-'+update.id).remove();
+
 		return 204;
 	});
 });
