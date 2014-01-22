@@ -1,7 +1,7 @@
 /*
-httpl://feed
+httpl://cli
 
-System updates aggregator
+Command Line Interface
 */
 
 var common = require('./common');
@@ -73,23 +73,21 @@ function forbidOthers(req, res) {
 
 server.route('/', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'self service collection', id: 'feed', title: 'Updates Feed' });
+	link({ href: '/', rel: 'self service collection', id: 'cli', title: 'Command Line' });
 	link({ href: '/{id}', rel: 'item', title: 'Update', hidden: true });
 
 	method('HEAD', forbidPeers, function() { return 204; });
 
 	method('GET', forbidPeers, function(req, res) {
-		var today = (''+new Date()).split(' ').slice(1,4).join(' ');
-		res.headers.link[1].title = 'Updates: '+today;
 		var html = [
 			'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src \'self\'; font-src \'self\'; style-src \'self\'" />',
 			'<div class="row">',
 				'<div class="col-xs-12">',
 					'<form action="/" method="EXEC" target="_null">',
-						'<input id="feed-cmd-input" class="form-control" type="text" name="cmd" />',
+						'<input id="cli-cmd-input" class="form-control" type="text" name="cmd" />',
 					'</form>',
 					'<br>',
-					'<div id="feed-updates">'+render_updates()+'</div>',
+					'<div id="cli-updates">'+render_updates()+'</div>',
 				'</div>',
 			'</div>'
 		].join('');
@@ -106,7 +104,7 @@ server.route('/', function(link, method) {
 
 		// Add command to updates
 		add_update(null, '<em class="text-muted">'+common.escape(cmd)+'</em>');
-		$('main iframe').contents().find('#feed-cmd-input').val(''); // :TODO: nquery
+		$('main iframe').contents().find('#cli-cmd-input').val(''); // :TODO: nquery
 
 		// Parse
 		try {
@@ -115,7 +113,7 @@ server.route('/', function(link, method) {
 			// Parsing error
 			add_update(null, e.toString());
 			// :TODO: replace with nquery
-			$('main iframe').contents().find('#feed-updates').html(render_updates());
+			$('main iframe').contents().find('#cli-updates').html(render_updates());
 			return 204;
 		}
 
@@ -124,7 +122,7 @@ server.route('/', function(link, method) {
 		var last_req, last_res;
 		cmd_task.on('request', function(cmd) {
 			// Set request headers
-			cmd.request.header('From', 'httpl://feed');
+			cmd.request.header('From', 'httpl://cli');
 			cmd.request.header('X-HTML-Context', 'gwr.io/cli gwr.io/rsh');
 		});
 		cmd_task.on('response', function(cmd) { last_req = cmd.request; last_res = cmd.response; });
@@ -154,14 +152,14 @@ server.route('/', function(link, method) {
 			// Add to history
 			add_update(origin, '<div class="frame-'+common.frame_nonce+'" data-origin="'+origin+'" data-html-context="gwr.io/cli gwr.io/rsh">'+html+'</div>', id);
 			// :TODO: replace with nquery
-			$('main iframe').contents().find('#feed-updates').html(render_updates());
+			$('main iframe').contents().find('#cli-updates').html(render_updates());
 		});
 		cmd_task.start();
 
 		// :DEBUG: output
 		/*add_update(null, JSON.stringify(cmd_parsed, null, 4));
 		// :TODO: replace with nquery
-		$('main iframe').contents().find('#feed-updates').html(render_updates());*/
+		$('main iframe').contents().find('#cli-updates').html(render_updates());*/
 		return 204;
 	});
 
@@ -176,7 +174,7 @@ server.route('/', function(link, method) {
 
 		var update = add_update(from, html);
 		// :TODO: replace with nquery
-		$('main iframe').contents().find('#feed-updates').html(render_updates());
+		$('main iframe').contents().find('#cli-updates').html(render_updates());
 
 		res.setHeader('location', 'httpl://'+req.header('Host')+'/'+update.id);
 		return 201;
@@ -185,7 +183,7 @@ server.route('/', function(link, method) {
 
 server.route('/:id', function(link, method) {
 	link({ href: 'httpl://hosts', rel: 'via', id: 'hosts', title: 'Page' });
-	link({ href: '/', rel: 'up service collection', id: 'feed', title: 'Updates Feed' });
+	link({ href: '/', rel: 'up service collection', id: 'cli', title: 'Command Line' });
 	link({ href: '/:id', rel: 'self item', id: ':id', title: 'Update :id' });
 
 	method('HEAD', forbidPeers, function() { return 204; });
@@ -196,7 +194,7 @@ server.route('/:id', function(link, method) {
 		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
-		if (from && update.from !== from && from != 'httpl://feed')
+		if (from && update.from !== from && from != 'httpl://cli')
 			throw 403;
 
 		var accept = local.preferredType(req, ['text/html', 'application/json']);
@@ -225,7 +223,7 @@ server.route('/:id', function(link, method) {
 		update.html = oDOM.body.innerHTML;
 
 		// :TODO: replace with nquery
-		$('main iframe').contents().find('#feed-updates').html(render_updates());
+		$('main iframe').contents().find('#cli-updates').html(render_updates());
 
 		return 204;
 	});*/
@@ -236,13 +234,13 @@ server.route('/:id', function(link, method) {
 		var update = get_update(req.params.id, from);
 		if (!update) throw 404;
 
-		if (from && from != 'httpl://feed')
+		if (from && from != 'httpl://cli')
 			throw 403;
 
 		delete _updates[update.id];
 		_updates_ids.splice(_updates_ids.indexOf(update.id), 1);
 
-		$('main iframe').contents().find('#feed-updates > #update-'+update.id).remove();
+		$('main iframe').contents().find('#cli-updates > #update-'+update.id).remove();
 
 		return 204;
 	});

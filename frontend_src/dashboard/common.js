@@ -1,7 +1,7 @@
 
 var common = module.exports = {};
 common.serviceURL = window.location.protocol+'//'+window.location.host;
-common.feedUA = local.agent('httpl://feed');
+common.cliUA = local.agent('httpl://cli');
 
 // Security
 // ========

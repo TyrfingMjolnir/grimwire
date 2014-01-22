@@ -6,13 +6,13 @@ var dashboardGUI = require('./dashboard-gui');
 // Setup
 // =====
 
-common.feedUA.POST('<img src="/img/avatars/user_astronaut.png"> "Welcome to Grimwire. We fight for the user."', { Content_Type: 'text/html', From: 'httpl://feed' });
-common.feedUA.POST([
+common.cliUA.POST('<img src="/img/avatars/user_astronaut.png"> "Welcome to Grimwire. We fight for the user."', { Content_Type: 'text/html', From: 'httpl://feed' });
+common.cliUA.POST([
 	'<strong>Grimwire v0.6.0 <span class="text-danger">unstable</span> build.</strong>',
 	'<small class="text-muted">Early Beta Build. Not all behaviors',
 	'are expected.</small>'
 ].join('\n'), { Content_Type: 'text/html', From: 'httpl://feed' });
-common.feedUA.POST([
+common.cliUA.POST([
 	' <img src="/img/fatcow/16x16/blackboard_drawing.png"> <a href="httpl://explorer/intro" target="_content">Start here</a>.',
 	' <img src="/img/fatcow/16x16/bug.png"> Please report bugs to the <a href="https://github.com/grimwire/grimwire/issues" target="_blank">issue tracker</a>.'
 ].join('\n'), { Content_Type: 'text/html', From: 'httpl://feed' });
@@ -35,7 +35,7 @@ var workers_server = require('./workers');
 // local.addServer('href', require('./href'));
 local.addServer('storage', require('./storage'));
 local.addServer('explorer', require('./explorer'));
-local.addServer('feed', require('./feed'));
+local.addServer('cli', require('./cli'));
 local.addServer('workers', workers_server);
 local.addServer(window.location.host, network.hostProxy);
 local.removeServer('hosts'); // replace hosts service
@@ -59,7 +59,7 @@ common.layout = $('body').layout({ west__size: 800, west__initClosed: true, east
 
 // Init
 (function() {
-	var firstreq = { method: 'GET', url: window.location.hash.slice(1) || 'httpl://feed', target: '_content' };
+	var firstreq = { method: 'GET', url: window.location.hash.slice(1) || 'httpl://cli', target: '_content' };
 	if (firstreq.url.indexOf('@') !== -1) {
 		// Global URI, wait for network
 		network.relay.once('listening', function() { console.log('going for it'); contentFrame.dispatchRequest(firstreq); });

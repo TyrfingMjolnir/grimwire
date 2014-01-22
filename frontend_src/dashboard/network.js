@@ -13,9 +13,9 @@ network.setupRelay = function(serviceURL, relay) {
 	network.relay = relay;
 
 	relay.on('accessGranted', function() { relay.startListening(); });
-	relay.on('notlistening', function() { common.feedUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
-	relay.on('listening', function() { common.feedUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
-	relay.on('outOfStreams', function() { common.feedUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
+	relay.on('notlistening', function() { common.cliUA.POST('<strong>Network Relay Connection Closed</strong>. You can no longer accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('listening', function() { common.cliUA.POST('<strong>Connected to Network Relay</strong>. You can now accept peer connections.', { Content_Type: 'text/html' }); });
+	relay.on('outOfStreams', function() { common.cliUA.POST('<strong>No more connections available on your account</strong>. Close some other apps and try again.', { Content_Type: 'text/html' }); });
 	relay.setServer(peerProxy);
 	// :TODO: - use the code below if device network-identity persistence matters (eg for tracking a dataset)
 	/*relay.autoRetryStreamTaken = false; // :TODO (may not need): the relay created by grimwidget does this automatically

@@ -246,7 +246,7 @@ contentFrame.dispatchRequest = function(req, origin, opts) {
 
 window.onhashchange = function() {
 	// Try to find this URI in proximate history
-	var hashurl = window.location.hash.slice(1) || 'httpl://feed';
+	var hashurl = window.location.hash.slice(1) || 'httpl://cli';
 	for (var pos = chrome_history_position-1; pos < (chrome_history_position+1); pos++) {
 		if (chrome_history[pos] && chrome_history[pos].url === hashurl) {
 			if (chrome_history_position == pos) return;
